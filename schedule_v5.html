@@ -254,14 +254,14 @@ body.focusDay .content-left { font-size: 15px; line-height: 1.3; }
 
 
 
-/* ── Day Focus 中は週移動やレイアウト切替を非表示 ── */
-body.dayFocus #prevWeek,
-body.dayFocus #nextWeek,
-body.dayFocus #todayBtn,
-body.dayFocus #weekPicker,
-body.dayFocus #mode2col,
-body.dayFocus #mode4col,
-body.dayFocus #mode5col {
+ /* ── Focus中は週移動やレイアウト切替を非表示（祖先に依存しない）── */
+ body.hasFocus #prevWeek,
+ body.hasFocus #nextWeek,
+ body.hasFocus #todayBtn,
+ body.hasFocus #weekPicker,
+ body.hasFocus #mode2col,
+ body.hasFocus #mode4col,
+ body.hasFocus #mode5col {
   display: none !important;
 }
 
@@ -307,6 +307,14 @@ body.dayFocus #focusBackBtn { display: inline-flex; }
 @media print {
   .ctx-menu { display: none !important; }
 }
+/* 週ピッカー右の曜日バッジ */
+#weekPickerWeekday {
+  margin-left: .5rem;
+  font-size: 0.95em;
+  opacity: .8;
+}
+#weekPickerWeekday { display: none; }
+body.focusDay #weekPickerWeekday { display: inline; }
 
   </style>
 </head>
@@ -507,7 +515,7 @@ function defaultLists(){
   const powers = [];
   for (let v = 15.0; v <= 30.001; v += 0.5) powers.push(v.toFixed(1)); // 使うなら
   return {
-    iolTypes: ["AcrySof IQ","TECNIS","HOYA Vivinex","PanOptix","EDOF"],
+    iolTypes: ["Ni","Ho","HoT","Amo","AmoT","参","Len","LenT","Ko"],
     proc1: ["PEA+IOL","PPC+IOL","IOL再固定","眼瞼内反手術"],
     proc2: ["眼内レンズ縫着","前房洗浄","瞳孔形成"],
     proc3: ["複合処置A","複合処置B"],
@@ -564,6 +572,7 @@ let appLists = loadSettings();
 
 // === 日フォーカス・ヘルパー ==========================
 function enterDayFocus(dayEl){
+window.__weekStartBeforeFocus = document.getElementById('weekPicker')?.value;
 document.body.classList.add('dayFocus');
   if (!dayEl) return;
   document.body.classList.add('focusDay');
@@ -580,6 +589,17 @@ if (!document.getElementById('focusBackBtn')){
 const rightGroup = document.querySelector('.topbar .group:nth-of-type(2)') || document.querySelector('.topbar');
   rightGroup.appendChild(btn);
 }
+// --- enterDayFocus(dayEl) の一番最後に追加 ---
+setTimeout(() => {
+  const txt = dayEl.querySelector('.day-header-date')?.textContent || '';
+  const m = txt.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+  if (!m) return;
+  const picker = document.getElementById('weekPicker');
+  if (picker) picker.value = `${m[1]}-${m[2]}-${m[3]}`; // ここではイベント発火しない
+  window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
+
+
+}, 0);
 
 
   // その日の先頭に寄せる
@@ -591,6 +611,9 @@ function exitDayFocus(){
   document.body.classList.remove('focusDay');
   document.querySelectorAll('.day[data-focus="true"]').forEach(d => d.removeAttribute('data-focus'));
   document.getElementById('focusBackBtn')?.remove();
+    // ★ここを追加（週表示へ戻る時、フォーカス前のピッカーに戻す）
+  const p = document.getElementById('weekPicker');
+  if (p && window.__weekStartBeforeFocus) p.value = window.__weekStartBeforeFocus;
 }
 
 // Escで解除（1回だけバインド）
@@ -2118,5 +2141,43 @@ if(k==='enter'){
 }, true);
 
   </script>
+  <script>
+(function(){
+  const JP = ['日','月','火','水','木','金','土'];
+
+  function ensureBadge(){
+    const picker = document.getElementById('weekPicker');
+    if (!picker) return null;
+    let badge = document.getElementById('weekPickerWeekday');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.id = 'weekPickerWeekday';
+      picker.insertAdjacentElement('afterend', badge);
+    }
+    return badge;
+  }
+
+  function setWeekdayFromISO(iso){
+    const badge = ensureBadge();
+    if (!badge || !iso) return;
+    const [y,m,d] = iso.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    if (!isNaN(dt)) badge.textContent = `（${JP[dt.getDay()]}）`;
+  }
+
+  // ピッカー操作でも更新
+  const picker = document.getElementById('weekPicker');
+  if (picker) {
+    picker.addEventListener('input',  () => setWeekdayFromISO(picker.value));
+    picker.addEventListener('change', () => setWeekdayFromISO(picker.value));
+    // 初期表示
+    setWeekdayFromISO(picker.value);
+  }
+
+  // 他スクリプトから使えるように公開（1行呼ぶだけ）
+  window.__setWeekdayFromISO = setWeekdayFromISO;
+})();
+</script>
+
 </body>
 </html>
