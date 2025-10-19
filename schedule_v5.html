@@ -619,10 +619,15 @@ function exitDayFocus(){
 // Escで解除（1回だけバインド）
 if (!window.__focusEscBound){
   document.addEventListener('keydown', (e)=>{
-    if (e.key === 'Escape' && document.body.classList.contains('focusDay')){
-      e.preventDefault();
-      exitDayFocus();
-    }
+      if (e.key === 'Escape'){
+        // モーダルが開いているときはフォーカス解除に進まない（<dialog> のESCデフォルト閉じを優先）
+        const modalOpen = document.querySelector('dialog[open]');
+        if (modalOpen) return;
+        if (document.body.classList.contains('focusDay')){
+          e.preventDefault();
+          exitDayFocus();
+        }
+      }
   }, true);
   window.__focusEscBound = true;
 }
