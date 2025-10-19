@@ -571,10 +571,10 @@ let appLists = loadSettings();
   function normalizeTimeInput(raw){ if(!raw) return null; let s = String(raw).trim(); let m = /^(\d{1,2}):(\d{2})$/.exec(s); if(m){ const h=Number(m[1]), mm=Number(m[2]); if(h>=0&&h<=23&&mm>=0&&mm<=59) return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; return null; } s = s.replace(/\s+/g,'').replace(/[^\d]/g,''); if(s.length===3 || s.length===4){ const hh=s.slice(0,s.length-2), mm=s.slice(-2); const h=Number(hh), m2=Number(mm); if(h>=0&&h<=23&&m2>=0&&m2<=59) return `${String(h).padStart(2,'0')}:${String(m2).padStart(2,'0')}`; } return null; }
 
 // === 日フォーカス・ヘルパー ==========================
-function enterDayFocus(dayEl){
-window.__weekStartBeforeFocus = document.getElementById('weekPicker')?.value;
-document.body.classList.add('dayFocus');
-  if (!dayEl) return;
+ function enterDayFocus(dayEl){
+   window.__weekStartBeforeFocus = document.getElementById('weekPicker')?.value;
+   if (!dayEl) return;                 // ← 先にガード
+   document.body.classList.add('dayFocus');
   document.body.classList.add('focusDay');
   dayEl.setAttribute('data-focus','true');
 
@@ -586,8 +586,7 @@ if (!document.getElementById('focusBackBtn')){
   btn.addEventListener('click', exitDayFocus);
 
   // 右端のグループ（印刷/Undo/Redoのグループ）に入れる
-const rightGroup = document.querySelector('.topbar .group:nth-of-type(2)') || document.querySelector('.topbar');
-  rightGroup.appendChild(btn);
+ (document.querySelector('.topbar .group:nth-of-type(2)') || document.querySelector('.topbar'))?.appendChild(btn);
 }
 // --- enterDayFocus(dayEl) の一番最後に追加 ---
 setTimeout(() => {
@@ -614,6 +613,7 @@ function exitDayFocus(){
     // ★ここを追加（週表示へ戻る時、フォーカス前のピッカーに戻す）
   const p = document.getElementById('weekPicker');
   if (p && window.__weekStartBeforeFocus) p.value = window.__weekStartBeforeFocus;
+  window.__weekStartBeforeFocus = null; // ← 後腐れ防止（任意）
 }
 
 // Escで解除（1回だけバインド）
@@ -2177,6 +2177,153 @@ if(k==='enter'){
   // 他スクリプトから使えるように公開（1行呼ぶだけ）
   window.__setWeekdayFromISO = setWeekdayFromISO;
 })();
+
+ // ===== フォーカスモード中に「週ボタン/ピッカー」を日移動に切り替える拡張 =====
+(()=> {
+  // ---- ボタン／ピッカー ----
+  const $prev   = document.getElementById('prevWeek');
+  const $next   = document.getElementById('nextWeek');
+  const $today  = document.getElementById('todayBtn');
+  const $picker = document.getElementById('weekPicker');
+  if (!$prev || !$next || !$today || !$picker) return;
+
+  // ---- 状態判定（当初うまくいっていた軽量版）----
+  const inDayFocus = () =>
+    document.body.classList.contains('focusDay') ||
+    document.body.classList.contains('dayFocus');
+
+  // ---- ユーティリティ ----
+  const pad = n => String(n).padStart(2,'0');
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const mon0 = d => (d.getDay() + 6) % 7;     // Mon=0..Sun=6（あなたのルール）
+  const mondayOf = dt => startOfWeek(dt);     // 既存の startOfWeek を利用
+   // 方向付き 週末スキップ
+   // dir: -1=前日方向 / +1=翌日方向 / 0=今日（週末は月曜へ寄せる）
+   const snapWeekendDir = (date, dir=0) => {
+     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+     const wd = d.getDay(); // 0:Sun ... 6:Sat
+     if (dir > 0) {               // 翌日方向：Fri(+1)=>Sat→Mon / Sat→Mon / Sun→Mon
+       if (wd === 6) d.setDate(d.getDate()+2); // Sat -> Mon
+       else if (wd === 0) d.setDate(d.getDate()+1); // Sun -> Mon
+     } else if (dir < 0) {        // 前日方向：Mon(-1)=>Sun→Fri / Sun→Fri / Sat→Fri
+       if (wd === 0) d.setDate(d.getDate()-2); // Sun -> Fri
+       else if (wd === 6) d.setDate(d.getDate()-1); // Sat -> Fri
+     } else {                     // 今日ボタンなど：週末は営業日に寄せる（Sun->Mon / Sat->Fri）
+       if (wd === 0) d.setDate(d.getDate()+1); // Sun -> Mon
+       if (wd === 6) d.setDate(d.getDate()-1); // Sat -> Fri
+     }
+     return d;
+   };
+  const sameWeek = (a,b) => mondayOf(a).getTime() === mondayOf(b).getTime();
+
+  // ---- フォーカス日ストア ----
+  function getFocusDate(){
+    if (window.currentFocusDate instanceof Date) return new Date(window.currentFocusDate);
+    if ($picker.value){ const [y,m,d]= $picker.value.split('-').map(Number); return new Date(y,m-1,d); }
+    return new Date();
+  }
+  function setFocusDateStore(d){
+    window.currentFocusDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  // ---- 既存フォーカス印を必ずクリア（多重フォーカス防止）----
+  function clearFocusedDays(){
+    document.querySelectorAll('.day[data-focus="true"]').forEach(el => el.removeAttribute('data-focus'));
+  }
+
+  // ---- ラベル切替（当初の方式）----
+  function updateLabels(){
+    const prev  = document.getElementById('prevWeek');
+    const next  = document.getElementById('nextWeek');
+    const today = document.getElementById('todayBtn');
+    if (!prev || !next || !today) return;
+    if (inDayFocus()){
+      prev.textContent  = '« 前日';
+      next.textContent  = '翌日 »';
+      today.textContent = '今日';
+    } else {
+      prev.textContent  = '« 前週';
+      next.textContent  = '次週 »';
+      today.textContent = '今週';
+    }
+  }
+  new MutationObserver(updateLabels).observe(document.body, {attributes:true, attributeFilter:['class']});
+  updateLabels();
+
+  // ---- 日付ヘッダー dblclick でフォーカスに入った瞬間、当日を保存＆ピッカー同期 ----
+  document.addEventListener('dblclick', (e)=>{
+    const hdr = e.target.closest('.day-header-date, .day-header, .date, .date-cell, .day-title, .hdr');
+    if (!hdr) return;
+    const m = (hdr.textContent||'').match(/(\d{4})\/(\d{2})\/(\d{2})/);
+    if (m){
+      const d = new Date(+m[1], +m[2]-1, +m[3]);
+      setFocusDateStore(d);
+      if (inDayFocus()) $picker.value = ymd(d);
+      requestAnimationFrame(updateLabels);
+    }
+  }, true);
+
+  // ---- コア：日ジャンプ（週跨ぎOK・週末スキップ・常に日フォーカス維持）----
+   async function jumpFocusTo(targetDate, dir=0){
+    let target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+     target = snapWeekendDir(target, dir);         // 方向付きで週末補正
+    setFocusDateStore(target);
+
+    // 1) 週が変わるなら currentMonday を更新して既存の render() 実行
+    if (!sameWeek(target, currentMonday)) {
+      currentMonday = mondayOf(target);
+      render();
+      // DOM確定待ち（2フレーム）
+      await new Promise(r => requestAnimationFrame(()=> requestAnimationFrame(r)));
+    }
+
+    // 2) 対象列を index で取得（Mon=0.. → days.length にクリップ）
+    clearFocusedDays();
+    const days = document.querySelectorAll('.day');
+    let idx = mon0(target);
+    idx = Math.min(Math.max(0, idx), Math.max(0, days.length-1));
+    const hit = days[idx];
+    if (!hit){ exitDayFocus(); return; }
+
+    // 3) フォーカス表示にする
+    enterDayFocus(hit);                            // 既存の関数をそのまま使う
+    document.body.classList.add('focusDay','dayFocus'); // 念のため
+
+    // 4) 実際に表示されている“その列の日付”を厳密に反映（ピッカー/ストアを揃える）
+    const shown = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate());
+    shown.setDate(shown.getDate() + idx);
+    setFocusDateStore(shown);
+    $picker.value = ymd(shown);
+
+    updateLabels();
+  }
+
+  // ---- フォーカス中のみ、週ボタンを「前日/翌日/今日」に差し替え（当初のキャプチャ方式）----
+  function captureWhenFocus(fn){
+    return function(e){
+      if (inDayFocus()){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        fn();
+      }
+    };
+  }
+   $prev .addEventListener('click', captureWhenFocus(()=>{ const d=getFocusDate(); d.setDate(d.getDate()-1); jumpFocusTo(d, -1); }), true);
+   $next .addEventListener('click', captureWhenFocus(()=>{ const d=getFocusDate(); d.setDate(d.getDate()+1); jumpFocusTo(d, +1); }), true);
+   $today.addEventListener('click', captureWhenFocus(()=>{ jumpFocusTo(new Date(), 0); }), true);
+
+  // ---- フォーカス中のピッカー：その日に直接ジャンプ（週ロジックは通さない）----
+   $picker.addEventListener('change', (e)=>{
+    if (!inDayFocus()) return;     // 週モード時は既存の週ロジックに任せる
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const v = $picker.value; if (!v) return;
+    const [y,m,d] = v.split('-').map(Number);
+     jumpFocusTo(new Date(y, m-1, d), 0);  // ピッカーは「その日」基準。週末は営業日に寄せる
+  }, true);
+})();
+
+
 </script>
 
 </body>
