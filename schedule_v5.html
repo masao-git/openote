@@ -254,26 +254,48 @@ body.focusDay .content-left { font-size: 15px; line-height: 1.3; }
 
 
 
- /* ── Focus中は週移動やレイアウト切替を非表示（祖先に依存しない）── */
- body.hasFocus #prevWeek,
- body.hasFocus #nextWeek,
- body.hasFocus #todayBtn,
- body.hasFocus #weekPicker,
- body.hasFocus #mode2col,
- body.hasFocus #mode4col,
- body.hasFocus #mode5col {
+/* --- フォーカス時に隠すもの --- */
+body.focusDay #mode2col,
+body.focusDay #mode4col,
+body.focusDay #mode5col,
+body.focusDay .topbar [aria-label="レイアウト切替"] {
   display: none !important;
 }
 
-/* dayFocus 中はレイアウト切替グループ丸ごと非表示 */
-body.dayFocus .topbar [aria-label="レイアウト切替"] { display: none !important; }
+/* --- 戻るボタンの配置 --- */
+/* 通常は非表示、フォーカス時にトップバー右端へ表示 */
+#focusBackBtn {
+  display: none;
+  padding: 6px 10px;
+  border: 1px solid #bbb;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  font-size: 0.9rem;
+  align-self: center; /* トップバー内で縦位置をそろえる */
+  margin-left: 8px;   /* 隣のボタンとの間隔 */
+}
+body.focusDay #focusBackBtn {
+  display: inline-flex;
+  position: static;   /* ← fixedを解除して1行内に */
+}
 
-/* 戻るボタンは通常は隠して、dayFocus 中だけ表示 */
-#focusBackBtn { display: none; }
-body.dayFocus #focusBackBtn { display: inline-flex; }
+/* --- フォーカス時に残すもの（ピッカー等） --- */
+body.focusDay #prevWeek,
+body.focusDay #nextWeek,
+body.focusDay #todayBtn,
+body.focusDay #weekPicker {
+  display: inline-flex !important;
+}
 
-/* トップバー内に収まるように（ボタンは通常ボタンと同じ見た目のまま） */
-#focusBackBtn { position: static; }
+/* --- フォーカス時のスケジュール1列化 --- */
+body.focusDay { --slot-h: 44px; }
+body.focusDay #schedule { grid-template-columns: 1fr; }
+body.focusDay .day { display: none; }
+body.focusDay .day[data-focus="true"] { display: block; }
+
+
 
 /* ===== 統一版：印刷レイアウト ===== */
 @media print {
@@ -480,31 +502,6 @@ body.focusDay #weekPickerWeekday { display: inline; }
   const mode5 = document.getElementById('mode5col');
   const editBtn     = document.getElementById('editBtn'); 
 
-// --- クリック選択（編集ボタンと連動）—安全版（重複定義を回避） ---
-(function(){
-  // 既に初期化済みなら何もしない
-  if (window.__selectionInitDone__) return;
-  window.__selectionInitDone__ = true;
-
-  // グローバルに1セットだけ持つ（再定義しない）
-  if (typeof window.activeSlotEl === 'undefined') window.activeSlotEl = null;
-  if (typeof window.lastSelectedKey === 'undefined') window.lastSelectedKey = null;
-
-  if (typeof window.setActiveSlot === 'undefined') {
-    window.setActiveSlot = function setActiveSlot(el){
-      try {
-        if (window.activeSlotEl && window.activeSlotEl !== el){
-          window.activeSlotEl.classList.remove('focused');
-        }
-        window.activeSlotEl = el || null;
-        if (window.activeSlotEl){
-          window.activeSlotEl.classList.add('focused');
-          window.lastSelectedKey = window.activeSlotEl.dataset.key || null;
-        }
-      } catch(_) {}
-    };
-  }
-})();
 
 // ==== 設定（候補リスト） ====
 // ストレージキー
@@ -570,12 +567,12 @@ let appLists = loadSettings();
   function addMinutes(hhmm, minutes){ let s = String(hhmm).trim().replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/：/g, ':'); const m = /^(\d{1,2}):(\d{2})$/.exec(s); if (!m) return null; const h = Number(m[1]), mm = Number(m[2]); const dt = new Date(2000,0,1,h,mm); if (isNaN(dt.getTime())) return null; dt.setMinutes(dt.getMinutes() + Number(minutes || 0)); return dt.toTimeString().slice(0,5); }
   function normalizeTimeInput(raw){ if(!raw) return null; let s = String(raw).trim(); let m = /^(\d{1,2}):(\d{2})$/.exec(s); if(m){ const h=Number(m[1]), mm=Number(m[2]); if(h>=0&&h<=23&&mm>=0&&mm<=59) return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; return null; } s = s.replace(/\s+/g,'').replace(/[^\d]/g,''); if(s.length===3 || s.length===4){ const hh=s.slice(0,s.length-2), mm=s.slice(-2); const h=Number(hh), m2=Number(mm); if(h>=0&&h<=23&&m2>=0&&m2<=59) return `${String(h).padStart(2,'0')}:${String(m2).padStart(2,'0')}`; } return null; }
 
+
 // === 日フォーカス・ヘルパー ==========================
  function enterDayFocus(dayEl){
    window.__weekStartBeforeFocus = document.getElementById('weekPicker')?.value;
    if (!dayEl) return;                 // ← 先にガード
-   document.body.classList.add('dayFocus');
-  document.body.classList.add('focusDay');
+   document.body.classList.add('focusDay');
   dayEl.setAttribute('data-focus','true');
 
 // トップバー右端に「戻る」ボタンを用意（重複作成しない）
@@ -603,10 +600,15 @@ setTimeout(() => {
 
   // その日の先頭に寄せる
   try { dayEl.scrollIntoView({ block:'start', behavior:'smooth' }); } catch(_){}
-}
+   // ★ フォーカス突入時：未選択なら当日の先頭スロットを選ぶ
+   try {
+     const cur = getActiveSlot?.();
+     const curDay = cur?.closest?.('.day');
+     if (!cur || curDay !== dayEl) ensureInitialSelectionForDay(dayEl);
+   } catch(_){}
+ }
 
 function exitDayFocus(){
-  document.body.classList.remove('dayFocus');
   document.body.classList.remove('focusDay');
   document.querySelectorAll('.day[data-focus="true"]').forEach(d => d.removeAttribute('data-focus'));
   document.getElementById('focusBackBtn')?.remove();
@@ -615,6 +617,97 @@ function exitDayFocus(){
   if (p && window.__weekStartBeforeFocus) p.value = window.__weekStartBeforeFocus;
   window.__weekStartBeforeFocus = null; // ← 後腐れ防止（任意）
 }
+
+function applyUndoWithFocus(){
+  const preferKey = window.lastSelectedKey || null;
+  const wasFocus = document.body.classList.contains('focusDay');
+
+  // 既存の undo を実行（内部で render() していてもOK）
+  try { if (typeof undo === 'function') undo(); } catch{}
+
+  // 描画の一本化：フォーカス中は必ずフォーカス維持で、週表示は念のため render
+  if (wasFocus) {
+    reRenderPreservingFocus(preferKey);
+  } else {
+    try { render(); } catch{}
+  }
+}
+
+function applyRedoWithFocus(){
+  const preferKey = window.lastSelectedKey || null;
+  const wasFocus = document.body.classList.contains('focusDay');
+
+  try { if (typeof redo === 'function') redo(); } catch{}
+
+  if (wasFocus) {
+    reRenderPreservingFocus(preferKey);
+  } else {
+    try { render(); } catch{}
+  }
+}
+
+// 週→日 再入用のユーティリティ
+function __findDayByISO(iso){
+  if (!iso) return null;
+  const esc = (window.CSS?.escape ? CSS.escape(iso) : iso);
+  // data-day="YYYY-MM-DD" を優先。なければ見出しテキストから一致を探す
+  return document.querySelector(`.day[data-day="${esc}"]`)
+      || Array.from(document.querySelectorAll('.day'))
+           .find(d => (d.querySelector('.day-header-date')?.textContent || '').includes(iso));
+}
+
+// フォーカス維持・完全復元（ISO優先）
+function reRenderPreservingFocus(preferKey){
+  const wasFocus = document.body.classList.contains('focusDay');
+
+  // ① フォーカスしていた日を ISO で確定（最優先：weekPickerの値）
+  let focusISO = null;
+  try {
+    const picker = document.getElementById('weekPicker');
+    focusISO = picker?.value || null;
+    if (!focusISO){
+      // フォーカス中の日ヘッダから 2025/10/20 → 2025-10-20 に整形
+      const txt = document.querySelector('.day[data-focus="true"] .day-header-date')?.textContent || '';
+      const m = txt.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+      if (m) focusISO = `${m[1]}-${m[2]}-${m[3]}`;
+    }
+  } catch(_){}
+
+  // ② いったん解除して再描画
+  if (wasFocus) { try{ exitDayFocus(); }catch{} }
+  render();
+
+  // 週表示ならここで終了
+  if (!wasFocus) return;
+
+  // ③ ピッカーを元のISOに戻す（イベントは発火させない）
+  try {
+    const picker = document.getElementById('weekPicker');
+    if (picker && focusISO) {
+      picker.value = focusISO;
+      // 週バッジ表示などの同期（副作用で週が変わらないことは事前確認済み）
+      window.__setWeekdayFromISO?.(picker.value);
+    }
+  } catch(_){}
+
+  // ④ 同じ日を DOM から特定し再フォーカス
+  let dayEl = __findDayByISO(focusISO) || document.querySelector('.day'); // 最後の安全弁
+  if (!dayEl) { document.body.classList.remove('focusDay'); return; }
+  try { enterDayFocus(dayEl); } catch{}
+
+  // ⑤ スロット再選択：preferKey > lastSelectedKey > 当日先頭
+  const pickByKey = (key)=>{
+    if (!key) return null;
+    const esc = (window.CSS?.escape ? CSS.escape(key) : key);
+    return dayEl.querySelector(`.slot[data-key="${esc}"]`)
+        || document.querySelector(`.slot[data-key="${esc}"]`);
+  };
+
+  let target = pickByKey(preferKey) || pickByKey(window.lastSelectedKey);
+  if (target) setActiveSlot(target); else ensureInitialSelectionForDay(dayEl);
+}
+
+
 
 // Escで解除（1回だけバインド）
 if (!window.__focusEscBound){
@@ -687,22 +780,18 @@ function extractHHMMFromTimeEl(timeEl){
   document.getElementById('undoBtn')?.addEventListener('click', undo);
   document.getElementById('redoBtn')?.addEventListener('click', redo);
   function isTypingContext(e){ const el = e.target; const tag = (el?.tagName || '').toLowerCase(); return el?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'; }
-  document.addEventListener('keydown', (e)=>{ if(isTypingContext(e)) return; const k = e.key.toLowerCase(); if((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'z'){ e.preventDefault(); undo(); }else if((e.ctrlKey || e.metaKey) && (k === 'y' || (e.shiftKey && k === 'z'))){ e.preventDefault(); redo(); } }, true);
-
-// ✅ アクティブ枠の管理（未定義なら初期化）
-if (typeof window.activeSlotEl === 'undefined') window.activeSlotEl = null;
-
-function setActiveSlot(el){
-  if (window.activeSlotEl && window.activeSlotEl !== el){
-    window.activeSlotEl.classList.remove('focused');
+  document.addEventListener('keydown', (e)=>{
+  if(isTypingContext(e)) return;
+  const k = e.key.toLowerCase(); 
+  if((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'z'){        // Undo
+    e.preventDefault();
+    applyUndoWithFocus();
+  }else if((e.ctrlKey || e.metaKey) && (k === 'y' || (e.shiftKey && k === 'z'))){ // Redo
+    e.preventDefault();
+    applyRedoWithFocus();
   }
-  window.activeSlotEl = el;
-  if (el){
-    el.classList.add('focused');
-    // ★ 選択を記録しておく（レイアウト変更後に復活させる用）
-    window.lastSelectedKey = el.dataset.key;
-  }
-}
+  }, true);
+
 
 // ===== 編集ロック判定（祝日/休止→編集不可。臨時/緊急は除外） =====
 function isSlotLockedForEdit(slotEl){
@@ -1241,9 +1330,10 @@ el.addEventListener('click', (e)=>{
 printBtn.addEventListener('click', ()=>{
   // 現在フォーカス中の .day があればそれ、なければ
   // アクティブスロットのある .day、無ければ先頭の .day
-  const day = document.querySelector('.day.is-focused')
-           || (window.activeSlotEl && window.activeSlotEl.closest('.day'))
-           || document.querySelector('.day');
+   const cur = getActiveSlot?.();
+   const day = document.querySelector('.day.is-focused')
+            || (cur && cur.closest('.day'))
+            || document.querySelector('.day');
   if(!day){ window.print(); return; }
 
   // 1列化して印刷
@@ -1257,7 +1347,7 @@ printBtn.addEventListener('click', ()=>{
 const printSelectionBtn = document.getElementById('printSelectionBtn');
 printSelectionBtn?.addEventListener('click', ()=>{
   // ルール：アクティブスロットの属する「直近の .slots」を印刷
-  const base = window.activeSlotEl || document.querySelector('.slot');
+   const base = getActiveSlot?.() || document.querySelector('.slot');
   if(!base){
     alert('印刷するセクションが特定できません（枠を1つ選択してから押してください）');
     return;
@@ -1316,22 +1406,99 @@ applyDatalists(appLists);
   (function ensureHolidayCaches(){ const y = new Date().getFullYear(); [y - 1, y, y + 1].forEach(ensureHolidayAuto); })();
 
 // ★ ダブルクリック編集を委譲で一括対応（F5直後でも必ず効く）
-document.getElementById('schedule').addEventListener('dblclick', (e) => {
-  // スロット要素を特定
-  const slot = e.target.closest('.slot');
-  if (!slot) return; // スロット外は無視
+ // =============================
+ // 選択状態（SST）とユーティリティ
+ // =============================
+ (function initSlotCursorCore(){
+   if (!window.__slotCursor)
+     window.__slotCursor = { activeSlotEl: null, activeDayIndex: null };
+ 
+   // 現在選択を取得
+   window.getActiveSlot = function(){ return window.__slotCursor.activeSlotEl; };
+ 
+   function isSelectableSlot(el){
+     return !!(el &&
+       el.classList?.contains('slot') &&
+       !el.hidden &&
+       !el.classList.contains('disabled') &&
+       !el.classList.contains('locked'));
+   }
+ 
+   function syncFocused(prev, next){
+     if (prev?.classList) prev.classList.remove('focused');
+     if (next?.classList) next.classList.add('focused');
+     try { next?.focus?.({preventScroll:true}); } catch(_){}
+     try { next?.scrollIntoView?.({block:'nearest'}); } catch(_){}
+   }
+ 
+   window.setActiveSlot = function(el){
+     if (!isSelectableSlot(el)) return;
+     const prev = window.__slotCursor.activeSlotEl;
+     window.__slotCursor.activeSlotEl = el;
+ 
+     const day = el.closest?.('.day');
+     if (day) {
+       const idx = Array.from(day.parentElement?.querySelectorAll?.('.day') || []).indexOf(day);
+       if (idx >= 0) window.__slotCursor.activeDayIndex = idx;
+     }
+ 
+     syncFocused(prev, el);
+     // 選択記録（旧window.lastSelectedKey互換）
+     window.lastSelectedKey = el?.dataset?.key || null;
+   };
+ 
+   window.findFirstSelectableInDay = function(dayEl){
+     if (!dayEl) return null;
+     const list = dayEl.querySelectorAll('.slot');
+     for (const el of list) if (isSelectableSlot(el)) return el;
+     return null;
+   };
+ 
+   window.ensureInitialSelectionForDay = function(dayEl){
+     if (window.__slotCursor.activeSlotEl?.closest?.('.day') === dayEl) return;
+     const first = findFirstSelectableInDay(dayEl);
+     if (first) setActiveSlot(first);
+   };
+ 
+   window.moveVertWithinDay = function(fromEl, delta){
+     if (!isSelectableSlot(fromEl)) return false;
+     const dayEl = fromEl.closest?.('.day');
+     if (!dayEl) return false;
+     const list = Array.from(dayEl.querySelectorAll('.slot')).filter(isSelectableSlot);
+     const i = list.indexOf(fromEl);
+     if (i < 0) return false;
+     const j = i + (delta > 0 ? 1 : -1);
+     if (j < 0 || j >= list.length) return false; // 端では止まる
+     setActiveSlot(list[j]);
+     return true;	 
+   };
+ })();
+ 
+    function moveVertWithCrossDay(fromEl, delta) {
+  const inFocus = document.body.classList.contains('focusDay');
+  if (inFocus) return moveVertWithinDay(fromEl, delta);
 
-  // 時刻セル(.time)上のダブルクリックは「時刻編集」に譲る
-  if (e.target.closest('.time')) return;
+  const curDay = fromEl.closest('.day');
+  if (!curDay) return;
 
-  // 祝日/休止のロックを尊重（isSlotLockedForEditを使っている場合）
-  if (typeof isSlotLockedForEdit === 'function' && isSlotLockedForEdit(slot)) return;
+  const allDays = Array.from(document.querySelectorAll('.day'));
+  const dayIndex = allDays.indexOf(curDay);
 
-  // 編集開始
-  const key = slot.dataset.key;
-  if (key) openEditor([key]);
-}, true); // ← captureはtrueでもfalseでもOK（他のstopPropagationの影響を受けにくい）
+  // 同日内試行
+  const moved = moveVertWithinDay(fromEl, delta);
+  if (moved) return;
 
+  // 日またぎ処理（週モード限定）
+  const nextIndex = dayIndex + (delta > 0 ? 1 : -1);
+  if (nextIndex < 0 || nextIndex >= allDays.length) return; // 範囲外
+
+  const nextDay = allDays[nextIndex];
+  const list = Array.from(nextDay.querySelectorAll('.slot')).filter(el => !el.hidden);
+  if (!list.length) return;
+
+  const target = (delta > 0) ? list[0] : list[list.length - 1];
+  setActiveSlot(target);
+}
   // 初期適用＆描画
   applyLayout(layoutMode);
 
@@ -1352,12 +1519,15 @@ editBtn?.addEventListener('click', () => {
       const el = document.querySelector(`.slot[data-key="${k}"]`);
       if (el) candEls.push(el);
     }
-  } else if (typeof activeSlotEl !== 'undefined' && activeSlotEl) {
-    candEls.push(activeSlotEl);
-  } else {
-    const first = document.querySelector('.slot');
-    if (first) candEls.push(first);
-  }
+   } else {
+     const cur = getActiveSlot?.();
+     if (cur) {
+       candEls.push(cur);
+     } else {
+       const first = document.querySelector('.slot');
+       if (first) candEls.push(first);
+     }
+   }
 
   if (!candEls.length){
     alert('編集する枠が見つかりません');
@@ -1702,13 +1872,7 @@ function fmtContent(d){
   if(dlP && !dlP.children.length) powers.forEach(v=>{const o=document.createElement('option');o.value=v;dlP.appendChild(o);});
 })();
 
-/* ---------- 選択・アクティブ管理（簡略版） ---------- */
-let activeSlotEl = null;
-function setActiveSlot(el){
-  if(activeSlotEl && activeSlotEl !== el) activeSlotEl.classList.remove('focused');
-  activeSlotEl = el;
-  if(el) el.classList.add('focused');
-}
+
 const multiSelected = new Set();
 function clearMultiSelection(){
   multiSelected.forEach(k=>{
@@ -1794,11 +1958,12 @@ createSlot = function(meta, time){
     if (isSlotLockedForEdit(el)) return;
     const multi = e.ctrlKey || e.metaKey || e.shiftKey;
     if(!multi){ clearMultiSelection(); }
-    if(e.shiftKey && activeSlotEl){
-      findRangeSameDay(activeSlotEl, el).forEach(addMultiSelect);
-      setActiveSlot(el);
-      return;
-    }
+     const cur = getActiveSlot?.();
+     if(e.shiftKey && cur){
+       findRangeSameDay(cur, el).forEach(addMultiSelect);
+       setActiveSlot(el);
+       return;
+     }
     if(multi){ toggleMultiSelect(el); setActiveSlot(el); return; }
     addMultiSelect(el); setActiveSlot(el);
   }, true);
@@ -2018,8 +2183,38 @@ function openEditor(keys){
         }
       }
 
-      saveWeek(currentMonday, data);
-      render();
+       // --- フォーカス維持のための退避 ---
+       const wasFocus = document.body.classList.contains('focusDay');
+       const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+       // フォーカス日を特定するためのキー（data-day があれば最優先、なければ見出しテキスト）
+       const focusedDayKey =
+         focusedDayEl?.dataset?.day ??
+         focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
+         null;
+       const lastKeyBefore = window.lastSelectedKey || null;
+ 
+       saveWeek(currentMonday, data);
+       if (wasFocus) exitDayFocus();  // ← いったん解除してから
+       render();
+       // --- 再突入（同じ日へ） ---
+       if (wasFocus && focusedDayKey){
+         // data-day で探す → 無ければ見出しテキスト一致で探す
+         let dayEl =
+           document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+           Array.from(document.querySelectorAll('.day'))
+             .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+         if (dayEl) {
+           enterDayFocus(dayEl);
+           // 可能なら直前と同じスロットを再選択
+           if (lastKeyBefore){
+             const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+             if (sameSlot) setActiveSlot(sameSlot);
+             else ensureInitialSelectionForDay(dayEl);
+           } else {
+             ensureInitialSelectionForDay(dayEl);
+           }
+         }
+       }
     }else if(editor.returnValue==='clear'){
       const data = loadWeek(currentMonday);
       const dHead = data[firstKey];
@@ -2032,8 +2227,33 @@ function openEditor(keys){
       }else{
         delete data[firstKey];
       }
-      saveWeek(currentMonday, data);
-      render();
+       const wasFocus = document.body.classList.contains('focusDay');
+       const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+       const focusedDayKey =
+         focusedDayEl?.dataset?.day ??
+         focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
+         null;
+       const lastKeyBefore = window.lastSelectedKey || null;
+ 
+       saveWeek(currentMonday, data);
+       if (wasFocus) exitDayFocus();
+       render();
+       if (wasFocus && focusedDayKey){
+         let dayEl =
+           document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+           Array.from(document.querySelectorAll('.day'))
+             .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+         if (dayEl) {
+           enterDayFocus(dayEl);
+           if (lastKeyBefore){
+             const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+             if (sameSlot) setActiveSlot(sameSlot);
+             else ensureInitialSelectionForDay(dayEl);
+           } else {
+             ensureInitialSelectionForDay(dayEl);
+           }
+         }
+       }
     }
   }, {once:true});
 }
@@ -2049,7 +2269,7 @@ function isOccupiedRecord(rec){
 }
 
 function copySlotOrMerge(){
-  const el = activeSlotEl;
+  const el = getActiveSlot?.();
   if(!el){ alert('スロットを選択してください'); return; }
   const key = el.dataset.key;
   const st  = loadWeek(currentMonday);
@@ -2070,7 +2290,7 @@ function copySlotOrMerge(){
 function pasteToActive({flip=false}={}){
   const clip = appClipboard;
   if(!clip?.type){ alert('コピーされていません'); return; }
-  const tEl = activeSlotEl; if(!tEl){ alert('貼り付け先を選択してください'); return; }
+  const tEl = getActiveSlot?.(); if(!tEl){ alert('貼り付け先を選択してください'); return; }
   const tKey = tEl.dataset.key;
   const st = loadWeek(currentMonday);
 
@@ -2080,7 +2300,8 @@ function pasteToActive({flip=false}={}){
     if(flip && data.eye) data.eye = flipEye(data.eye);
     delete data.linkWith;
     st[tKey] = data;
-    saveWeek(currentMonday, st); render();
+  saveWeek(currentMonday, st);
+  reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
     return;
   }
 
@@ -2097,19 +2318,47 @@ function pasteToActive({flip=false}={}){
     const headKey = destKeys[0];
     st[headKey] = {...headData, head:true, span};
     for(let i=1;i<span;i++) st[destKeys[i]] = { tail:true, head:headKey };
-    saveWeek(currentMonday, st); render();
+  saveWeek(currentMonday, st);
+  reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
     return;
   }
 }
 
 function cutActive(){
-  const el = activeSlotEl; if(!el) return;
+  const el = getActiveSlot?.(); if(!el) return;
   copySlotOrMerge();
   const st = loadWeek(currentMonday);
   const key = el.dataset.key; const d=st[key]; if(!d) return;
   if(d.head){ const {d:dd,day,section,idx}=parseKey(key); for(let i=0;i<(d.span||1);i++){ delete st[`${dd}|${day}|${section}|${idx+i}`]; } }
   else { delete st[key]; }
-  saveWeek(currentMonday, st); render();
+   // --- フォーカス維持ラッパー（保存時と同じパターン） ---
+   const wasFocus = document.body.classList.contains('focusDay');
+   const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+   const focusedDayKey =
+     focusedDayEl?.dataset?.day ??
+     focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ?? null;
+   const lastKeyBefore = window.lastSelectedKey || null;
+ 
+   saveWeek(currentMonday, st);
+   if (wasFocus) exitDayFocus();
+   render();
+   if (wasFocus && focusedDayKey){
+     let dayEl =
+       document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+       Array.from(document.querySelectorAll('.day'))
+         .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+     if (dayEl) {
+       enterDayFocus(dayEl);
+       // 可能なら同じキーへ再選択、無ければ当日先頭
+       if (lastKeyBefore){
+         const same = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+         if (same) setActiveSlot(same);
+         else ensureInitialSelectionForDay(dayEl);
+       } else {
+         ensureInitialSelectionForDay(dayEl);
+       }
+     }
+   }
 }
 
 /* ---------- ショートカット（Ctrl/Cmd + C/V/X, Delete, Enter） ---------- */
@@ -2123,7 +2372,7 @@ document.addEventListener('keydown',(e)=>{
 
   if(k==='delete' || k==='backspace'){
     e.preventDefault();
-    const el = activeSlotEl; if(!el) return;
+    const el = getActiveSlot?.(); if(!el) return;
     const st = loadWeek(currentMonday);
     delete st[el.dataset.key];
     saveWeek(currentMonday, st); render();
@@ -2131,7 +2380,7 @@ document.addEventListener('keydown',(e)=>{
 
 if(k==='enter'){
   e.preventDefault();
-  const el = activeSlotEl || document.querySelector('.slot');
+  const el = getActiveSlot?.() || document.querySelector('.slot');
   if(!el) return;
 
   // ★ 祝日/休止ガードを追加
@@ -2144,7 +2393,39 @@ if(k==='enter'){
   openEditor([el.dataset.key]);
 }
 }, true);
-
+ (function bindArrowNavOnce(){
+   if (window.__slotNavBound) return; window.__slotNavBound = true;
+   document.addEventListener('keydown', (e)=>{
+     if (e.defaultPrevented) return;
+     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+ 
+     const inFocus = document.body.classList.contains('focusDay');
+     let cur = getActiveSlot?.();
+ 
+     // 未選択のとき：表示モードに応じて当日先頭/週の既定日先頭を選ぶ
+     if (!cur) {
+       if (inFocus) {
+         const dayEl = document.querySelector('.day[data-focus="true"]');
+         if (dayEl) ensureInitialSelectionForDay(dayEl);
+         cur = getActiveSlot?.();
+       } else {
+         // 週表示：現在クリック済みの日がなければ、左列の最初の日から
+         const firstDay = document.querySelector('.day'); // DOM先頭の日
+         if (firstDay) {
+           const first = findFirstSelectableInDay(firstDay);
+           if (first) setActiveSlot(first);
+           cur = getActiveSlot?.();
+         }
+       }
+       if (!cur) return; // まだなければ何もしない
+     }
+ 
+     // 上下移動：週モードでは日またぎあり、フォーカスでは同日で止まる
+     e.preventDefault();
+     const delta = (e.key === 'ArrowDown' ? +1 : -1);
+     moveVertWithCrossDay(cur, delta);
+   });
+ })();
   </script>
   <script>
 (function(){
