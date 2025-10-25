@@ -617,6 +617,87 @@ function exitDayFocus(){
   if (p && window.__weekStartBeforeFocus) p.value = window.__weekStartBeforeFocus;
   window.__weekStartBeforeFocus = null; // ← 後腐れ防止（任意）
 }
+// 固定ヘッダー高（常に差し引く）
+function __getHeaderOffsetPx(){
+  const topbar = document.querySelector('.topbar');
+  return topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+}
+
+// スクロール親
+function __getScrollParent(node){
+  let p = node?.parentElement;
+  while (p && p !== document.body){
+    const s = getComputedStyle(p);
+    const ovY = s.overflowY || s.overflow;
+    if (/(auto|scroll)/.test(ovY) && p.scrollHeight > p.clientHeight) return p;
+    p = p.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
+// el の「scroller内での」Y座標（絶対スナップ用）
+function __offsetTopWithin(el, scroller){
+  let y = 0, n = el;
+  while (n && n !== scroller){
+    y += n.offsetTop || 0;
+    n = n.offsetParent;
+  }
+  return y;
+}
+
+// dayEl 全体を基準に絶対位置へスナップ（上/下/中央）
+// align: 'top' | 'bottom' | 'center'
+function snapDay(dayEl, align='top'){
+  if (!dayEl) return;
+  const scroller = __getScrollParent(dayEl);
+  const headerH = __getHeaderOffsetPx();
+
+  const viewH = (scroller === document.scrollingElement || scroller === document.documentElement)
+    ? window.innerHeight - headerH
+    : scroller.clientHeight - headerH;
+
+  const dayTop    = __offsetTopWithin(dayEl, scroller);               // scroller内の先頭
+  const dayHeight = dayEl.getBoundingClientRect().height;
+
+  let target; // scroller.scrollTop の目標値
+  if (align === 'top'){
+    target = dayTop - headerH;                                        // ヘッダーに隠れない“Max上”
+  } else if (align === 'bottom'){
+    target = dayTop + dayHeight - viewH - headerH;                    // 末尾がちょうど入る位置
+  } else { // center
+    target = dayTop + (dayHeight - viewH) / 2 - headerH;              // 可能なら中央
+  }
+
+  // 範囲クリップ
+  const max = scroller.scrollHeight - (scroller.clientHeight || window.innerHeight);
+  if (isFinite(max)) target = Math.max(0, Math.min(target, max));
+
+  scroller.scrollTo({ top: target, behavior: 'smooth' });
+}
+
+function keepSlotVisibleNearest(slotEl){
+  if (!slotEl) return;
+  const scroller = __getScrollParent(slotEl);
+  const headerH = __getHeaderOffsetPx();
+  const rect = slotEl.getBoundingClientRect();
+  const scRect = (scroller === document.scrollingElement || scroller === document.documentElement)
+    ? { top: 0, height: window.innerHeight }
+    : scroller.getBoundingClientRect();
+
+  const topIn  = rect.top    - scRect.top;
+  const botIn  = rect.bottom - scRect.top;
+  const viewH  = (scroller === document.scrollingElement || scroller === document.documentElement)
+    ? window.innerHeight - headerH
+    : scroller.clientHeight - headerH;
+  const extra  = 8;
+
+  let dy = 0;
+  if (topIn < headerH + extra) dy = topIn - (headerH + extra);
+  else if (botIn > viewH + headerH - extra) dy = botIn - (viewH + headerH - extra);
+
+  if (dy) scroller.scrollBy({ top: dy, behavior: 'smooth' });
+}
+
 
 function applyUndoWithFocus(){
   const preferKey = window.lastSelectedKey || null;
@@ -1470,6 +1551,7 @@ applyDatalists(appLists);
      const j = i + (delta > 0 ? 1 : -1);
      if (j < 0 || j >= list.length) return false; // 端では止まる
      setActiveSlot(list[j]);
+	 keepSlotVisibleNearest(list[j]);   // 同日内は“見切れ防止”だけ
      return true;	 
    };
  })();
@@ -1498,6 +1580,22 @@ applyDatalists(appLists);
 
   const target = (delta > 0) ? list[0] : list[list.length - 1];
   setActiveSlot(target);
+  // ★ 方向つきスナップ（あなたの指定どおり）
+  // 遷移先「日」へ絶対スナップ（方向ルール）
+  // 月8↓→火1    ：火曜 上寄せ
+  // 火末↓→水     ：水曜 下寄せ
+  // 火1↑→月8     ：月曜 上寄せ
+  // 水末↓→木1    ：木曜 上寄せ
+  // 木1↑→水末    ：水曜 下寄せ
+  const nextDayEl = nextDay;
+  const align =
+    (nextIndex === 0) ? 'top' :                   // 月
+    (nextIndex === 1) ? (delta > 0 ? 'top' : 'bottom') :  // 火
+    (nextIndex === 2) ? 'bottom' :
+    (nextIndex === 3) ? 'top' :
+    (nextIndex === 4) ? (delta > 0 ? 'top' : 'bottom') :
+    /* 5,6 土日 */   'bottom';
+  snapDay(nextDayEl, align);
 }
   // 初期適用＆描画
   applyLayout(layoutMode);
