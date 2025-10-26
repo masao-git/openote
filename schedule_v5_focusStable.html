@@ -927,6 +927,34 @@ function extractHHMMFromTimeEl(timeEl){
   function getSectionKey(dayKey, section){ return `${dayKey}|${section}`; }
   function ensureSlotOvrShape(ovr, dayKey, section){ const key = getSectionKey(dayKey, section); if (!ovr[key]) ovr[key] = {}; const s = ovr[key]; if (typeof s.extraHead !== 'number') s.extraHead = 0; if (typeof s.extraTail !== 'number') s.extraTail = 0; if (!Array.isArray(s.inserts)) s.inserts = []; s.inserts = Array.from(new Set(s.inserts.filter(n=>Number.isInteger(n) && n>=0))).sort((a,b)=>a-b); return s; }
   function getSectionOvr(week, dayKey, section){ const o = loadSlotOverrides(week) || {}; return ensureSlotOvrShape(o, dayKey, section); }
+function resetSlotLayoutForDay(week, dayKey, opts = {}) {
+   console.log('[DEBUG] resetSlotLayoutForDay called:', week, dayKey);
+   const ovr = loadSlotOverrides(week) || {};
+   console.log('[DEBUG] keys before:', Object.keys(ovr));
+   console.log('[DEBUG] ovr[dayKey] before:', ovr[dayKey]);
+
+  // その日の全セクション（例: "Fri|0","Fri|1",...）を削除
+  const prefix = `${dayKey}|`;
+  let changed = false;
+  Object.keys(ovr).forEach(k => {
+    if (k.startsWith(prefix)) { delete ovr[k]; changed = true; }
+  });
+  if (!changed) return;
+
+  // 保存
+  saveSlotOverrides(week, ovr);
+
+  // オプションで即反映
+   if (opts.snapshot) {
+     // フォーカス中でも週表示でも正しく復帰
+     if (document.body.classList.contains('focusDay')) {
+       reRenderPreservingFocus();
+     } else {
+       render();
+     }
+   }
+}
+
   function setSectionOvr(week, dayKey, section, patch){ const all = loadSlotOverrides(week) || {}; const s = ensureSlotOvrShape(all, dayKey, section); Object.assign(s, patch); saveSlotOverrides(week, all); }
   function getExtraTailSlots(week, dayKey, section){ return getSectionOvr(week, dayKey, section).extraTail|0; }
   function setExtraTailSlots(week, dayKey, section, n){ const v = Math.max(0, Number(n)||0); setSectionOvr(week, dayKey, section, { extraTail: v }); }
@@ -1261,7 +1289,7 @@ header.addEventListener('dblclick', (e)=>{
       addItem('────────', ()=>{}, {disabled:true});
       addItem('この日の休止を「全リセット」', ()=>{ if(confirm('この日の休止設定（終日/セクション/以後/以前）をすべて解除します。よろしいですか？')){ clearDayOffForDay(currentMonday, dayKey, { snapshot:true }); render(); } }, {danger:true});
       addItem('────────', ()=>{}, {disabled:true});
-      addItem('この日の「枠の形」をデフォルトに戻す', ()=>{ if (confirm('この日の枠形状（先頭臨時・途中挿入・末尾臨時）をすべて解除して、初期の枠数に戻します。よろしいですか？')) { resetSlotLayoutForDay(currentMonday, dayKey, { snapshot:true }); render(); } });
+      addItem('この日の「枠の形」をデフォルトに戻す', ()=>{ if (confirm('この日の枠形状（先頭臨時・途中挿入・末尾臨時）をすべて解除して、初期の枠数に戻します。よろしいですか？')) { resetSlotLayoutForDay?.(currentMonday, dayKey, { snapshot:true }); render(); } });
  addItem('この日を印刷（A4）', ()=> printDayElement(wrap));
       const close=(ev)=>{ if(!menu.contains(ev.target)){ document.removeEventListener('mousedown',close,true); menu.remove(); } };
       document.addEventListener('mousedown', close, true);
