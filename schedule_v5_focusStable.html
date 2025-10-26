@@ -653,7 +653,10 @@ function enterDayFocus(dayEl) {
     if (picker) {
       window.__suppressWeekChange = true;
       picker.value = `${m[1]}-${m[2]}-${m[3]}`;
+      // バッジをここで明示的に更新（抑止解除前に）
+      window.__setWeekdayFromISO?.(picker.value);
       setTimeout(() => (window.__suppressWeekChange = false), 100);
+       try { window.__setWeekdayFromISO?.(picker.value); } catch(_) {}	  
     }
   }
 
@@ -678,7 +681,8 @@ function exitDayFocus() {
   // --- モード解除 ---
   document.body.classList.remove('focusDay');
   document.querySelectorAll('#schedule .day').forEach(d => {
-    d.style.display = 'block';
+    // ★ フォーカス時に付けた inline display をクリア（CSSに委ねる）
+    d.style.display = '';
     d.removeAttribute('data-focus');
   });
   document.getElementById('focusBackBtn')?.remove();
@@ -689,7 +693,10 @@ function exitDayFocus() {
   if (p && window.__weekStartBeforeFocus) {
     window.__suppressWeekChange = true;
     p.value = window.__weekStartBeforeFocus;
+    // ★ 抑止解除の前に、現在のピッカー値で曜日バッジを更新
+    window.__setWeekdayFromISO?.(p.value);
     setTimeout(() => (window.__suppressWeekChange = false), 100);
+     try { window.__setWeekdayFromISO?.(p.value); } catch(_) {}
   }
   window.__weekStartBeforeFocus = null;
 }
@@ -1041,10 +1048,31 @@ function applyGaColoring(){
     else el.classList.remove('ga-slot');
   });
 }
+// ISO(YYYY-MM-DD)を「ローカル日付の正午」で作る（DSTや境界でも安全）
+function parseISODateLocal(iso){
+  if(!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if(!m) return null;
+  return new Date(+m[1], +m[2]-1, +m[3], 12, 0, 0, 0); // ← 正午固定がコツ
+}
+
+// ローカル日付に「n日」を安全に加減算（正午固定で扱う）
+function addDaysLocal(date, n){
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+// ISOに戻す（ゼロ詰め）
+function toISODate(d){
+  const z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+}
 
   // ===== 描画 =====
   function render(){
 　　applyDatalists(appLists);
+   window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
   if (document.body.classList.contains('focusDay') && window.focusDate) {
     // フォーカス中はピッカーを当日に保つ（イベントは発火させない）
     window.__suppressWeekChange = true;
@@ -1105,6 +1133,11 @@ function applyGaColoring(){
     document.querySelectorAll('.slots').forEach(sl => applyMerges(sl, loadWeek(currentMonday)));
     applyGaColoring();
 	enforceFocusView(); 
+// --- 曜日バッジ更新（フォーカス中は既に正しいので再更新しない）
+if (!document.body.classList.contains('focusDay')) {
+  const iso = document.getElementById('weekPicker')?.value;
+  window.__setWeekdayFromISO?.(iso);
+}
   }
 
   
@@ -1136,6 +1169,7 @@ function preserveScrollWhile(doWork){
 
   // === フォーカスモード時の再表示補正 ===
 function enforceFocusView(){
+
   if (!document.body.classList.contains('focusDay') || !window.focusDate) return;
 
   const days = document.querySelectorAll('#schedule .day');
@@ -1153,13 +1187,18 @@ function enforceFocusView(){
       if (iso === window.focusDate) hit = d;
     });
   }
-  if (!hit) return;
+   if (!hit) return;
 
   days.forEach(d => {
     d.style.display = (d === hit) ? 'block' : 'none';
     if (d === hit) d.setAttribute('data-focus','true');
     else d.removeAttribute('data-focus');
   });
+ 
+   // フォーカス表示が確定した時点のピッカー値で曜日バッジを更新
+   const picker = document.getElementById('weekPicker');
+   if (picker) window.__setWeekdayFromISO?.(picker.value); 
+   window.__setWeekdayFromISO?.(window.focusDate);
 }
 
 
@@ -2719,19 +2758,28 @@ if(k==='enter'){
     return badge;
   }
 
-  function setWeekdayFromISO(iso){
-    const badge = ensureBadge();
-    if (!badge || !iso) return;
-    const [y,m,d] = iso.split('-').map(Number);
-    const dt = new Date(y, m-1, d);
-    if (!isNaN(dt)) badge.textContent = `（${JP[dt.getDay()]}）`;
-  }
+function setWeekdayFromISO(iso){
+  const badge = ensureBadge();
+  if (!badge || !iso) return;
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0, 0);
+  dt.setHours(12,0,0,0); // ← この行を追加（正午固定）
+  if (!isNaN(dt)) badge.textContent = `（${JP[dt.getDay()]}）`;
+}
+
+
 
   // ピッカー操作でも更新
   const picker = document.getElementById('weekPicker');
   if (picker) {
-    picker.addEventListener('input',  () => setWeekdayFromISO(picker.value));
-    picker.addEventListener('change', () => setWeekdayFromISO(picker.value));
+  picker.addEventListener('input',  () => {
+    if (window.__suppressWeekChange) return;
+    window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
+  });
+  picker.addEventListener('change', () => {
+    if (window.__suppressWeekChange) return;
+    window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
+  });
     // 初期表示
     setWeekdayFromISO(picker.value);
   }
@@ -2834,6 +2882,7 @@ if(k==='enter'){
     // 1) 週が変わるなら currentMonday を更新して既存の render() 実行
     if (!sameWeek(target, currentMonday)) {
       currentMonday = mondayOf(target);
+	  currentMonday = mondayOf(target);
       render();
       // DOM確定待ち（2フレーム）
       await new Promise(r => requestAnimationFrame(()=> requestAnimationFrame(r)));
@@ -2858,6 +2907,7 @@ if(k==='enter'){
     $picker.value = ymd(shown);
 
     updateLabels();
+	window.__setWeekdayFromISO?.(ymd(shown));
   }
 
   // ---- フォーカス中のみ、週ボタンを「前日/翌日/今日」に差し替え（当初のキャプチャ方式）----
