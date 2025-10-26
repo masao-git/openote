@@ -338,8 +338,66 @@ body.focusDay .day[data-focus="true"] { display: block; }
 #weekPickerWeekday { display: none; }
 body.focusDay #weekPickerWeekday { display: inline; }
 
+    /* ツールバーに入ったときの見た目（重なり回避） */
+    #helpBtn.docked{
+      position: static;
+      width: 32px; height: 32px; line-height: 32px;
+      border-radius: 50%;
+      box-shadow: none;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
   </style>
-</head>
+  <style>
+   #helpBtn{
+     position: fixed; top: 12px; right: 12px;
+     width: 32px; height: 32px; line-height: 32px;
+     padding: 0; font: inherit; font-size: 16px;
+     border: 1px solid #ddd; border-radius: 50%;
+     background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+     text-align: center; cursor: pointer; z-index: 10000;
+   }
+    #helpBtn:hover{ box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+    @media print{ #helpBtn{ display: none !important; } }
+	
+    /* Help dialog basic styling */
+    #helpDialog{ border:none; padding:0; }
+    #helpDialog::backdrop{ background: rgba(0,0,0,.35); }
+    #helpDialog > div{
+      max-height: min(70vh, 600px);
+      overflow:auto;
+      background:#fff;
+      border-radius:12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+    }
+    #helpDialog h2{ margin:0 0 .5rem; font-size:1.1rem; }
+    #helpCloseBtn{
+      display:block; margin:16px 0 0 auto;
+      height:32px; padding:0 12px; border:1px solid #ddd;
+      border-radius:8px; background:#fff; cursor:pointer;
+    }
+    @media print{ #helpDialog{ display:none !important; } }
+
+    /* help content: keyboard key, table */
+    #helpDialog kbd{
+      display:inline-block; min-width:1.6em; padding:.15em .4em;
+      border:1px solid #ccc; border-bottom-width:2px; border-radius:6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size:.92em; background:#f8f8f8;
+    }
+    #helpDialog table.help-table{
+      width:100%; border-collapse:collapse; margin:.5rem 0 0;
+      font-size:.95em;
+    }
+    #helpDialog table.help-table th,
+    #helpDialog table.help-table td{
+      border-top:1px solid #eee; padding:.5rem .25rem; text-align:left; vertical-align:top;
+    }
+    #helpDialog table.help-table th{ width:32%; font-weight:600; }
+	
+  </style>
+  </head>
 <body>
   <header class="topbar">
     <div class="group">
@@ -2975,6 +3033,79 @@ function setWeekdayFromISO(iso){
 
 
 </script>
-
-</body>
+  <button id="helpBtn" aria-haspopup="dialog" aria-controls="helpDialog">❔</button>
+  <script>
+  (function(){
+    const btn = document.getElementById('helpBtn');
+    if(!btn) return;
+    // 候補となるツールバー要素（存在するものに挿入）
+    const selectors = [
+      '#topbar','.topbar','#toolbar','.toolbar',
+      '.header-actions','#header .actions',
+      '#controls','.controls','#rightButtons'
+    ];
+    const host = selectors.map(s=>document.querySelector(s)).find(el=>el);
+    if(host){
+      btn.classList.add('docked');
+      host.appendChild(btn);
+    }
+  })();
+  </script>
+  <dialog id="helpDialog">
+    <div style="min-width:420px;max-width:640px;padding:20px;">
+      <h2>操作ヘルプ</h2>
+      <table class="help-table">
+        <tr><th><kbd>↑</kbd> / <kbd>↓</kbd></th><td>同日のスロットを上下に移動</td></tr>
+        <tr><th><kbd>Enter</kbd></th><td>編集開始（編集ウィンドウを開く）</td></tr>
+        <tr><th><kbd>ESC</kbd></th><td>編集終了／週表示に戻る</td></tr>
+        <tr><th>日付セルをダブルクリック</th><td>その日のフォーカス表示へ切替</td></tr>
+        <tr><th>時刻セルをダブルクリック</th><td>開始時刻を編集（例：<code>1100</code> → <code>11:00</code>）</td></tr>
+        <tr><th><kbd>Shift</kbd>＋ダブルクリック<br><small>（時刻セル）</small></th><td>その日の全スロットの「時刻」をデフォルトに一括リセット</td></tr>
+        <tr><th><kbd>Alt</kbd>＋ダブルクリック<br><small>（時刻セル）</small></th><td>そのスロットのみ「時刻」をデフォルトにリセット</td></tr>
+        <tr><th><kbd>Ctrl</kbd>＋<kbd>C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></th><td>コピー／貼り付け／切り取り</td></tr>
+        <tr><th><kbd>Ctrl</kbd>＋<kbd>Z</kbd> / <kbd>Y</kbd></th><td>元に戻す／やり直し</td></tr>
+      </table>
+      <p style="margin-top:1rem;">その他の操作は順次ここに追記予定です。</p>
+      <button id="helpCloseBtn">閉じる</button>
+    </div>
+  </dialog>  
+  <script>
+  (function(){
+    const btn = document.getElementById('helpBtn');
+    const dlg = document.getElementById('helpDialog');
+    const closeBtn = document.getElementById('helpCloseBtn');
+    if(!btn || !dlg) return;
+ 
+    // 開く
+    btn.addEventListener('click', ()=> {
+      if (!dlg.open) dlg.showModal();
+    });
+ 
+    // 閉じる（ボタン）
+    closeBtn?.addEventListener('click', ()=> dlg.close());
+ 
+    // 背景クリックで閉じる
+    dlg.addEventListener('click', (e)=>{
+      if (e.target === dlg) dlg.close();
+    });
+  })();
+  </script>
+  <script>
+  (function(){
+    const dlg = document.getElementById('helpDialog');
+    if(!dlg) return;
+    // ダイアログ内のESCは外へ伝播させない（週表示への切替などを防止）
+    dlg.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){ e.stopPropagation(); }
+    });
+    // 開閉にあわせてフラグを付与（他のESC制御が参照できるように）
+    dlg.addEventListener('close', ()=> { delete document.body.dataset.modalOpen; });
+    dlg.addEventListener('cancel', (e)=>{ e.stopPropagation(); }); // 念のため
+    const openObs = new MutationObserver(()=>{
+      if(dlg.open) document.body.dataset.modalOpen = '1';
+    });
+    openObs.observe(dlg, { attributes:true, attributeFilter:['open'] });
+  })();
+  </script>
+  </body>
 </html>
