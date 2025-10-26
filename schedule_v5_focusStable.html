@@ -698,7 +698,17 @@ function exitDayFocus() {
     setTimeout(() => (window.__suppressWeekChange = false), 100);
      try { window.__setWeekdayFromISO?.(p.value); } catch(_) {}
   }
-  window.__weekStartBeforeFocus = null;
+   window.__weekStartBeforeFocus = null;
+   document.body.classList.remove('dayFocus');
+// 週モードに戻るのでピッカーを週頭（currentMonday）へ
+const pickerEl = document.getElementById('weekPicker');
+if (pickerEl) {
+  window.__suppressWeekChange = true;
+  pickerEl.value = dateISO(currentMonday);     // ← weekStartは使わずcurrentMondayをそのまま
+  window.__setWeekdayFromISO?.(pickerEl.value); // バッジも同期
+  setTimeout(() => window.__suppressWeekChange = false, 0);
+}
+
 }
 
 // 固定ヘッダー高（常に差し引く）
