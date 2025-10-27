@@ -559,6 +559,72 @@ body.focusDay #weekPickerWeekday { display: inline; }
   const mode4 = document.getElementById('mode4col');
   const mode5 = document.getElementById('mode5col');
   const editBtn     = document.getElementById('editBtn'); 
+  
+// ==== シンプル⇅：clickで現在slotを記録し、hiddenRowを飛ばして移動 ====
+(function(){
+  if (window.__navHeadSimpleBound) return;
+  window.__navHeadSimpleBound = true;
+
+  // 1) クリックで現在slotを記録（tailならheadへ寄せる）
+  document.addEventListener('click', (e)=>{
+    const slot = e.target.closest?.('.slot');
+    if (!slot) return;
+    window.__navCurSlot = slot.classList.contains('hiddenRow')
+      ? (function upToHead(n){ while(n && n.classList.contains('hiddenRow')) n = n.previousElementSibling; return n || slot; })(slot)
+      : slot;
+  }, {capture:true});
+
+  // 2) ⇅でhead単位に移動（hiddenRowは停車しない）
+  document.addEventListener('keydown', (e)=>{
+    if (e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
+
+    // 他ハンドラを止めて自前制御
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+
+    // 現在地：自前記録 → 既存active系の順でfallback
+    let cur = window.__navCurSlot
+           || window.activeSlotEl
+           || document.querySelector('.slot.active, .slot.is-active, .slot.selected')
+           || null;
+
+    // 初回など未選択なら、画面上の最初/最後の非hiddenRowを選ぶ
+    if (!cur) {
+      const root = document.getElementById('schedule') || document;
+      const heads0 = Array.from(root.querySelectorAll('.slot')).filter(s => !s.classList.contains('hiddenRow'));
+      if (!heads0.length) return;
+      const initTarget = (e.key==='ArrowDown') ? heads0[0] : heads0[heads0.length-1];
+      initTarget.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+      window.__navCurSlot = initTarget;
+      (window.activeSlotEl||initTarget).scrollIntoView({block:'nearest', inline:'nearest'});
+      return;
+    }
+
+    // 画面全体の「停車駅」（非hiddenRowのみ）＝日/セクションまたぎOK
+    const root = document.getElementById('schedule') || document;
+    const list = Array.from(root.querySelectorAll('.slot'));
+    const heads = list.filter(s => !s.classList.contains('hiddenRow'));
+    if (!heads.length) return;
+
+    // 現在地がtailならheadへ寄せる
+    if (cur.classList.contains('hiddenRow')) {
+      let p = cur.previousElementSibling;
+      while (p && p.classList.contains('hiddenRow')) p = p.previousElementSibling;
+      if (p) cur = p;
+    }
+
+    // インデックス → 次の停車駅
+    const i = heads.indexOf(cur);
+    if (i < 0) return;
+    const next = heads[i + (e.key==='ArrowDown' ? 1 : -1)];
+    if (!next) return;
+
+    // 既存クリック処理に委譲して選択更新
+    next.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+	next.scrollIntoView({block:'center', behavior:'smooth'});
+    window.__navCurSlot = next; // 自前の現在地も更新
+    (window.activeSlotEl||next).scrollIntoView({block:'nearest', inline:'nearest'});
+  }, {capture:true});
+})();
 
    // ===== ダブルクリックで編集起動（週/フォーカス共通、最優先で拾う） =====
    (function(){
