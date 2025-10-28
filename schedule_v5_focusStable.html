@@ -569,6 +569,8 @@ body.focusDay #weekPickerWeekday { display: inline; }
   document.addEventListener('click', (e)=>{
     const slot = e.target.closest?.('.slot');
     if (!slot) return;
+    // 押した“実際の行”のY中心を記録（hiddenでもOK）
+    window.__navRowY = (slot.getBoundingClientRect().top + slot.getBoundingClientRect().bottom) / 2;	
     window.__navCurSlot = slot.classList.contains('hiddenRow')
       ? (function upToHead(n){ while(n && n.classList.contains('hiddenRow')) n = n.previousElementSibling; return n || slot; })(slot)
       : slot;
@@ -625,6 +627,194 @@ body.focusDay #weekPickerWeekday { display: inline; }
     (window.activeSlotEl||next).scrollIntoView({block:'nearest', inline:'nearest'});
   }, {capture:true});
 })();
+
+// ==== 右移動（シンプル完全版）：真横へ → hiddenRowならheadに正規化 ==== 
+(function(){
+  if (window.__arrowRightSimpleBound) return;
+  window.__arrowRightSimpleBound = true;
+
+  // head取得（hiddenRowなら上へ遡る）
+  function getHead(el){ let n=el; while(n && n.classList.contains('hiddenRow')) n=n.previousElementSibling; return n||el; }
+
+  // 右隣の“隣列”で最も近い行のslotを返す（hiddenRowは着地候補に含めない）
+  function nearestRightSlot(fromEl){
+    if (!fromEl) return null;
+    const cur = getHead(fromEl).getBoundingClientRect();
+    const EPSX = 3, EPSY = 4;
+    const root = document.getElementById('schedule') || document;
+
+    // 右側候補（hiddenRow除外）
+    const all = Array.from(root.querySelectorAll('.slot')).filter(s => !s.classList.contains('hiddenRow'));
+    const right = [];
+    for (const el of all){
+      const r = el.getBoundingClientRect(); if (!r) continue;
+      if (r.left < cur.right - EPSX) continue; // 右側のみ
+      right.push({el, left:r.left, top:r.top, bottom:r.bottom});
+    }
+    if (!right.length) return null;
+
+    // 隣列だけに固定（最小leftの列）
+    const minLeft = Math.min(...right.map(c=>c.left));
+    const sameCol = right.filter(c => c.left <= minLeft + EPSX);
+    if (!sameCol.length) return null;
+
+   // まず「クリックした実際の行Y」で隣列の同じ行帯を優先
+   const rowY = (window.__navRowY ?? ((cur.top + cur.bottom)/2));
+   const inRow = sameCol.filter(c => rowY >= c.top - EPSY && rowY <= c.bottom + EPSY);
+    const pick = (inRow.length ? inRow : sameCol).sort((a,b)=>{
+       if (inRow.length){
+         const cya = (a.top + a.bottom)/2, cyb = (b.top + b.bottom)/2;
+         const ya = Math.abs(cya - rowY),     yb = Math.abs(cyb - rowY);
+         if (ya !== yb) return ya - yb;                 // 行中心に近い方を最優先（= head帯が勝つ）
+         const dxA = Math.max(0, a.left - cur.right);
+         const dxB = Math.max(0, b.left - cur.right);
+         if (dxA !== dxB) return dxA - dxB;             // 次に横の近さ
+         return a.top - b.top;                          // 最後に上寄りで安定化
+       }else{
+         const dyA = Math.min(Math.abs(a.bottom - cur.top), Math.abs(a.top - cur.bottom));
+         const dyB = Math.min(Math.abs(b.bottom - cur.top), Math.abs(b.top - cur.bottom));
+         if (dyA !== dyB) return dyA - dyB;             // 縦距離
+         const dxA = Math.max(0, a.left - cur.right);
+         const dxB = Math.max(0, b.left - cur.right);
+         return dxA - dxB;                              // 横距離
+       }
+     });
+    return pick[0]?.el || null;
+  }
+
+  // →キーで移動（hiddenRowに当たったらheadへ正規化して選択）
+  document.addEventListener('keydown', (e)=>{
+    if (e.key !== 'ArrowRight') return;
+
+    // 現在位置の取得（クリックで選んだ要素を優先）
+    let cur = window.__navCurSlot
+            || window.activeSlotEl
+            || document.querySelector('.slot.active, .slot.is-active, .slot.selected');
+    if (!cur) return;
+
+    // 衝突回避
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+
+  // ★結合枠のheadを選択中なら、行Yを「headの段」に固定
+  if (cur.classList.contains('mergeHead')) {
+    const r = cur.getBoundingClientRect();
+    window.__navRowY = r.top + 1;
+  }
+  
+    // 出発点はhead基準
+    cur = getHead(cur);
+
+    const next = nearestRightSlot(cur);
+    if (!next) return;
+
+    const head = getHead(next);
+    head.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+    window.__navCurSlot = head;
+    { const rr = head.getBoundingClientRect();
+      window.__navRowY = head.classList.contains('mergeHead') ? (rr.top + 1) : ((rr.top + rr.bottom)/2);
+    }	
+    (window.activeSlotEl || head).scrollIntoView({block:'center', behavior:'smooth'});
+  }, {capture:true});
+
+  // クリックで現在地を記録（次回の起点にする）
+  document.addEventListener('click', (e)=>{
+    const slot = e.target.closest?.('.slot'); if (!slot) return;
+    const r = slot.getBoundingClientRect();
+    window.__navRowY = slot.classList.contains('mergeHead') ? (r.top + 1) : ((r.top + r.bottom)/2);	
+    window.__navCurSlot = getHead(slot);
+  }, {capture:true});
+})();
+
+// ==== 左移動（シンプル完全版）：真横へ → hiddenRowならheadに正規化 ==== 
+(function(){
+  if (window.__arrowLeftSimpleBound) return;
+  window.__arrowLeftSimpleBound = true;
+
+  // head取得（hiddenRowなら上へ遡る）
+  function getHead(el){ let n=el; while(n && n.classList.contains('hiddenRow')) n=n.previousElementSibling; return n||el; }
+
+  // 左隣の“隣列”で最も近い行のslotを返す（hiddenRowは着地候補に含めない）
+  function nearestLeftSlot(fromEl){
+    if (!fromEl) return null;
+    const cur = getHead(fromEl).getBoundingClientRect();
+    const EPSX = 3, EPSY = 3;
+    const root = document.getElementById('schedule') || document;
+
+    // 左側候補（hiddenRow除外）
+    const all = Array.from(root.querySelectorAll('.slot')).filter(s => !s.classList.contains('hiddenRow'));
+    const left = [];
+    for (const el of all){
+      const r = el.getBoundingClientRect(); if (!r) continue;
+      if (r.right > cur.left + EPSX) continue; // 左側のみ
+      left.push({el, right:r.right, top:r.top, bottom:r.bottom});
+    }
+    if (!left.length) return null;
+
+    // 隣列だけに固定（最大rightの列）
+    const maxRight = Math.max(...left.map(c=>c.right));
+    const sameCol = left.filter(c => c.right >= maxRight - EPSX);
+    if (!sameCol.length) return null;
+
+    // 「クリックした実際の行Y」で隣列の同じ行帯を優先
+    const rowY = (window.__navRowY ?? ((cur.top + cur.bottom)/2));
+    const inRow = sameCol.filter(c => rowY >= c.top - EPSY && rowY <= c.bottom + EPSY);
+
+    const pick = (inRow.length ? inRow : sameCol).sort((a,b)=>{
+       if (inRow.length){
+         const cya = (a.top + a.bottom)/2, cyb = (b.top + b.bottom)/2;
+         const ya = Math.abs(cya - rowY),     yb = Math.abs(cyb - rowY);
+         if (ya !== yb) return ya - yb;                 // 行中心に近い方を最優先
+         const dxA = Math.max(0, cur.left - a.right);
+         const dxB = Math.max(0, cur.left - b.right);
+         if (dxA !== dxB) return dxA - dxB;             // 次に横の近さ
+         return a.top - b.top;                          // 最後に上寄りで安定化
+       }else{
+         const dyA = Math.min(Math.abs(a.bottom - cur.top), Math.abs(a.top - cur.bottom));
+         const dyB = Math.min(Math.abs(b.bottom - cur.top), Math.abs(b.top - cur.bottom));
+         if (dyA !== dyB) return dyA - dyB;
+         const dxA = Math.max(0, cur.left - a.right);
+         const dxB = Math.max(0, cur.left - b.right);
+         return dxA - dxB;
+       }
+     });
+    return pick[0]?.el || null;
+  }
+
+  // ←キーで移動（hiddenRowに当たったらheadへ正規化して選択）
+  document.addEventListener('keydown', (e)=>{
+    if (e.key !== 'ArrowLeft') return;
+
+    // 現在位置の取得（クリックで選んだ要素を優先）
+    let cur = window.__navCurSlot
+            || window.activeSlotEl
+            || document.querySelector('.slot.active, .slot.is-active, .slot.selected');
+    if (!cur) return;
+
+    // 衝突回避
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+
+    // ★結合枠のheadを選択中なら、行Yを「headの段」に固定
+    if (cur.classList.contains('mergeHead')) {
+      const r = cur.getBoundingClientRect();
+      window.__navRowY = r.top + 1;
+    }
+
+    // 出発点はhead基準
+    cur = getHead(cur);
+
+    const next = nearestLeftSlot(cur);
+    if (!next) return;
+
+    const head = getHead(next);
+    head.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+    window.__navCurSlot = head;
+    { const rr = head.getBoundingClientRect();
+      window.__navRowY = head.classList.contains('mergeHead') ? (rr.top + 1) : ((rr.top + rr.bottom)/2);
+    }
+    (window.activeSlotEl || head).scrollIntoView({block:'center', behavior:'smooth'});
+  }, {capture:true});
+})();
+
 
    // ===== ダブルクリックで編集起動（週/フォーカス共通、最優先で拾う） =====
    (function(){
