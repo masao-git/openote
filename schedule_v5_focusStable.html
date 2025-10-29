@@ -3060,6 +3060,161 @@ if(k==='enter'){
   openEditor([el.dataset.key]);
 }
 }, true);
+
+ <!-- Ctrl+←／→ 統合ハンドラ：週＝前週/次週、フォーカス＝前日/翌日 -->
+ (()=> {
+   if (window.__bindCtrlArrowsUnified) return; window.__bindCtrlArrowsUnified = true;
+ 
+   const isEditable = (t)=>{ const tag=t?.tagName?.toLowerCase(); return tag==='input'||tag==='textarea'||t?.isContentEditable; };
+   const isDialogOpen = ()=> {
+     const ed=document.getElementById('editor'), st=document.getElementById('settings');
+     return !!((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open'))));
+   };
+   const z = n => String(n).padStart(2,'0');
+   const ymd = d => `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+ 
+   document.addEventListener('keydown', (e)=>{
+     if (!e.ctrlKey) return;
+     const isLeft  = (e.key === 'ArrowLeft');
+     const isRight = (e.key === 'ArrowRight');
+     if (!(isLeft || isRight)) return;
+     if (isEditable(e.target) || isDialogOpen()) return;
+ 
+     const dir = isRight ? +1 : -1; // 週：±7日 / フォーカス：±1日
+ 
+     // フォーカスモード：前日/翌日
+     if (document.body.classList.contains('dayFocus') || document.body.classList.contains('focusDay')) {
+       const hasJump = (typeof window.jumpFocusTo === 'function');
+       const getFd   = (typeof window.getFocusDate === 'function') ? window.getFocusDate : null;
+       let d = getFd ? getFd() : null;
+       if (!(d instanceof Date) || isNaN(+d)) {
+         const wp=document.getElementById('weekPicker');
+         if (wp?.value){ const [y,m,dd]=wp.value.split('-').map(Number); d=new Date(y,m-1,dd); }
+         else d = new Date();
+       }
+       d.setDate(d.getDate() + dir);
+       if (typeof window.snapWeekendDir === 'function') d = window.snapWeekendDir(d, dir);
+       e.preventDefault(); e.stopImmediatePropagation();
+       if (hasJump){
+         window.jumpFocusTo(d, dir);
+       } else {
+         // フォールバック：フォーカス時は週ボタンが「前日/翌日」に置換されている
+         const btn = document.getElementById(dir > 0 ? 'nextWeek' : 'prevWeek');
+         btn?.click();
+       }
+       return;
+     }
+ 
+     // 週モード：前週/次週
+     const wp = document.getElementById('weekPicker'); if (!wp) return;
+     const base = (window.currentMonday instanceof Date)
+       ? new Date(window.currentMonday)
+       : (wp.value ? new Date(wp.value) : new Date());
+     base.setDate(base.getDate() + (dir * 7));
+     e.preventDefault(); e.stopImmediatePropagation();
+     // ← 基準週を即時更新して“現在の週”を正しく追従させる
+     window.currentMonday = new Date(base.getFullYear(), base.getMonth(), base.getDate());	 
+     wp.value = ymd(base);
+     wp.dispatchEvent(new Event('change', { bubbles:true }));
+   }, { capture:true });
+ })();
+
+ <!-- Ctrl＋.：週表示→フォーカス表示で今日にジャンプ -->
+ (() => {
+   if (window.__bindCtrlDotFocus) return; window.__bindCtrlDotFocus = true;
+ 
+   const isEditable = t => { const tag = t?.tagName?.toLowerCase(); return tag==='input'||tag==='textarea'||t?.isContentEditable; };
+   const isDialogOpen = () => {
+     const ed = document.getElementById('editor'), st = document.getElementById('settings');
+     return !!((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open'))));
+   };
+ 
+   document.addEventListener('keydown', e => {
+     if (!(e.ctrlKey && e.key === '.')) return;
+     if (isEditable(e.target) || isDialogOpen()) return;
+ 
+     e.preventDefault(); e.stopImmediatePropagation();
+ 
+     // フォーカス表示へ確実に切替して「今日」に合わせる
+     (async ()=>{
+       const today = new Date();
+       if (typeof window.jumpFocusTo === 'function') {
+         window.jumpFocusTo(today, 0);
+         return;
+       }
+       // ▼ jumpFocusTo がグローバルで使えない場合のフォールバック
+       const z = n => String(n).padStart(2,'0');
+       const ymd = d => `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+       // 月曜始まりの当週（月曜=0..日曜=6）
+       const mon0 = (d)=> (d.getDay()+6)%7;
+       const mondayOf = (d)=>{ const t=new Date(d.getFullYear(),d.getMonth(),d.getDate()); t.setDate(t.getDate()-mon0(t)); return t; };
+ 
+       // 1) 当週へ合わせて再描画
+       const needWeek = !(window.currentMonday instanceof Date) ||
+                        window.currentMonday.getTime() !== mondayOf(today).getTime();
+       if (needWeek){
+         window.currentMonday = mondayOf(today);
+         if (typeof window.render === 'function') window.render();
+         // DOM確定を2フレーム待つ
+         await new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
+       }
+       // 2) 今日の列を特定してフォーカスへ
+       const days = document.querySelectorAll('.day');
+       const idx  = Math.min(mon0(today), Math.max(0, days.length-1));
+       const hit  = days[idx];
+       if (hit && typeof window.enterDayFocus === 'function') {
+         window.enterDayFocus(hit);
+       }
+       document.body.classList.add('focusDay','dayFocus'); // 念のため
+       // 3) ピッカー/曜日バッジを同期
+       const picker = document.getElementById('weekPicker');
+       if (picker){ picker.value = ymd(today); picker.dispatchEvent(new Event('change',{bubbles:true})); }
+       window.__setWeekdayFromISO?.(ymd(today));
+     })();
+   }, { capture:true });
+ })();
+
+ <!-- Ctrl＋,：今週へ（フォーカス中は週表示に戻す） -->
+ (()=> {
+   if (window.__bindCtrlCommaWeek) return; window.__bindCtrlCommaWeek = true;
+   const isEditable = t => { const tag=t?.tagName?.toLowerCase(); return tag==='input'||tag==='textarea'||t?.isContentEditable; };
+   const isDialogOpen = () => {
+     const ed=document.getElementById('editor'), st=document.getElementById('settings');
+     return !!((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open'))));
+   };
+   const z = n => String(n).padStart(2,'0');
+   const ymd = d => `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+   const mondayOf = (d)=>{ const t=new Date(d.getFullYear(),d.getMonth(),d.getDate()); t.setDate(t.getDate()-((t.getDay()+6)%7)); return t; };
+ 
+   document.addEventListener('keydown', (e)=>{
+     if (!(e.ctrlKey && e.key === ',')) return;
+     if (isEditable(e.target) || isDialogOpen()) return;
+     const picker = document.getElementById('weekPicker'); if (!picker) return;
+ 
+     e.preventDefault(); e.stopImmediatePropagation();
+     // 今日（必要なら週末スナップ）
+     let today = new Date();
+     if (typeof window.snapWeekendDir === 'function') today = window.snapWeekendDir(today, 0);
+     // ▼ 今週の「月曜」を厳密に算出
+     const mon = mondayOf(today);
+ 
+     // フォーカス中なら週表示へ戻す（先にクラスを外してラベル等を正常化）
+     if (document.body.classList.contains('dayFocus') || document.body.classList.contains('focusDay')) {
+       if (typeof window.exitDayFocus === 'function') {
+         window.exitDayFocus();
+       } else {
+         document.body.classList.remove('dayFocus','focusDay');
+       }
+     }
+     // 今週へ：ピッカーも currentMonday も“月曜”で統一してから change 発火
+     window.currentMonday = mon;
+     picker.value = ymd(mon);                  // ← 本日の曜日ではなく“今週の月曜”をセット
+     picker.dispatchEvent(new Event('change', { bubbles:true }));
+     // 曜日バッジ等は「今日」を示したい場合のみ任意で同期
+     window.__setWeekdayFromISO?.(ymd(today));	 
+   }, { capture:true });
+ })();
+
  (function bindArrowNavOnce(){
    if (window.__slotNavBound) return; window.__slotNavBound = true;
    document.addEventListener('keydown', (e)=>{
