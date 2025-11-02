@@ -47,14 +47,22 @@
 
     /* 休止日（終日 or セクション）見た目 */
     .day.is-off { background:#f5f5f5; opacity:.9; }
-    .day.is-off .slot:not(.temp-slot),
-    .slots.section-off .slot:not(.temp-slot) {
+.day.is-off .slot:not(.temp-slot):not(.emergency-slot),
+.slots.section-off .slot:not(.temp-slot):not(.emergency-slot) {
       pointer-events: none;
       background: #eee !important;
       opacity: .8;
     }
     .day.is-off .slots,
     .slots.section-off { filter: grayscale(1) contrast(.9); }
+
+/* 緊急が1つでもあればフィルタ解除（:has は対応ブラウザ用） */
+.day.is-off:has(.emergency-slot) .slots,
+.slots.section-off:has(.emergency-slot) {filter: none !important;}
+
+/* :has 非対応ブラウザ用フォールバック（JSで .has-emergency を付ける） */
+.day.is-off.has-emergency .slots,
+.slots.section-off.has-emergency {filter: none !important;}
 
     /* 臨時（temp）は常に赤＆操作可 */
     .temp-slot{ background: rgba(255, 100, 100, .15) !important; }
@@ -63,16 +71,14 @@
       filter: none; pointer-events: auto; opacity: 1;
     }
 
-    /* 個別に“臨時化（緊急）”した枠を最優先 */
-    .emergency-slot { background: rgba(255, 100, 100, .15) !important; opacity: 1 !important; filter: none !important; pointer-events: auto !important; }
-    .day.is-off  .emergency-slot,
-    .slots.section-off .emergency-slot { background: rgba(255,100,100,.15) !important; opacity:1 !important; filter:none !important; pointer-events:auto !important; }
+/* ▼ この「off」の定義が強いので、緊急・臨時は除外しておく */
+.slot.off:not(.emergency-slot):not(.temp-slot){
+  background:#bbb !important; opacity:1; pointer-events:auto;}
 
-    /* off の最終定義は #bbb に統一 */
-    .slot.off{ background:#bbb !important; opacity:1; pointer-events:auto; }
-
-    /* ホバーの薄い青（off は点灯させない） */
-    .slot:hover:not(.off) { background: rgba(37, 99, 235, 0.08) !important; }
+/* ホバーの薄い青（off・緊急・臨時は塗り替えない） */
+.slot:hover:not(.off):not(.emergency-slot):not(.temp-slot) {
+  background: rgba(37, 99, 235, 0.08) !important;
+}
 
     /* 祝日見た目 */
     .day.is-holiday .day-header{ background: #fff5f5; }
@@ -96,6 +102,16 @@
   pointer-events: auto !important;
 }
 
+/* 緊急（祝日・休止でも最優先で赤＆操作可）— Aより後ろに置く */
+.day.is-off  .slot.emergency-slot,
+.day.is-holiday .slot.emergency-slot,
+.slots.section-off .slot.emergency-slot {
+  background: rgba(255,100,100,.15) !important;
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+
 /* 結合ブロック head 見た目（右肩にバッジ） */
 .slot.mergeHead { background: #fefce8; }
 .slot.mergeHead .badge {
@@ -105,6 +121,13 @@
 /* tail行は DOM は残して非表示（高さ0） */
 .hiddenRow { display:none !important; }
 .slot.paired { outline: 2px dashed rgba(37,99,235,.4); outline-offset:-2px; }
+
+
+/* ブラウザ既定の黒いフォーカス枠を無効化（青枠は .focused で付ける） */
+.slot:focus,
+.slot:focus-visible {
+  outline: none !important;
+}
 
 /* クリックで選択された枠の見た目 */
 .slot.focused{
@@ -347,7 +370,21 @@ body.dayFocus #weekPickerWeekday { display: inline; }
       margin-left: 8px;
       vertical-align: middle;
     }
-
+/* ===== FINAL OVERRIDE: 緊急はどこでも赤 & 操作可（必ずCSSの最下部に置く） ===== */
+:where(.day.is-off, .day.is-holiday, .slots.section-off) .slot.emergency-slot,
+.slot.off.emergency-slot,
+.slot.emergency-slot {
+  background: rgba(255,100,100,.15) !important;
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+/* 緊急/臨時に .focused が付いたら必ず青枠を表示（最後尾に置く） */
+.slot.emergency-slot.focused,
+.slot.temp-slot.focused {
+  outline: 2px solid #2563eb !important;
+  outline-offset: -2px !important;
+}
   </style>
   <style>
    #helpBtn{
@@ -637,12 +674,17 @@ body.dayFocus #weekPickerWeekday { display: inline; }
     if (!s || !s.classList?.contains('slot')) return false;
     if (s.classList.contains('hiddenRow')) return false;
     if (s.hidden || s.classList.contains('disabled') || s.classList.contains('locked')) return false;
+  // 緊急/臨時は特別扱い（常に候補に含める）
+  const isEmOrTemp = s.classList.contains('emergency-slot') || s.classList.contains('temp-slot');
     const day = s.closest?.('.day');
     if (!day) return false;
-    if (day.classList.contains('is-holiday') || day.classList.contains('is-off')) return false;
+  // 祝日・休診日でも「緊急/臨時」は例外で通す
+  if ((day.classList.contains('is-holiday') || day.classList.contains('is-off')) && !isEmOrTemp) return false;
     const wrap = s.closest?.('.slots');
-    if (wrap?.classList?.contains('section-off')) return false;
-    if (s.classList.contains('off')) return false;
+  // セクション休止でも「緊急/臨時」は例外
+  if (wrap?.classList?.contains('section-off') && !isEmOrTemp) return false;
+  // 個別offでも「緊急/臨時」は例外
+  if (s.classList.contains('off') && !isEmOrTemp) return false;
     return (getComputedStyle(s).display !== 'none');
   });
     if (!heads.length) return;
@@ -721,9 +763,12 @@ body.dayFocus #weekPickerWeekday { display: inline; }
          return dxA - dxB;                              // 横距離
        }
      });
-    // ★ 休日列（.is-holiday / .is-off）を最終段で除外：次善案にフォールバック
+    // ★ 休日列でも「緊急/臨時」があれば着地を許可
     for (const c of pick){
-      if (!isOffDay(c.el)) return c.el;
+      const el = c.el;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
+      if (isEmOrTemp) return el;
+      if (!isOffDay(el)) return el;
     }
     return null; // 隣列が休日のみなら着地なし（上位でフォールバックすればOK）
   }
@@ -767,11 +812,12 @@ body.dayFocus #weekPickerWeekday { display: inline; }
       // フォールバック（念のため）
       if (!el || !el.classList?.contains('slot')) return false;
       if (el.hidden || el.classList.contains('hiddenRow') || el.classList.contains('disabled') || el.classList.contains('locked')) return false;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
       const day = el.closest?.('.day');
       const slotsWrap = el.closest?.('.slots');
-      if (day && (day.classList.contains('is-off') || day.classList.contains('is-holiday'))) return false;
-      if (slotsWrap?.classList?.contains('section-off')) return false;
-      if (el.classList.contains('off')) return false;
+      if (day && (day.classList.contains('is-off') || day.classList.contains('is-holiday')) && !isEmOrTemp) return false;
+      if (slotsWrap?.classList?.contains('section-off') && !isEmOrTemp) return false;
+      if (el.classList.contains('off') && !isEmOrTemp) return false;
       return true;
     };
 
@@ -880,9 +926,12 @@ body.dayFocus #weekPickerWeekday { display: inline; }
          return dxA - dxB;
        }
      });
-    // ★ 休日列（.is-holiday / .is-off）を最終段で除外：次善案にフォールバック
+    // ★ 休日列でも「緊急/臨時」があれば着地を許可
     for (const c of pick){
-      if (!isOffDay(c.el)) return c.el;
+      const el = c.el;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
+      if (isEmOrTemp) return el;
+      if (!isOffDay(el)) return el;
     }
     return null;
   }
@@ -910,6 +959,9 @@ body.dayFocus #weekPickerWeekday { display: inline; }
   // --- 現在地が「オフ日 / 祝日」の水面下にいる場合は、左優先で営業日に正規化 ---
   (function(){
     const day0 = cur.closest?.('.day'); if (!day0) return;
+    // ★ 緊急/臨時に居るなら“寄せ”を行わず、その場を優先
+    if (cur.classList?.contains('emergency-slot') || cur.classList?.contains('temp-slot')) return;
+
     const isOffDay = (d)=>{
       if (!d) return false;
       if (d.classList.contains('is-holiday') || d.classList.contains('is-off')) return true;
@@ -953,14 +1005,15 @@ body.dayFocus #weekPickerWeekday { display: inline; }
     // --- 着地の正規化（←専用：オフ日/祝日は無条件で回避）---
     const isNavSelectable = (el)=>{
       if (!el || !el.classList?.contains('slot')) return false;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
       // 親 day が is-off / is-holiday なら ← では必ず不可
       const day = el.closest?.('.day');
-      if (day && (day.classList.contains('is-off') || day.classList.contains('is-holiday'))) return false;
+      if (day && (day.classList.contains('is-off') || day.classList.contains('is-holiday')) && !isEmOrTemp) return false;
       // セクション休止も不可
       const wrap = el.closest?.('.slots');
-      if (wrap?.classList?.contains('section-off')) return false;
+      if (wrap?.classList?.contains('section-off') && !isEmOrTemp) return false;
       // 個別 off も不可
-      if (el.classList.contains('off')) return false;
+      if (el.classList.contains('off') && !isEmOrTemp) return false;
       // hiddenRow / lock / disabled 等は既存の選別に委譲（念のため）
       if (el.hidden || el.classList.contains('hiddenRow') || el.classList.contains('disabled') || el.classList.contains('locked')) return false;
       return true;
@@ -2270,6 +2323,9 @@ function isOffDay(dayEl){
 
   // 祝日/休診日の day を渡された場合は「営業日の最初の枠」へ寄せる
   (function normalizeAwayFromHoliday(){
+    // ★ 緊急/臨時は“寄せず”にその場で選択させる
+    const isEmOrTemp = el?.classList?.contains('emergency-slot') || el?.classList?.contains('temp-slot');
+    if (isEmOrTemp) return;  
     const day = el.closest?.('.day');
     if (!isOffDay(day)) return;
     const days = Array.from(document.querySelectorAll('.day'));
@@ -2444,6 +2500,9 @@ editBtn?.addEventListener('click', () => {
 // 保存済みデータで画面の各スロットを塗り直す
 function paintSlotsFromStore(){
   const st = (typeof loadWeek === 'function') ? loadWeek(currentMonday) : {};
+  const em = loadEmerg(currentMonday) || {}; // ← 今週の緊急マップを読む
+  // フォールバック用の親フラグを一度リセット
+  document.querySelectorAll('.day, .slots').forEach(n => n.classList.remove('has-emergency'));
   // 内容（左テキスト＋術者タグ）
   document.querySelectorAll('.slot').forEach(el=>{
     const key  = el.dataset.key;
@@ -2454,6 +2513,16 @@ function paintSlotsFromStore(){
     // いったん初期化
     el.classList.remove('empty','mergeHead','hiddenRow');
     el.style.gridRowEnd = '';
+
+    // ★ 緊急フラグをDOMに反映（ここが唯一の反映ポイントでOK）
+    const isEm = !!(key && em[key]);
+    el.classList.toggle('emergency-slot', isEm);
+    if (isEm){
+      // :has 非対応ブラウザ向けに親へフォールバックフラグ
+      el.closest('.day')?.classList.add('has-emergency');
+      el.closest('.slots')?.classList.add('has-emergency');
+      el.tabIndex = 0; // キーボード選択可（任意）
+    }
 
     if (data && !data.tail) {
       // 本体（head も含む）
