@@ -2417,9 +2417,40 @@ window.syncFocused = function(){ /* unified into setActiveSlot */ };
      const j = i + (delta > 0 ? 1 : -1);
      if (j < 0 || j >= list.length) return false; // 端では止まる
      setActiveSlot(list[j]);
-	 keepSlotVisibleNearest(list[j]);   // 同日内は“見切れ防止”だけ
+    // === フォーカス表示では週表示と同じセンタリングスクロールを適用 ===
+    if (document.body.classList.contains('dayFocus')) {
+      centerSlotInView(list[j]);
+    } else {
+      keepSlotVisibleNearest(list[j]);   // 週表示などは従来通り
+    }
      return true;	 
    };
+
+  // === アクティブスロットを中央に寄せる ===
+  function centerSlotInView(slotEl){
+    if (!slotEl) return;
+    const dayEl = slotEl.closest('.day');
+    if (!dayEl) return;
+
+    const scrollBox = __getScrollParent(dayEl);
+    if (!scrollBox) return;
+
+    const boxRect = scrollBox.getBoundingClientRect();
+    const slotRect = slotEl.getBoundingClientRect();
+
+    const currentTop = scrollBox.scrollTop;
+    const slotTop = slotRect.top - boxRect.top + currentTop;
+    const slotCenter = slotTop + slotRect.height / 2;
+
+    // スロットを可視領域中央に配置
+    let target = slotCenter - scrollBox.clientHeight / 2;
+
+    // 0〜最大範囲内に収める
+    target = Math.max(0, Math.min(target, scrollBox.scrollHeight - scrollBox.clientHeight));
+
+    // スムーズスクロールで自然な動きに（レスポンス優先なら .scrollTop = target;）
+    scrollBox.scrollTo({ top: target, behavior: 'smooth' });
+  }
  })();
  
     function moveVertWithCrossDay(fromEl, delta) {
