@@ -1,0 +1,3899 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>週間手術スケジュール</title>
+  <style>
+    :root{--slot-h:28px;--gap:0}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Hiragino Kaku Gothic ProN','Meiryo',sans-serif}
+    .topbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #ddd;position:sticky;top:0;background:#fff;z-index:5}
+    .group{display:flex;gap:8px;align-items:center}
+    button{padding:6px 10px;border:1px solid #bbb;background:#fff;border-radius:6px;cursor:pointer}
+    button.primary{background:#2563eb;color:#fff;border-color:#1e40af}
+    .icon-btn{background:transparent!important;border:none!important;padding:0!important;margin-left:6px;font-size:14px;cursor:pointer}
+    .icon-btn:hover{opacity:.8}
+    #schedule{padding:12px;display:grid;grid-template-columns:1fr 1fr;column-gap:16px;row-gap:0}
+    .column{display:flex;flex-direction:column;row-gap:16px}
+    .day{border:2px solid #000;background:#fff;position:relative}
+    .day-header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px;padding:4px 8px;background:#f7f7f7;border-bottom:1px solid #ddd;font-weight:700}
+    .day-header-date{white-space:nowrap}
+    .day-note-inline{flex:1 1 auto;display:flex;justify-content:flex-end;min-width:0}
+    .day-note-input{width:100%;min-width:0;height:auto;line-height:1.4;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;white-space:pre-wrap;word-break:break-word;overflow:auto;resize:none;min-height:2.8em;max-height:2.8em}
+    .day-note-input:focus{border-color:#2563eb;box-shadow:0 0 0 1px rgba(37,99,235,.2)}
+    .section-title{margin:0;padding:2px 6px;font-size:12px;font-weight:600;border-top:1px solid #999;border-bottom:1px solid #999;background:#f8f8f8;display:flex;align-items:center}
+    .slots{display:grid;grid-auto-rows:var(--slot-h);row-gap:var(--gap);padding:0;position:relative}
+    .slot{border-top:1px solid #d0d5dd;padding:3px 5px;background:#fff;display:grid;grid-template-columns:40px 1fr;gap:6px;align-items:start;cursor:grab;position:relative}
+    .slot.empty{opacity:.8;background:#fbfbfb}
+    .time{font-weight:700;text-align:left;padding:0 4px 0 2px;user-select:none;cursor:pointer}
+    .content{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:13px}
+    .content-left{flex:1 1 auto;min-width:0;padding-right:52px}
+    .surgeon-tag{position:absolute;top:4px;right:6px;white-space:nowrap;font-weight:600;padding:2px 6px;border:1px solid #1e3a8a;border-radius:10px;font-size:12px}
+    .slot.empty .surgeon-tag{display:none}
+
+    /* レイアウト切替用 */
+    body.fiveCols #schedule{grid-template-columns:repeat(5,minmax(var(--col-min-5,300px),1fr));gap:16px;align-items:start;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    body.fiveCols #leftCol, body.fiveCols #rightCol{display:contents}
+    body.fourCols #schedule{grid-template-columns:repeat(4,minmax(var(--col-min-4,360px),1fr));gap:16px;align-items:start;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    body.fourCols #leftCol, body.fourCols #rightCol{display:contents}
+    body.fourCols .dayStack{display:flex;flex-direction:column;gap:16px;min-width:0;width:100%}
+    body.fiveCols .dayStack{display:flex;flex-direction:column;gap:16px;min-width:0;width:100%}
+
+    /* 週末 臨時手術（まとめセクション） */
+    .weekend{ border:2px dashed #cbd5e1; background:#fafafa; position:relative; }
+    .weekend .day-header{ background:#f3f4f6; border-bottom:1px dashed #cbd5e1; }
+    .weekend .section-title{ background:#f8fafc; justify-content:flex-start; }
+
+    /* 休止日（終日 or セクション）見た目 */
+    .day.is-off { background:#f5f5f5; opacity:.9; }
+.day.is-off .slot:not(.temp-slot):not(.emergency-slot),
+.slots.section-off .slot:not(.temp-slot):not(.emergency-slot) {
+      pointer-events: none;
+      background: #eee !important;
+      opacity: .8;
+    }
+    .day.is-off .slots,
+    .slots.section-off { filter: grayscale(1) contrast(.9); }
+
+/* 緊急が1つでもあればフィルタ解除（:has は対応ブラウザ用） */
+.day.is-off:has(.emergency-slot) .slots,
+.slots.section-off:has(.emergency-slot) {filter: none !important;}
+
+/* :has 非対応ブラウザ用フォールバック（JSで .has-emergency を付ける） */
+.day.is-off.has-emergency .slots,
+.slots.section-off.has-emergency {filter: none !important;}
+
+    /* 臨時（temp）は常に赤＆操作可 */
+    .temp-slot{ background: rgba(255, 100, 100, .15) !important; }
+    .day.is-off .temp-slot,
+    .slots.section-off .temp-slot {
+      filter: none; pointer-events: auto; opacity: 1;
+    }
+
+/* ▼ この「off」の定義が強いので、緊急・臨時は除外しておく */
+.slot.off:not(.emergency-slot):not(.temp-slot){
+  background:#bbb !important; opacity:1; pointer-events:auto;}
+
+/* ホバーの薄い青（off・緊急・臨時は塗り替えない） */
+.slot:hover:not(.off):not(.emergency-slot):not(.temp-slot) {
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+    /* 祝日見た目 */
+    .day.is-holiday .day-header{ background: #fff5f5; }
+    .day.is-holiday .day-header-date::after{
+      content: " 祝"; display:inline-block; margin-left:.5em; padding:0 .4em; font-size:.85em; color:#b91c1c; border:1px solid #fca5a5; border-radius:6px; background:#ffe4e6;
+    }
+    /* 祝日でも右クリックを通す保険 */
+    .day.is-off .slot, .day.is-holiday .slot { pointer-events:auto; }
+    .day.is-off .slots, .day.is-holiday .slots { pointer-events:auto; }
+
+    /* 祝日の枠背景は #bbb（臨時は除外） */
+    .day.is-holiday .slot:not(.temp-slot):not(.emergency-slot) { background:#bbb !important; opacity:1 !important; }
+
+    /* 平日のセクション見出しにある＋/−ボタンは非表示、週末のみ表示 */
+    .day .section-title .icon-btn, .day .section-title .circle-btn { display:none !important; }
+    .weekend .section-title .icon-btn, .weekend .section-title .circle-btn { display:inline-flex !important; }
+/* 祝日でも右クリックを通す（最優先で許可） */
+.day.is-holiday .slot,
+.day.is-holiday .slot.off,
+.day.is-holiday .slots {
+  pointer-events: auto !important;
+}
+
+/* 緊急（祝日・休止でも最優先で赤＆操作可）— Aより後ろに置く */
+.day.is-off  .slot.emergency-slot,
+.day.is-holiday .slot.emergency-slot,
+.slots.section-off .slot.emergency-slot {
+  background: rgba(255,100,100,.15) !important;
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+
+/* 結合ブロック head 見た目（右肩にバッジ） */
+.slot.mergeHead { background: #fefce8; }
+.slot.mergeHead .badge {
+  display:inline-block;margin-left:.5em;padding:0 .4em;border:1px solid #f59e0b;
+  border-radius:6px;font-size:11px;color:#b45309;background:#fffbeb;
+}
+/* tail行は DOM は残して非表示（高さ0） */
+.hiddenRow { display:none !important; }
+.slot.paired { outline: 2px dashed rgba(37,99,235,.4); outline-offset:-2px; }
+
+
+/* ブラウザ既定の黒いフォーカス枠を無効化（青枠は .focused で付ける） */
+.slot:focus,
+.slot:focus-visible {
+  outline: none !important;
+}
+
+/* クリックで選択された枠の見た目 */
+.slot.focused{
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background: rgba(37,99,235,0.06);
+}
+
+/* スロット境界から下への“にじみ”を止める */
+.slot { overflow: hidden; }
+
+.content { overflow: hidden; }
+.content-left{
+  line-height: 1.2;
+  overflow: hidden;                 /* はみ出し非表示 */
+  display: block;                   /* 高さ計算が安定 */
+  max-height: calc(var(--slot-h) - 6px); /* 枠高(28px) - 上下padding(3+3) */
+  /* font-size は JS で 13px or 10px を自動切替 */
+}
+
+/* ① 通常枠は2行まで＆はみ出し非表示（すでに入れている場合はこの定義を残す） */
+.slot .content-left{
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;   /* 2行でカット */
+  overflow: hidden;        /* 下の行は隠す */
+  max-height: calc(2 * 1.2em);
+  line-height: 1.2;
+  font-size: 10px;         /* 2行時の指定フォント */
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* ② 結合枠（head）は行数制限を解除して自由に表示 */
+.slot.mergeHead .content-left{
+  /* 行数制限＆高さ制限を解除 */
+  -webkit-line-clamp: unset;
+  max-height: none;
+  overflow: visible;
+  /* -webkit-box だと行数制御前提になるので通常ブロックに戻す */
+  display: block;
+
+  /* 好みで：結合枠内は通常サイズに戻す（任意） */
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+/* 念のため：結合枠の箱側でクリップしない */
+.slot.mergeHead{
+  overflow: visible;
+}
+
+/* ✅ データの入ったスロットを薄い緑で表示 */
+.slot:not(.empty) {
+  background-color: #e6ffe6 !important;  /* 薄い緑 */
+}
+
+/* ✅ 結合枠(head)も同じく薄い緑で */
+.slot.mergeHead {
+  background-color: #e6ffe6 !important;
+}
+
+/* 時刻の下に小バッジを置けるように縦レイアウトに */
+.time{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;   /* 左寄せ（必要なら center に） */
+  gap: 2px;                  /* 時刻との間隔 */
+}
+
+/* 「4枠」バッジ（時刻の下に小さく） */
+.merge-badge {
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 6px;
+  border: 1px solid #94a3b8;   /* slate 系 */
+  border-radius: 9999px;
+  background: #eef2ff;         /* 薄い青 or お好みで */
+  color: #1e293b;
+  user-select: none;
+  pointer-events: none;         /* クリック無視 */
+}
+
+/* 全麻バッジ：横長の楕円／“4枠”と同じサイズ感 */
+.ga-badge{
+  display: inline-block;            /* ← これで1文字ずつ縦に崩れない */
+  writing-mode: horizontal-tb;      /* 念のため */
+  white-space: nowrap;              /* ← 改行させない */
+
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  border: 1px solid #f59e0b;
+  background: #fef3c7;
+  color: #92400e;
+
+  pointer-events: none;
+  user-select: none;
+
+  margin-top: auto; /* 結合バッジの下側に配置するための指定（必要なら残してOK） */
+}
+
+.ga-slot {
+  background: #fff9c4 !important;   /* 薄い黄色（変更可） */
+}
+
+/* --- GA(全麻) は薄い黄色に上書きする --- */
+/* データあり薄緑より強くするため、より具体＋最後＋!important */
+.slot.ga-slot:not(.empty) { background: #fff9c4 !important; }
+.mergeHead.ga-slot        { background: #fff9c4 !important; }
+
+/* 祝日/休止を優先したいなら何もしない（←このまま） */
+/* もし祝日/休止でも黄色にしたいなら、下を有効化：
+.day.is-holiday .slot.ga-slot:not(.temp-slot):not(.emergency-slot),
+.slot.off.ga-slot {
+  background: #fff9c4 !important;
+}
+*/
+
+/* === 日フォーカス表示（方式A） ===================== */
+body.dayFocus { --slot-h: 44px; }              /* スロットを少し背高に */
+body.dayFocus #schedule { grid-template-columns: 1fr; }
+
+body.dayFocus .day { display:none; }           /* 他日は隠す */
+body.dayFocus .day[data-focus="true"] { 
+  display:block;
+}
+
+/* フォーカス時の文字サイズを少しアップ（お好みで） */
+body.dayFocus .time { font-size: 16px; }
+body.dayFocus .content-left { font-size: 15px; line-height: 1.3; }
+
+/* フォーカス時の戻るフローティングボタン */
+#focusBackBtn {
+  position: fixed;
+  top: 56px;            /* トップバーの下あたりに */
+  right: 16px;
+  z-index: 1000;
+  padding: 6px 10px;
+  border: 1px solid #bbb;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,.08);
+}
+
+
+
+/* --- フォーカス時に隠すもの --- */
+body.dayFocus #mode2col,
+body.dayFocus #mode4col,
+body.dayFocus #mode5col,
+body.dayFocus .topbar [aria-label="レイアウト切替"] {
+  display: none !important;
+}
+
+/* --- 戻るボタンの配置 --- */
+/* 通常は非表示、フォーカス時にトップバー右端へ表示 */
+#focusBackBtn {
+  display: none;
+  padding: 6px 10px;
+  border: 1px solid #bbb;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  font-size: 0.9rem;
+  align-self: center; /* トップバー内で縦位置をそろえる */
+  margin-left: 8px;   /* 隣のボタンとの間隔 */
+}
+body.dayFocus #focusBackBtn {
+  display: inline-flex;
+  position: static;   /* ← fixedを解除して1行内に */
+}
+
+/* --- フォーカス時に残すもの（ピッカー等） --- */
+body.dayFocus #prevWeek,
+body.dayFocus #nextWeek,
+body.dayFocus #todayBtn,
+body.dayFocus #weekPicker {
+  display: inline-flex !important;
+}
+
+/* --- フォーカス時のスケジュール1列化 --- */
+body.dayFocus { --slot-h: 44px; }
+body.dayFocus #schedule { grid-template-columns: 1fr; }
+body.dayFocus .day { display: none; }
+body.dayFocus .day[data-focus="true"] { display: block; }
+
+
+
+/* ===== 統一版：印刷レイアウト ===== */
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+
+  /* 画面UIは隠す */
+  .topbar,
+  .no-print,
+  .print-toolbar { display: none !important; }
+
+  /* 週間でもフォーカスでも：A4いっぱい・1列化 */
+  #schedule {
+    grid-template-columns: 1fr !important;
+    column-gap: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  #schedule .column { display: contents !important; }
+
+  /* 行高（必要なら mm を調整） */
+  :root { --print-slot-h: 8mm; }
+  .slots { grid-auto-rows: var(--print-slot-h) !important; }
+
+  /* 改ページの分割を最小化 */
+  .day, .slots, .slot { break-inside: avoid; page-break-inside: avoid; }
+
+  /* 右クリック選択印刷で使うフラグ */
+  .hide-on-print { display: none !important; }
+}
+@media print {
+  .ctx-menu { display: none !important; }
+}
+/* 週ピッカー右の曜日バッジ */
+#weekPickerWeekday {
+  margin-left: .5rem;
+  font-size: 0.95em;
+  opacity: .8;
+}
+#weekPickerWeekday { display: none; }
+body.dayFocus #weekPickerWeekday { display: inline; }
+
+    /* ツールバーに入ったときの見た目（重なり回避） */
+    #helpBtn.docked{
+      position: static;
+      width: 32px; height: 32px; line-height: 32px;
+      border-radius: 50%;
+      box-shadow: none;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+/* ===== FINAL OVERRIDE: 緊急はどこでも赤 & 操作可（必ずCSSの最下部に置く） ===== */
+:where(.day.is-off, .day.is-holiday, .slots.section-off) .slot.emergency-slot,
+.slot.off.emergency-slot,
+.slot.emergency-slot {
+  background: rgba(255,100,100,.15) !important;
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+/* 緊急/臨時に .focused が付いたら必ず青枠を表示（最後尾に置く） */
+.slot.emergency-slot.focused,
+.slot.temp-slot.focused {
+  outline: 2px solid #2563eb !important;
+  outline-offset: -2px !important;
+}
+  </style>
+  <style>
+   #helpBtn{
+     position: fixed; top: 12px; right: 12px;
+     width: 32px; height: 32px; line-height: 32px;
+     padding: 0; font: inherit; font-size: 16px;
+     border: 1px solid #ddd; border-radius: 50%;
+     background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+     text-align: center; cursor: pointer; z-index: 10000;
+   }
+    #helpBtn:hover{ box-shadow: 0 4px 16px rgba(0,0,0,.12); }
+    @media print{ #helpBtn{ display: none !important; } }
+	
+    /* Help dialog basic styling */
+    #helpDialog{ border:none; padding:0; }
+    #helpDialog::backdrop{ background: rgba(0,0,0,.35); }
+    #helpDialog > div{
+      max-height: min(70vh, 600px);
+      overflow:auto;
+      background:#fff;
+      border-radius:12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+    }
+    #helpDialog h2{ margin:0 0 .5rem; font-size:1.1rem; }
+    #helpCloseBtn{
+      display:block; margin:16px 0 0 auto;
+      height:32px; padding:0 12px; border:1px solid #ddd;
+      border-radius:8px; background:#fff; cursor:pointer;
+    }
+    @media print{ #helpDialog{ display:none !important; } }
+
+    /* help content: keyboard key, table */
+    #helpDialog kbd{
+      display:inline-block; min-width:1.6em; padding:.15em .4em;
+      border:1px solid #ccc; border-bottom-width:2px; border-radius:6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size:.92em; background:#f8f8f8;
+    }
+    #helpDialog table.help-table{
+      width:100%; border-collapse:collapse; margin:.5rem 0 0;
+      font-size:.95em;
+    }
+    #helpDialog table.help-table th,
+    #helpDialog table.help-table td{
+      border-top:1px solid #eee; padding:.5rem .25rem; text-align:left; vertical-align:top;
+    }
+    #helpDialog table.help-table th{ width:32%; font-weight:600; }
+	
+  </style>
+  </head>
+<body>
+  <header class="topbar">
+    <div class="group">
+      <button id="prevWeek">« 前週</button>
+      <input type="date" id="weekPicker" />
+      <button id="nextWeek">次週 »</button>
+      <button id="todayBtn">今週</button>
+　　　<button id="settingsBtn">設定</button>
+    </div>
+    <div class="group">
+      <button id="editBtn" class="primary">編集</button>
+      <button id="undoBtn">元に戻す</button>
+      <button id="redoBtn">やり直し</button>
+      <button id="printBtn">印刷</button>
+    </div>
+    <div class="group" aria-label="レイアウト切替">
+      <span>レイアウト:</span>
+      <button id="mode2col">2列</button>
+      <button id="mode4col">4列</button>
+      <button id="mode5col">5列</button>
+    </div>
+  </header>
+  <main id="schedule">
+    <div class="column" id="leftCol"></div>
+    <div class="column" id="rightCol"></div>
+  </main>
+
+<!-- ▼ 編集ダイアログ（旧版と互換の最小項目） -->
+<dialog id="editor">
+  <form id="editorForm" method="dialog" style="min-width:520px;max-width:720px">
+    <h3 id="editorTitle" style="margin:0 0 8px;font-size:16px">枠の編集</h3>
+    <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center">
+      <label>氏名</label><input name="name" />
+      <label>患者ID</label><input name="pid" />
+      <label>年齢</label><input name="age" />
+      <label>眼</label>
+      <select name="eye">
+        <option value=""></option><option>R</option><option>L</option><option>B</option>
+      </select>
+      <label>入/外/当日入院</label>
+      <select name="io"><option></option><option>入</option><option>外</option><option>当</option></select>
+      <label>IOL種類</label><input name="iolType" list="iolTypes" />
+      <label>IOL度数</label><input name="iolPower" list="iolPowers" />
+      <label>術式1</label><input name="proc1" />
+      <label>術式2</label><input name="proc2" />
+      <label>術式3</label><input name="proc3" />
+      <label>術者</label><input name="surgeon" />
+      <label>備考</label><textarea name="note" rows="3" style="resize:vertical"></textarea>
+      <label>結合（枠数）</label>
+      <div>
+        <input type="checkbox" id="mergeSlots" name="mergeSlots">
+        <label for="mergeSlots">この枠から</label>
+        <input name="mergeSpan" type="number" min="1" value="1" style="width:5em"> 枠
+      </div>
+      <label for="ga">
+       全麻
+       <input type="checkbox" id="ga" name="ga" style="margin-right:6px;">
+     </label>
+     <div></div>
+    </div>
+    <menu style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button value="clear" style="color:#b91c1c">クリア</button>
+      <button value="cancel">キャンセル</button>
+      <button value="save" class="primary">保存</button>
+    </menu>
+  </form>
+</dialog>
+
+<!-- datalist（IOL候補） -->
+<datalist id="iolTypes"></datalist>
+<datalist id="iolPowers"></datalist>
+
+  <template id="slotTemplate">
+    <div class="slot" draggable="false">
+      <div class="time"></div>
+      <div class="content">
+        <span class="content-left"></span>
+        <span class="surgeon-tag" title="術者"></span>
+      </div>
+    </div>
+  </template>
+
+<!-- ▼▼ 選択肢の供給元：datalist（エディタの入力欄の list="" から参照） -->
+<datalist id="iolTypes"></datalist>
+<datalist id="procList"></datalist>
+<datalist id="procList2"></datalist>
+<datalist id="procList3"></datalist>
+<datalist id="surgeonsList"></datalist>
+
+<!-- ▼▼ 設定ダイアログ -->
+<dialog id="settings" style="width:min(720px, 92vw); padding:16px;">
+  <form id="settingsForm" method="dialog" style="display:flex; flex-direction:column; gap:12px;">
+    <h3 style="margin:0 0 8px;">候補リストの編集</h3>
+
+    <label style="display:flex; gap:8px;">
+      <span style="width:120px; padding-top:6px;">IOL種類</span>
+      <textarea id="optIolTypes" rows="4" style="flex:1;"></textarea>
+    </label>
+
+    <label style="display:flex; gap:8px;">
+      <span style="width:120px; padding-top:6px;">術式１</span>
+      <textarea id="optProc1" rows="4" style="flex:1;"></textarea>
+    </label>
+
+    <label style="display:flex; gap:8px;">
+      <span style="width:120px; padding-top:6px;">術式２</span>
+      <textarea id="optProc2" rows="4" style="flex:1;"></textarea>
+    </label>
+
+    <label style="display:flex; gap:8px;">
+      <span style="width:120px; padding-top:6px;">術式３</span>
+      <textarea id="optProc3" rows="4" style="flex:1;"></textarea>
+    </label>
+
+    <label style="display:flex; gap:8px;">
+      <span style="width:120px; padding-top:6px;">術者</span>
+      <textarea id="optSurgeons" rows="4" style="flex:1;"></textarea>
+    </label>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+      <button value="cancel">閉じる</button>
+      <button class="primary" id="settingsSaveBtn" value="save">保存</button>
+    </div>
+  </form>
+</dialog>
+
+  <script>
+  "use strict";
+
+  // ===== 基本設定 =====
+  const CONFIG = {
+    Mon: [{ title: "午前（手術室1）", start: "09:30", slots: 8 }],
+    Tue: [
+      { title: "午前（手術室1）", start: "09:30", slots: 8 },
+      { title: "午後（手術室1）", start: "13:00", slots: 12 },
+      { title: "午後（手術室8）", start: "13:00", slots: 10 }
+    ],
+    Wed: [{ title: "午前（手術室9）", start: "09:30", slots: 8 }],
+    Thu: [{ title: "午前（手術室1）", start: "09:30", slots: 8 }],
+    Fri: [
+      { title: "午前（手術室1）", start: "09:30", slots: 8 },
+      { title: "午後（手術室1）", start: "13:00", slots: 12 },
+      { title: "午後（手術室8）", start: "13:00", slots: 10 }
+    ],
+    Weekend: [{ title: "週末臨時手術（Sat/Sun）", start: "09:30", slots: 0 }]
+  };
+
+
+  // 要素参照
+  const leftCol  = document.getElementById('leftCol');
+  const rightCol = document.getElementById('rightCol');
+  const weekPicker = document.getElementById('weekPicker');
+  const prevWeekBtn = document.getElementById('prevWeek');
+  const nextWeekBtn = document.getElementById('nextWeek');
+  const todayBtn    = document.getElementById('todayBtn');
+  const printBtn    = document.getElementById('printBtn');
+  const slotTpl     = document.getElementById('slotTemplate');
+  const mode2 = document.getElementById('mode2col');
+  const mode4 = document.getElementById('mode4col');
+  const mode5 = document.getElementById('mode5col');
+  const editBtn     = document.getElementById('editBtn'); 
+  
+// ==== シンプル⇅：clickで現在slotを記録し、hiddenRowを飛ばして移動 ====
+(function(){
+  if (window.__navHeadSimpleBound) return;
+  window.__navHeadSimpleBound = true;
+
+  // 1) クリックで現在slotを記録（tailならheadへ寄せる）
+  document.addEventListener('click', (e)=>{
+    const slot = e.target.closest?.('.slot');
+    if (!slot) return;
+    // 押した“実際の行”のY中心を記録（hiddenでもOK）
+    window.__navRowY = (slot.getBoundingClientRect().top + slot.getBoundingClientRect().bottom) / 2;	
+    window.__navCurSlot = slot.classList.contains('hiddenRow')
+      ? (function upToHead(n){ while(n && n.classList.contains('hiddenRow')) n = n.previousElementSibling; return n || slot; })(slot)
+      : slot;
+  }, {capture:true});
+
+  // 2) ⇅でhead単位に移動（hiddenRowは停車しない）
+  document.addEventListener('keydown', (e)=>{
+    if (e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
+    // Ctrl押下時・入力中・ダイアログ開中は無効化
+    if (e.ctrlKey) return;
+    const t = e.target, tag = t?.tagName?.toLowerCase();
+    if (tag==='input' || tag==='textarea' || t?.isContentEditable) return;
+    const ed=document.getElementById('editor'), st=document.getElementById('settings');
+    if ((ed&&(ed.open||ed.classList?.contains('is-open'))) || 
+        (st&&(st.open||st.classList?.contains('is-open')))) return;	
+    // Ctrl 押下中はこの簡易ナビを無効化（ショートカットに譲る）
+    if (e.ctrlKey) return;
+    // フォーカス表示中はこの簡易ナビを無効化（同日内ロジックに譲る）
+    if (document.body.classList.contains('dayFocus')) return;	
+
+    // 他ハンドラを止めて自前制御
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+	
+    // dayFocus 中はこのハンドラを無効化（専用ロジックに委譲）
+    if (document.body.classList.contains('dayFocus')) return;	
+
+    // 現在地：自前記録 → 既存active系の順でfallback
+    let cur = window.__navCurSlot
+           || window.activeSlotEl
+           || document.querySelector('.slot.active, .slot.is-active, .slot.selected')
+           || null;
+
+    // 初回など未選択なら、画面上の最初/最後の非hiddenRowを選ぶ
+    if (!cur) {
+      const root = document.getElementById('schedule') || document;
+  const heads0 = Array.from(root.querySelectorAll('.slot')).filter(s => {
+    if (typeof window.isSelectableSlot === 'function') return window.isSelectableSlot(s);
+    // フォールバック（以前の基準を温存）
+    if (!s || !s.classList?.contains('slot')) return false;
+    if (s.classList.contains('hiddenRow')) return false;
+    if (s.hidden || s.classList.contains('disabled') || s.classList.contains('locked')) return false;
+    const day = s.closest?.('.day');
+    if (!day) return false;
+    if (day.classList.contains('is-holiday') || day.classList.contains('is-off')) return false;
+    const wrap = s.closest?.('.slots');
+    if (wrap?.classList?.contains('section-off')) return false;
+    if (s.classList.contains('off')) return false;
+    return (getComputedStyle(s).display !== 'none');
+  });
+      if (!heads0.length) return;
+      const initTarget = (e.key==='ArrowDown') ? heads0[0] : heads0[heads0.length-1];
+      initTarget.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+      window.__navCurSlot = initTarget;
+      (window.activeSlotEl||initTarget).scrollIntoView({block:'nearest', inline:'nearest'});
+      return;
+    }
+
+  // 画面全体の「停車駅」＝“選択可能スロット”のみ（祝日/休止/section-off/off/hiddenRow等を一括除外）
+    const root = document.getElementById('schedule') || document;
+    const list = Array.from(root.querySelectorAll('.slot'));
+  const heads = list.filter(s => {
+    if (typeof window.isSelectableSlot === 'function') return window.isSelectableSlot(s);
+    // フォールバック（↑と同じ判定）
+    if (!s || !s.classList?.contains('slot')) return false;
+    if (s.classList.contains('hiddenRow')) return false;
+    if (s.hidden || s.classList.contains('disabled') || s.classList.contains('locked')) return false;
+  // 緊急/臨時は特別扱い（常に候補に含める）
+  const isEmOrTemp = s.classList.contains('emergency-slot') || s.classList.contains('temp-slot');
+    const day = s.closest?.('.day');
+    if (!day) return false;
+  // 祝日・休診日でも「緊急/臨時」は例外で通す
+  if ((day.classList.contains('is-holiday') || day.classList.contains('is-off')) && !isEmOrTemp) return false;
+    const wrap = s.closest?.('.slots');
+  // セクション休止でも「緊急/臨時」は例外
+  if (wrap?.classList?.contains('section-off') && !isEmOrTemp) return false;
+  // 個別offでも「緊急/臨時」は例外
+  if (s.classList.contains('off') && !isEmOrTemp) return false;
+    return (getComputedStyle(s).display !== 'none');
+  });
+    if (!heads.length) return;
+
+    // 現在地がtailならheadへ寄せる
+    if (cur.classList.contains('hiddenRow')) {
+      let p = cur.previousElementSibling;
+      while (p && p.classList.contains('hiddenRow')) p = p.previousElementSibling;
+      if (p) cur = p;
+    }
+
+    // インデックス → 次の停車駅
+    const i = heads.indexOf(cur);
+    if (i < 0) return;
+    const next = heads[i + (e.key==='ArrowDown' ? 1 : -1)];
+    if (!next) return;
+
+    // 既存クリック処理に委譲して選択更新
+    next.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+	next.scrollIntoView({block:'center', behavior:'smooth'});
+    window.__navCurSlot = next; // 自前の現在地も更新
+    (window.activeSlotEl||next).scrollIntoView({block:'nearest', inline:'nearest'});
+  }, {capture:true});
+})();
+
+// ==== 右移動（シンプル完全版）：真横へ → hiddenRowならheadに正規化 ==== 
+(function(){
+  if (window.__arrowRightSimpleBound) return;
+  window.__arrowRightSimpleBound = true;
+
+  // head取得（hiddenRowなら上へ遡る）
+  function getHead(el){ let n=el; while(n && n.classList.contains('hiddenRow')) n=n.previousElementSibling; return n||el; }
+  // 休日判定（ローカル）
+  function isOffDay(el){ const d=el?.closest?.('.day'); return !!(d && (d.classList.contains('is-holiday')||d.classList.contains('is-off'))); }
+
+  // 右隣の“隣列”で最も近い行のslotを返す（hiddenRowは着地候補に含めない）
+  function nearestRightSlot(fromEl){
+    if (!fromEl) return null;
+    const cur = getHead(fromEl).getBoundingClientRect();
+    const EPSX = 3, EPSY = 4;
+    const root = document.getElementById('schedule') || document;
+
+    // 右側候補（hiddenRow除外）
+    const all = Array.from(root.querySelectorAll('.slot')).filter(s => !s.classList.contains('hiddenRow'));
+    const right = [];
+    for (const el of all){
+      const r = el.getBoundingClientRect(); if (!r) continue;
+      if (r.left < cur.right - EPSX) continue; // 右側のみ
+      right.push({el, left:r.left, top:r.top, bottom:r.bottom});
+    }
+    if (!right.length) return null;
+
+    // 隣列だけに固定（最小leftの列）
+    const minLeft = Math.min(...right.map(c=>c.left));
+    const sameCol = right.filter(c => c.left <= minLeft + EPSX);
+    if (!sameCol.length) return null;
+
+   // まず「クリックした実際の行Y」で隣列の同じ行帯を優先
+   const rowY = (window.__navRowY ?? ((cur.top + cur.bottom)/2));
+   const inRow = sameCol.filter(c => rowY >= c.top - EPSY && rowY <= c.bottom + EPSY);
+    const pick = (inRow.length ? inRow : sameCol).sort((a,b)=>{
+       if (inRow.length){
+         const cya = (a.top + a.bottom)/2, cyb = (b.top + b.bottom)/2;
+         const ya = Math.abs(cya - rowY),     yb = Math.abs(cyb - rowY);
+         if (ya !== yb) return ya - yb;                 // 行中心に近い方を最優先（= head帯が勝つ）
+         const dxA = Math.max(0, a.left - cur.right);
+         const dxB = Math.max(0, b.left - cur.right);
+         if (dxA !== dxB) return dxA - dxB;             // 次に横の近さ
+         return a.top - b.top;                          // 最後に上寄りで安定化
+       }else{
+         const dyA = Math.min(Math.abs(a.bottom - cur.top), Math.abs(a.top - cur.bottom));
+         const dyB = Math.min(Math.abs(b.bottom - cur.top), Math.abs(b.top - cur.bottom));
+         if (dyA !== dyB) return dyA - dyB;             // 縦距離
+         const dxA = Math.max(0, a.left - cur.right);
+         const dxB = Math.max(0, b.left - cur.right);
+         return dxA - dxB;                              // 横距離
+       }
+     });
+    // ★ 休日列でも「緊急/臨時」があれば着地を許可
+    for (const c of pick){
+      const el = c.el;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
+      if (isEmOrTemp) return el;
+      if (!isOffDay(el)) return el;
+    }
+    return null; // 隣列が休日のみなら着地なし（上位でフォールバックすればOK）
+  }
+
+  // →キーで移動（hiddenRowに当たったらheadへ正規化して選択）
+  document.addEventListener('keydown', (e)=>{
+    if (e.key !== 'ArrowRight') return;
+    // フォーカス中はこの横移動を無効化（フォーカス用ロジックに委譲）
+    if (document.body.classList.contains('dayFocus')) return;	
+    // Ctrl+→ は週/日ジャンプに譲る（通常の横移動は無効化）
+    if (e.ctrlKey) return;
+	const t = e.target, tag = t?.tagName?.toLowerCase();
+	if (tag==='input' || tag==='textarea' || t?.isContentEditable) return;
+	const ed=document.getElementById('editor'), st=document.getElementById('settings');
+	if ((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open')))) return;
+
+
+    // 現在位置の取得（クリックで選んだ要素を優先）
+    let cur = window.__navCurSlot
+            || window.activeSlotEl
+            || document.querySelector('.slot.active, .slot.is-active, .slot.selected');
+    if (!cur) return;
+
+    // 衝突回避
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+
+ // ★直前のスクロール影響を避けるため、毎回ここで rowY を“今のrect”から決定
+ { const head = getHead(cur); const r = head.getBoundingClientRect();
+   window.__navRowY = head.classList.contains('mergeHead') ? (r.top + 1) : ((r.top + r.bottom)/2);
+ }
+  
+    // 出発点はhead基準
+    cur = getHead(cur);
+
+    let next = nearestRightSlot(cur);
+    if (!next) return;
+
+    // --- 着地の正規化（休止/祝日/セクション休止を回避）---
+    const isSel = (el)=>{
+      if (window.isSelectableSlot) return window.isSelectableSlot(el);
+      // フォールバック（念のため）
+      if (!el || !el.classList?.contains('slot')) return false;
+      if (el.hidden || el.classList.contains('hiddenRow') || el.classList.contains('disabled') || el.classList.contains('locked')) return false;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
+      const day = el.closest?.('.day');
+      const slotsWrap = el.closest?.('.slots');
+      if (day && (day.classList.contains('is-off') || day.classList.contains('is-holiday')) && !isEmOrTemp) return false;
+      if (slotsWrap?.classList?.contains('section-off') && !isEmOrTemp) return false;
+      if (el.classList.contains('off') && !isEmOrTemp) return false;
+      return true;
+    };
+
+    // まず head を基準に判定
+    let head = getHead(next);
+    if (!isSel(head)) {
+      const day = head.closest?.('.day');
+      // 同日内の「選択可能」候補を収集
+      const allInDay = day ? Array.from(day.querySelectorAll('.slot')).filter(isSel) : [];
+      if (allInDay.length) {
+        // クリック行Y（__navRowY）に最も近い候補へ寄せる
+        const targetY = (()=>{
+          if (typeof window.__navRowY === 'number') return window.__navRowY;
+          const r = head.getBoundingClientRect(); return (r.top + r.bottom) / 2;
+        })();
+        head = allInDay
+          .map(el => ({ el, r: el.getBoundingClientRect() }))
+          .sort((a,b)=>{
+            const ya = Math.abs(((a.r.top+a.r.bottom)/2) - targetY);
+            const yb = Math.abs(((b.r.top+b.r.bottom)/2) - targetY);
+            if (ya !== yb) return ya - yb;
+            return a.r.top - b.r.top; // 同距離なら上寄りで安定
+          })[0].el;
+      } else {
+        // 同日内に選択可能枠が無ければ「右側の営業日」へフォールバック
+        const days = Array.from(document.querySelectorAll('.day'));
+        const i = days.indexOf(day);
+        let found = null;
+        for (let j = i + 1; j < days.length; j++) {
+          const f = window.findFirstSelectableInDay?.(days[j]);
+          if (f && isSel(f)) { found = f; break; }
+        }
+        if (!found) return; // 着地先なし → 何もしない
+        head = found;
+      }
+    }
+
+    head.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+    window.__navCurSlot = head;
+    { const rr = head.getBoundingClientRect();
+      window.__navRowY = head.classList.contains('mergeHead') ? (rr.top + 1) : ((rr.top + rr.bottom)/2);
+    }	
+    (window.activeSlotEl || head).scrollIntoView({block:'center', behavior:'smooth'});
+  }, {capture:true});
+
+  // クリックで現在地を記録（次回の起点にする）
+  document.addEventListener('click', (e)=>{
+    const slot = e.target.closest?.('.slot'); if (!slot) return;
+    const r = slot.getBoundingClientRect();
+    window.__navRowY = slot.classList.contains('mergeHead') ? (r.top + 1) : ((r.top + r.bottom)/2);	
+    window.__navCurSlot = getHead(slot);
+  }, {capture:true});
+})();
+
+// ==== 左移動（シンプル完全版）：真横へ → hiddenRowならheadに正規化 ==== 
+(function(){
+  if (window.__arrowLeftSimpleBound) return;
+  window.__arrowLeftSimpleBound = true;
+
+  // head取得（hiddenRowなら上へ遡る）
+  function getHead(el){ let n=el; while(n && n.classList.contains('hiddenRow')) n=n.previousElementSibling; return n||el; }
+  // 休日判定（ローカル）
+  function isOffDay(el){ const d=el?.closest?.('.day'); return !!(d && (d.classList.contains('is-holiday')||d.classList.contains('is-off'))); }
+
+  // 左隣の“隣列”で最も近い行のslotを返す（hiddenRowは着地候補に含めない）
+  function nearestLeftSlot(fromEl){
+    if (!fromEl) return null;
+    const cur = getHead(fromEl).getBoundingClientRect();
+    const EPSX = 3, EPSY = 3;
+    const root = document.getElementById('schedule') || document;
+
+    // 左側候補（hiddenRow除外）
+    const all = Array.from(root.querySelectorAll('.slot')).filter(s => !s.classList.contains('hiddenRow'));
+    const left = [];
+    for (const el of all){
+      const r = el.getBoundingClientRect(); if (!r) continue;
+      if (r.right > cur.left + EPSX) continue; // 左側のみ
+      left.push({el, right:r.right, top:r.top, bottom:r.bottom});
+    }
+    if (!left.length) return null;
+
+    // 隣列だけに固定（最大rightの列）
+    const maxRight = Math.max(...left.map(c=>c.right));
+    const sameCol = left.filter(c => c.right >= maxRight - EPSX);
+    if (!sameCol.length) return null;
+
+    // 「クリックした実際の行Y」で隣列の同じ行帯を優先
+    const rowY = (window.__navRowY ?? ((cur.top + cur.bottom)/2));
+    const inRow = sameCol.filter(c => rowY >= c.top - EPSY && rowY <= c.bottom + EPSY);
+
+    const pick = (inRow.length ? inRow : sameCol).sort((a,b)=>{
+       if (inRow.length){
+         const cya = (a.top + a.bottom)/2, cyb = (b.top + b.bottom)/2;
+         const ya = Math.abs(cya - rowY),     yb = Math.abs(cyb - rowY);
+         if (ya !== yb) return ya - yb;                 // 行中心に近い方を最優先
+         const dxA = Math.max(0, cur.left - a.right);
+         const dxB = Math.max(0, cur.left - b.right);
+         if (dxA !== dxB) return dxA - dxB;             // 次に横の近さ
+         return a.top - b.top;                          // 最後に上寄りで安定化
+       }else{
+         const dyA = Math.min(Math.abs(a.bottom - cur.top), Math.abs(a.top - cur.bottom));
+         const dyB = Math.min(Math.abs(b.bottom - cur.top), Math.abs(b.top - cur.bottom));
+         if (dyA !== dyB) return dyA - dyB;
+         const dxA = Math.max(0, cur.left - a.right);
+         const dxB = Math.max(0, cur.left - b.right);
+         return dxA - dxB;
+       }
+     });
+    // ★ 休日列でも「緊急/臨時」があれば着地を許可
+    for (const c of pick){
+      const el = c.el;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
+      if (isEmOrTemp) return el;
+      if (!isOffDay(el)) return el;
+    }
+    return null;
+  }
+
+  // ←キーで移動（hiddenRowに当たったらheadへ正規化して選択）
+  document.addEventListener('keydown', (e)=>{
+    if (e.key !== 'ArrowLeft') return;
+    // フォーカス中はこの横移動を無効化（フォーカス用ロジックに委譲）
+    if (document.body.classList.contains('dayFocus')) return;	
+    // Ctrl+← は週/日ジャンプに譲る（通常の横移動は無効化）
+    if (e.ctrlKey) return;
+	const t = e.target, tag = t?.tagName?.toLowerCase();
+    if (tag==='input' || tag==='textarea' || t?.isContentEditable) return;
+    const ed=document.getElementById('editor'), st=document.getElementById('settings');
+    if ((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open')))) return;
+
+
+    // 現在位置の取得（クリックで選んだ要素を優先）
+    let cur = window.__navCurSlot
+            || window.activeSlotEl
+            || document.querySelector('.slot.active, .slot.is-active, .slot.selected');
+    if (!cur) return;
+
+
+  // --- 現在地が「オフ日 / 祝日」の水面下にいる場合は、左優先で営業日に正規化 ---
+  (function(){
+    const day0 = cur.closest?.('.day'); if (!day0) return;
+    // ★ 緊急/臨時に居るなら“寄せ”を行わず、その場を優先
+    if (cur.classList?.contains('emergency-slot') || cur.classList?.contains('temp-slot')) return;
+
+    const isOffDay = (d)=>{
+      if (!d) return false;
+      if (d.classList.contains('is-holiday') || d.classList.contains('is-off')) return true;
+      // セクション休止が日全体に及ぶケースも想定して念のため確認
+      const slotsWrap = d.querySelector('.slots');
+      return !!(slotsWrap && slotsWrap.classList.contains('section-off'));
+    };
+    if (!isOffDay(day0)) return;
+    const days = Array.from(document.querySelectorAll('.day'));
+    const i = days.indexOf(day0);
+    let found = null;
+    // 左（過去日）を優先
+    for (let j = i - 1; j >= 0; j--) {
+      if (!isOffDay(days[j])) { found = days[j]; break; }
+    }
+    // 左に無ければ右へ
+    if (!found) {
+      for (let j = i + 1; j < days.length; j++) {
+        if (!isOffDay(days[j])) { found = days[j]; break; }
+      }
+    }
+    if (found) {
+      const first = window.findFirstSelectableInDay?.(found);
+      if (first) { setActiveSlot(first, {scroll:false}); cur = first; }
+    }
+  })();
+
+    // 衝突回避
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+
+ { const head = getHead(cur); const r = head.getBoundingClientRect();
+   window.__navRowY = head.classList.contains('mergeHead') ? (r.top + 1) : ((r.top + r.bottom)/2);
+ }
+
+    // 出発点はhead基準
+    cur = getHead(cur);
+
+    let next = nearestLeftSlot(cur);
+    if (!next) return;
+
+    // --- 着地の正規化（←専用：オフ日/祝日は無条件で回避）---
+    const isNavSelectable = (el)=>{
+      if (!el || !el.classList?.contains('slot')) return false;
+      const isEmOrTemp = el.classList.contains('emergency-slot') || el.classList.contains('temp-slot');
+      // 親 day が is-off / is-holiday なら ← では必ず不可
+      const day = el.closest?.('.day');
+      if (day && (day.classList.contains('is-off') || day.classList.contains('is-holiday')) && !isEmOrTemp) return false;
+      // セクション休止も不可
+      const wrap = el.closest?.('.slots');
+      if (wrap?.classList?.contains('section-off') && !isEmOrTemp) return false;
+      // 個別 off も不可
+      if (el.classList.contains('off') && !isEmOrTemp) return false;
+      // hiddenRow / lock / disabled 等は既存の選別に委譲（念のため）
+      if (el.hidden || el.classList.contains('hiddenRow') || el.classList.contains('disabled') || el.classList.contains('locked')) return false;
+      return true;
+    };
+
+    let target = getHead(next);
+    // 着地がナビ上不適なら寄せ直し
+    if (!isNavSelectable(target)) {
+      const day = target.closest?.('.day');
+      // 1) 同日内の「ナビ選択可」候補から、__navRowY に最も近い枠へ
+      const sameDay = day ? Array.from(day.querySelectorAll('.slot')).map(getHead).filter(isNavSelectable) : [];
+      if (sameDay.length) {
+        const ty = (typeof window.__navRowY === 'number')
+          ? window.__navRowY
+          : ((target.getBoundingClientRect().top + target.getBoundingClientRect().bottom) / 2);
+        target = sameDay
+          .map(el => ({ el, r: el.getBoundingClientRect() }))
+          .sort((a,b)=>{
+            const ya = Math.abs(((a.r.top+a.r.bottom)/2) - ty);
+            const yb = Math.abs(((b.r.top+b.r.bottom)/2) - ty);
+            if (ya !== yb) return ya - yb;
+            return a.r.top - b.r.top;
+          })[0].el;
+      } else {
+        // 2) 同日内が全滅なら、左側の営業日で最初の選択可スロットへ
+        const days = Array.from(document.querySelectorAll('.day'));
+        const i = days.indexOf(day);
+        let found = null;
+        for (let j = i - 1; j >= 0; j--) {
+          const f = window.findFirstSelectableInDay?.(days[j]);
+          if (f && isNavSelectable(f)) { found = f; break; }
+        }
+        if (!found) return; // 着地先なし → 何もしない
+        target = getHead(found);
+      }
+    }
+    const head = target;
+    head.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+    window.__navCurSlot = head;
+    { const rr = head.getBoundingClientRect();
+      window.__navRowY = head.classList.contains('mergeHead') ? (rr.top + 1) : ((rr.top + rr.bottom)/2);
+    }
+    (window.activeSlotEl || head).scrollIntoView({block:'center', behavior:'smooth'});
+  }, {capture:true});
+})();
+
+
+   // ===== ダブルクリックで編集起動（週/フォーカス共通、最優先で拾う） =====
+   (function(){
+     const sched = document.getElementById('schedule');
+     if (!sched) return;
+ 
+     function isLockedOrHidden(slot){
+       if (!slot || !slot.classList) return true;
+       if (slot.classList.contains('hiddenRow')) return true;  // tailは編集不可
+       if (typeof isSlotLockedForEdit === 'function' && isSlotLockedForEdit(slot)) return true;
+       return false;
+     }
+     function resolveSlot(node){
+       if (!node) return null;
+       return node.closest ? node.closest('.slot') : null;
+     }
+     function resolveHead(slot){
+       // 明示 head があればそれ、なければ hiddenRow でない枠＝単独=head
+       let p = slot;
+       while (p && p.classList && p.classList.contains('slot')){
+         if (p.classList.contains('mergeHead')) return p;
+         if (!p.classList.contains('hiddenRow')) return p;
+         p = p.previousElementSibling;
+       }
+       return slot;
+     }
+     function fireEditFor(slot){
+       if (!slot) return;
+       // まずアクティブに（Enter/ボタン経路と同条件に揃える）
+       if (typeof setActiveSlot === 'function') setActiveSlot(slot);
+       // 既存の編集起動経路を優先的に使用
+       if (editBtn && typeof editBtn.click === 'function') {
+         editBtn.click();
+         return;
+       }
+       if (typeof beginEditActive === 'function') {
+         beginEditActive();
+         return;
+       }
+       if (typeof openEditor === 'function') {
+         const k = slot.dataset ? slot.dataset.key : undefined;
+         if (k) openEditor([k]);
+       }
+     }
+ 
+     // capture で最優先・他ハンドラに止められないようにする
+     sched.addEventListener('dblclick', function(e){
+       // 入力中/モーダル中/時刻セルは除外（既存ルールを踏襲）
+       if (typeof isTypingContext === 'function' && isTypingContext(e)) return;
+       if (document.querySelector('dialog[open], .modal.is-open, .editor.is-open')) return;
+       if (e.target && e.target.closest && e.target.closest('.time')) return;
+ 
+       const slot = resolveSlot(e.target);
+       if (!slot) return;
+       if (isLockedOrHidden(slot)) return;
+ 
+       e.preventDefault();
+       e.stopPropagation();
+ 
+       const head = resolveHead(slot);
+       fireEditFor(head);
+     }, { capture: true });
+   })();
+// ==== 設定（候補リスト） ====
+// ストレージキー
+const SETTINGS_KEY = 'schedule_lists_settings';
+
+// 既定値
+function defaultLists(){
+  const powers = [];
+  for (let v = 15.0; v <= 30.001; v += 0.5) powers.push(v.toFixed(1)); // 使うなら
+  return {
+    iolTypes: ["Ni","Ho","HoT","Amo","AmoT","参","Len","LenT","Ko"],
+    proc1: ["PEA+IOL","PPC+IOL","IOL再固定","眼瞼内反手術"],
+    proc2: ["眼内レンズ縫着","前房洗浄","瞳孔形成"],
+    proc3: ["複合処置A","複合処置B"],
+    surgeons: ["木村","岡部","後藤田","宮部","飯田","森山"]
+  };
+}
+
+// 読込／保存
+function loadSettings(){
+  try{
+    const s = localStorage.getItem(SETTINGS_KEY);
+    const v = s ? JSON.parse(s) : {};
+    // 欠けている配列は既定で補完
+    return Object.assign(defaultLists(), v||{});
+  }catch(_){
+    return defaultLists();
+  }
+}
+function saveSettings(obj){
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(obj||{}));
+}
+
+// datalist に反映
+function setOptions(dl, arr){
+  if (!dl) return;
+  dl.innerHTML = '';
+  (arr||[]).forEach(v=>{
+    const opt = document.createElement('option');
+    opt.value = String(v);
+    dl.appendChild(opt);
+  });
+}
+function applyDatalists(lists){
+  setOptions(document.getElementById('iolTypes'),     lists.iolTypes);
+  setOptions(document.getElementById('procList'),     lists.proc1);
+  setOptions(document.getElementById('procList2'),    lists.proc2);
+  setOptions(document.getElementById('procList3'),    lists.proc3);
+  setOptions(document.getElementById('surgeonsList'), lists.surgeons);
+}
+
+// グローバル設定オブジェクト
+let appLists = loadSettings();
+
+  // ===== 日付ユーティリティ =====
+  let currentMonday = startOfWeek(new Date());
+  function startOfWeek(d){ const x=new Date(d.getFullYear(), d.getMonth(), d.getDate()); const g=x.getDay(); const diff=(g===0?-6:1-g); x.setDate(x.getDate()+diff); x.setHours(0,0,0,0); return x; }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+  function dateISO(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+  function weekKey(date){ return dateISO(startOfWeek(date)); }
+  function formatDateJP(d){ const y=d.getFullYear(), m=d.getMonth()+1, day=d.getDate(); const w="日月火水木金土"[d.getDay()]; return `${y}/${m}/${day}（${w}）`; }
+  function hhmmToMinutes(hhmm){ const [H, M] = String(hhmm).split(':').map(Number); return (isFinite(H) && isFinite(M)) ? H*60 + M : 0; }
+  function addMinutes(hhmm, minutes){ let s = String(hhmm).trim().replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/：/g, ':'); const m = /^(\d{1,2}):(\d{2})$/.exec(s); if (!m) return null; const h = Number(m[1]), mm = Number(m[2]); const dt = new Date(2000,0,1,h,mm); if (isNaN(dt.getTime())) return null; dt.setMinutes(dt.getMinutes() + Number(minutes || 0)); return dt.toTimeString().slice(0,5); }
+  function normalizeTimeInput(raw){ if(!raw) return null; let s = String(raw).trim(); let m = /^(\d{1,2}):(\d{2})$/.exec(s); if(m){ const h=Number(m[1]), mm=Number(m[2]); if(h>=0&&h<=23&&mm>=0&&mm<=59) return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; return null; } s = s.replace(/\s+/g,'').replace(/[^\d]/g,''); if(s.length===3 || s.length===4){ const hh=s.slice(0,s.length-2), mm=s.slice(-2); const h=Number(hh), m2=Number(mm); if(h>=0&&h<=23&&m2>=0&&m2<=59) return `${String(h).padStart(2,'0')}:${String(m2).padStart(2,'0')}`; } return null; }
+
+
+// === 日フォーカス・ヘルパー ==========================
+function enterDayFocus(dayEl) {
+  if (!dayEl) return;
+
+  // --- 状態を保存 ---
+  window.focusDate = dayEl?.dataset?.date || window.focusDate; // ← ★これ
+  window.__weekStartBeforeFocus = document.getElementById('weekPicker')?.value;
+
+  // --- フォーカスモードに入る ---
+  document.body.classList.add('dayFocus');
+  document.querySelectorAll('#schedule .day').forEach(d => {
+    d.style.display = (d === dayEl) ? 'block' : 'none';
+    if (d === dayEl) d.setAttribute('data-focus', 'true');
+    else d.removeAttribute('data-focus');
+  });
+
+  // --- ピッカーを当日へ（change発火を抑止） ---
+  const txt = dayEl.querySelector('.day-header-date')?.textContent || '';
+  const m = txt.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+  if (m) {
+    const picker = document.getElementById('weekPicker');
+    if (picker) {
+      window.__suppressWeekChange = true;
+      picker.value = `${m[1]}-${m[2]}-${m[3]}`;
+      // バッジをここで明示的に更新（抑止解除前に）
+      window.__setWeekdayFromISO?.(picker.value);
+      setTimeout(() => (window.__suppressWeekChange = false), 100);
+       try { window.__setWeekdayFromISO?.(picker.value); } catch(_) {}	  
+    }
+  }
+
+  // --- 戻るボタン（存在しなければ追加） ---
+  if (!document.getElementById('focusBackBtn')) {
+    const btn = document.createElement('button');
+    btn.id = 'focusBackBtn';
+    btn.textContent = '戻る';
+    btn.addEventListener('click', exitDayFocus);
+    (document.querySelector('.topbar .group:nth-of-type(2)') ||
+     document.querySelector('.topbar'))?.appendChild(btn);
+  }
+
+  // --- スクロール位置はそのまま（不要なjump抑制） ---
+  // フォーカス突入時：未選択なら当日の先頭スロットを選ぶ
+  const cur = getActiveSlot?.();
+  const curDay = cur?.closest?.('.day');
+  if (!cur || curDay !== dayEl) ensureInitialSelectionForDay(dayEl);
+}
+
+function exitDayFocus() {
+  // --- モード解除 ---
+  document.body.classList.remove('dayFocus');
+  document.querySelectorAll('#schedule .day').forEach(d => {
+    // ★ フォーカス時に付けた inline display をクリア（CSSに委ねる）
+    d.style.display = '';
+    d.removeAttribute('data-focus');
+  });
+  document.getElementById('focusBackBtn')?.remove();
+  window.focusDate = null;
+
+  // --- ピッカーをフォーカス前の週に戻す ---
+  const p = document.getElementById('weekPicker');
+  if (p && window.__weekStartBeforeFocus) {
+    window.__suppressWeekChange = true;
+    p.value = window.__weekStartBeforeFocus;
+    // ★ 抑止解除の前に、現在のピッカー値で曜日バッジを更新
+    window.__setWeekdayFromISO?.(p.value);
+    setTimeout(() => (window.__suppressWeekChange = false), 100);
+     try { window.__setWeekdayFromISO?.(p.value); } catch(_) {}
+  }
+   window.__weekStartBeforeFocus = null;
+   document.body.classList.remove('dayFocus');
+// 週モードに戻るのでピッカーを週頭（currentMonday）へ
+const pickerEl = document.getElementById('weekPicker');
+if (pickerEl) {
+  window.__suppressWeekChange = true;
+  pickerEl.value = dateISO(currentMonday);     // ← weekStartは使わずcurrentMondayをそのまま
+  window.__setWeekdayFromISO?.(pickerEl.value); // バッジも同期
+  setTimeout(() => window.__suppressWeekChange = false, 0);
+}
+
+}
+
+// 固定ヘッダー高（常に差し引く）
+function __getHeaderOffsetPx(){
+  const topbar = document.querySelector('.topbar');
+  return topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+}
+
+// スクロール親
+function __getScrollParent(node){
+  let p = node?.parentElement;
+  while (p && p !== document.body){
+    const s = getComputedStyle(p);
+    const ovY = s.overflowY || s.overflow;
+    if (/(auto|scroll)/.test(ovY) && p.scrollHeight > p.clientHeight) return p;
+    p = p.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
+// el の「scroller内での」Y座標（絶対スナップ用）
+function __offsetTopWithin(el, scroller){
+  let y = 0, n = el;
+  while (n && n !== scroller){
+    y += n.offsetTop || 0;
+    n = n.offsetParent;
+  }
+  return y;
+}
+
+// dayEl 全体を基準に絶対位置へスナップ（上/下/中央）
+// align: 'top' | 'bottom' | 'center'
+function snapDay(dayEl, align='top'){
+  if (!dayEl) return;
+  const scroller = __getScrollParent(dayEl);
+  const headerH = __getHeaderOffsetPx();
+
+  const viewH = (scroller === document.scrollingElement || scroller === document.documentElement)
+    ? window.innerHeight - headerH
+    : scroller.clientHeight - headerH;
+
+  const dayTop    = __offsetTopWithin(dayEl, scroller);               // scroller内の先頭
+  const dayHeight = dayEl.getBoundingClientRect().height;
+
+  let target; // scroller.scrollTop の目標値
+  if (align === 'top'){
+    target = dayTop - headerH;                                        // ヘッダーに隠れない“Max上”
+  } else if (align === 'bottom'){
+    target = dayTop + dayHeight - viewH - headerH;                    // 末尾がちょうど入る位置
+  } else { // center
+    target = dayTop + (dayHeight - viewH) / 2 - headerH;              // 可能なら中央
+  }
+
+  // 範囲クリップ
+  const max = scroller.scrollHeight - (scroller.clientHeight || window.innerHeight);
+  if (isFinite(max)) target = Math.max(0, Math.min(target, max));
+
+  scroller.scrollTo({ top: target, behavior: 'smooth' });
+}
+
+function keepSlotVisibleNearest(slotEl){
+  if (!slotEl) return;
+  const scroller = __getScrollParent(slotEl);
+  const headerH = __getHeaderOffsetPx();
+  const rect = slotEl.getBoundingClientRect();
+  const scRect = (scroller === document.scrollingElement || scroller === document.documentElement)
+    ? { top: 0, height: window.innerHeight }
+    : scroller.getBoundingClientRect();
+
+  const topIn  = rect.top    - scRect.top;
+  const botIn  = rect.bottom - scRect.top;
+  const viewH  = (scroller === document.scrollingElement || scroller === document.documentElement)
+    ? window.innerHeight - headerH
+    : scroller.clientHeight - headerH;
+  const extra  = 8;
+
+  let dy = 0;
+  if (topIn < headerH + extra) dy = topIn - (headerH + extra);
+  else if (botIn > viewH + headerH - extra) dy = botIn - (viewH + headerH - extra);
+
+  if (dy) scroller.scrollBy({ top: dy, behavior: 'smooth' });
+}
+
+
+function applyUndoWithFocus(){
+  const preferKey = window.lastSelectedKey || null;
+  const wasFocus = document.body.classList.contains('dayFocus');
+
+  // 既存の undo を実行（内部で render() していてもOK）
+  try { if (typeof undo === 'function') undo(); } catch{}
+
+  // 描画の一本化：フォーカス中は必ずフォーカス維持で、週表示は念のため render
+  if (wasFocus) {
+    reRenderPreservingFocus(preferKey);
+  } else {
+    try { render(); } catch{}
+  }
+}
+
+function applyRedoWithFocus(){
+  const preferKey = window.lastSelectedKey || null;
+  const wasFocus = document.body.classList.contains('dayFocus');
+
+  try { if (typeof redo === 'function') redo(); } catch{}
+
+  if (wasFocus) {
+    reRenderPreservingFocus(preferKey);
+  } else {
+    try { render(); } catch{}
+  }
+}
+
+// 週→日 再入用のユーティリティ
+function __findDayByISO(iso){
+  if (!iso) return null;
+  const esc = (window.CSS?.escape ? CSS.escape(iso) : iso);
+  // data-day="YYYY-MM-DD" を優先。なければ見出しテキストから一致を探す
+  return document.querySelector(`.day[data-day="${esc}"]`)
+      || Array.from(document.querySelectorAll('.day'))
+           .find(d => (d.querySelector('.day-header-date')?.textContent || '').includes(iso));
+}
+
+// フォーカス維持・完全復元（ISO優先）
+ function reRenderPreservingFocus(preferKey){
+   const inFocus = document.body.classList.contains('dayFocus');
+ 
+   // ① フォーカス日を“UIの状態”から取得（pickerより window.focusDate を信用）
+   let focusISO = inFocus ? (window.focusDate || null) : null;
+   if (!focusISO && inFocus) {
+     const txt = document.querySelector('.day[data-focus="true"] .day-header-date')?.textContent || '';
+     const m = txt && txt.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+     if (m) focusISO = `${m[1]}-${m[2]}-${m[3]}`;
+   }
+ 
+   // ② フォーカスは解除せず、そのまま週を再描画
+   preserveScrollWhile(()=> render());
+ 
+   // 週表示ならここで終わり
+   if (!inFocus) return;
+ 
+   // ③ ピッカーを当日に戻す（change抑止）。週ナビ関数は呼ばない
+   if (focusISO){
+     const picker = document.getElementById('weekPicker');
+     if (picker){
+       const prev = window.__suppressWeekChange;
+       window.__suppressWeekChange = true;
+       picker.value = focusISO;
+       window.__suppressWeekChange = prev;
+     }
+     // UI基準日も維持
+     window.focusDate = focusISO;
+   }
+ 
+   // ④ 当日の .day を残して他日を隠す（フォーカス表示を復元）
+   if (typeof enforceFocusView === 'function') enforceFocusView();
+ 
+   // ⑤ スロット再選択：preferKey > lastSelectedKey > 当日先頭
+   const dayEl = __findDayByISO?.(focusISO) || document.querySelector('body.dayFocus .day[data-focus="true"]');
+   const pickByKey = (key)=>{
+     if (!key) return null;
+     const sel = `.slot[data-key="${(window.CSS?.escape ? CSS.escape(key) : key)}"]`;
+     return (dayEl && dayEl.querySelector(sel)) || document.querySelector(sel);
+   };
+   const target = pickByKey(preferKey) || pickByKey(window.lastSelectedKey);
+   if (target) setActiveSlot(target); else if (dayEl) ensureInitialSelectionForDay(dayEl);
+ }
+
+
+
+// Escで解除（1回だけバインド）
+if (!window.__focusEscBound){
+  document.addEventListener('keydown', (e)=>{
+      if (e.key === 'Escape'){
+        // モーダルが開いているときはフォーカス解除に進まない（<dialog> のESCデフォルト閉じを優先）
+        const modalOpen = document.querySelector('dialog[open]');
+        if (modalOpen) return;
+        if (document.body.classList.contains('dayFocus')){
+          e.preventDefault();
+          exitDayFocus();
+        }
+      }
+  }, true);
+  window.__focusEscBound = true;
+}
+
+// timeEl から "HH:MM" だけを安全に取り出す
+function extractHHMMFromTimeEl(timeEl){
+  const txt = (timeEl?.textContent || '').trim();
+  const m = txt.match(/\b\d{1,2}:\d{2}\b/);
+  return m ? m[0] : '';
+}
+
+
+  // ===== 時刻オーバーライド（週単位） =====
+  function loadTimeOverrides(week){ try{ return JSON.parse(localStorage.getItem('timeovr_'+weekKey(week))) || {}; }catch(e){ return {}; } }
+  function saveTimeOverrides(week, obj){ localStorage.setItem('timeovr_'+weekKey(week), JSON.stringify(obj||{})); }
+  function setTimeOverride(week, dayKey, section, idx, hhmm){ const store = loadTimeOverrides(week); const key = `${dayKey}|${section}`; if(!store[key]) store[key] = {}; store[key][idx] = hhmm; saveTimeOverrides(week, store); }
+  function clearTimeOverrideFrom(week, dayKey, section, idx){ const store = loadTimeOverrides(week); const key = `${dayKey}|${section}`; if(store[key]){ for(const k of Object.keys(store[key])){ if(Number(k) >= idx) delete store[key][k]; } if(Object.keys(store[key]).length===0) delete store[key]; saveTimeOverrides(week, store); } }
+  function clearTimeOverrideAll(week, dayKey, section){ const store = loadTimeOverrides(week); const key = `${dayKey}|${section}`; if(store[key]){ delete store[key]; saveTimeOverrides(week, store); } }
+  function getSlotTimeHHMMEx(baseHHMM, week, dayKey, section, idx){ let store = {}; try { store = JSON.parse(localStorage.getItem('timeovr_' + weekKey(week))) || {}; } catch(_) {} const table = store[`${dayKey}|${section}`] || {}; let anchorIdx = -1, anchorHHMM = baseHHMM; for (const k of Object.keys(table)){ const n = Number(k); if (Number.isFinite(n) && n <= idx && n > anchorIdx){ anchorIdx = n; anchorHHMM = table[k]; } } const steps = idx - (anchorIdx >= 0 ? anchorIdx : 0); return addMinutes(anchorHHMM, steps * 20); }
+
+  // ===== 休止情報 =====
+  function loadDayOff(week){ try { return JSON.parse(localStorage.getItem('dayoff_'+weekKey(week))) || {}; } catch(_) { return {}; } }
+  function saveDayOffRaw(week, obj){ localStorage.setItem('dayoff_'+weekKey(week), JSON.stringify(obj||{})); }
+  function setDayOff(week, dayKey, patch, opts){ const map = loadDayOff(week); const cur = map[dayKey] || {}; map[dayKey] = Object.assign({}, cur, patch||{}); try{ if(opts?.snapshot){ undoStack.push(snapshotState()); redoStack.length=0; } }catch(_){} saveDayOffRaw(week, map); }
+  function clearDayOffForDay(week, dayKey, opts){ const map = loadDayOff(week); if (map && map[dayKey] !== undefined) { try{ if(opts?.snapshot){ undoStack.push(snapshotState()); redoStack.length=0; } }catch(_){} delete map[dayKey]; saveDayOffRaw(week, map); } }
+
+  // ===== 個別枠の「臨時化（緊急）」 =====
+  function loadEmerg(week){ try{ return JSON.parse(localStorage.getItem('emerg_' + weekKey(week))) || {}; } catch(_){ return {}; } }
+  function saveEmergRaw(week, obj){ localStorage.setItem('emerg_' + weekKey(week), JSON.stringify(obj || {})); }
+  function setEmergency(week, slotKey, enabled, opts){ const map = loadEmerg(week); if (enabled) map[slotKey] = true; else delete map[slotKey]; try{ if(opts?.snapshot){ undoStack.push(snapshotState()); redoStack.length=0; } }catch(_){} saveEmergRaw(week, map); }
+
+  // ===== 枠数オーバーライド（臨時枠） =====
+  function loadSlotOverrides(week){ try{ return JSON.parse(localStorage.getItem('slotovr_'+weekKey(week))) || {}; }catch(e){ return {}; } }
+  function saveSlotOverrides(week, obj){ localStorage.setItem('slotovr_'+weekKey(week), JSON.stringify(obj||{})); }
+  function getSectionKey(dayKey, section){ return `${dayKey}|${section}`; }
+  function ensureSlotOvrShape(ovr, dayKey, section){ const key = getSectionKey(dayKey, section); if (!ovr[key]) ovr[key] = {}; const s = ovr[key]; if (typeof s.extraHead !== 'number') s.extraHead = 0; if (typeof s.extraTail !== 'number') s.extraTail = 0; if (!Array.isArray(s.inserts)) s.inserts = []; s.inserts = Array.from(new Set(s.inserts.filter(n=>Number.isInteger(n) && n>=0))).sort((a,b)=>a-b); return s; }
+  function getSectionOvr(week, dayKey, section){ const o = loadSlotOverrides(week) || {}; return ensureSlotOvrShape(o, dayKey, section); }
+function resetSlotLayoutForDay(week, dayKey, opts = {}) {
+   console.log('[DEBUG] resetSlotLayoutForDay called:', week, dayKey);
+   const ovr = loadSlotOverrides(week) || {};
+   console.log('[DEBUG] keys before:', Object.keys(ovr));
+   console.log('[DEBUG] ovr[dayKey] before:', ovr[dayKey]);
+
+  // その日の全セクション（例: "Fri|0","Fri|1",...）を削除
+  const prefix = `${dayKey}|`;
+  let changed = false;
+  Object.keys(ovr).forEach(k => {
+    if (k.startsWith(prefix)) { delete ovr[k]; changed = true; }
+  });
+  if (!changed) return;
+
+  // 保存
+  saveSlotOverrides(week, ovr);
+
+  // オプションで即反映
+   if (opts.snapshot) {
+     // フォーカス中でも週表示でも正しく復帰
+     if (document.body.classList.contains('dayFocus')) {
+       reRenderPreservingFocus();
+     } else {
+       render();
+     }
+   }
+}
+
+  function setSectionOvr(week, dayKey, section, patch){ const all = loadSlotOverrides(week) || {}; const s = ensureSlotOvrShape(all, dayKey, section); Object.assign(s, patch); saveSlotOverrides(week, all); }
+  function getExtraTailSlots(week, dayKey, section){ return getSectionOvr(week, dayKey, section).extraTail|0; }
+  function setExtraTailSlots(week, dayKey, section, n){ const v = Math.max(0, Number(n)||0); setSectionOvr(week, dayKey, section, { extraTail: v }); }
+  function addExtraTailSlot(week, dayKey, section, n=1){ const s = getSectionOvr(week, dayKey, section); setSectionOvr(week, dayKey, section, { extraTail: s.extraTail + (Number(n)||0) }); }
+  function removeExtraTailSlot(week, dayKey, section){ const cur = getExtraTailSlots(week, dayKey, section); if(cur > 0){ setExtraTailSlots(week, dayKey, section, cur - 1); } }
+  function getSectionLayout(week, dayKey, section, baseCount){ const s = getSectionOvr(week, dayKey, section); const extraHead = s.extraHead|0; const extraTail = s.extraTail|0; const inserts = Array.from(new Set(s.inserts)).sort((a,b)=>a-b); const total = extraHead + baseCount + inserts.length + extraTail; function isTemp(idx){ if (idx < extraHead) return true; if (idx >= extraHead + baseCount + inserts.length) return true; const posInBody = idx - extraHead; return inserts.includes(posInBody); } function toBaseIndex(idx){ if (isTemp(idx)) return -1; const posInBody = idx - extraHead; const leftInserts = inserts.filter(n => n < posInBody).length; return posInBody - leftInserts; } return { total, isTemp, toBaseIndex, extraHead, extraTail, inserts }; }
+  function insertTempBefore(week, dayKey, section, displayIndex){ const all = loadSlotOverrides(week) || {}; const s = ensureSlotOvrShape(all, dayKey, section); if (displayIndex <= 0){ s.extraHead += 1; saveSlotOverrides(week, all); return; } const layout = getSectionLayout(week, dayKey, section, CONFIG[dayKey][section].slots); const posInBody = Math.max(0, displayIndex - layout.extraHead); if (!s.inserts.includes(posInBody)){ s.inserts.push(posInBody); s.inserts = Array.from(new Set(s.inserts)).sort((a,b)=>a-b); } saveSlotOverrides(week, all); }
+  function insertTempAfter(week, dayKey, section, displayIndex){ insertTempBefore(week, dayKey, section, displayIndex + 1); }
+  function removeTempAt(week, dayKey, section, displayIndex){ const all = loadSlotOverrides(week) || {}; const s = ensureSlotOvrShape(all, dayKey, section); const baseCount = CONFIG[dayKey][section].slots; const layout = getSectionLayout(week, dayKey, section, baseCount); if (!layout.isTemp(displayIndex)) return; if (displayIndex >= layout.total - 1 && s.extraTail > 0){ s.extraTail -= 1; saveSlotOverrides(week, all); return; } if (displayIndex < s.extraHead && s.extraHead > 0){ s.extraHead -= 1; saveSlotOverrides(week, all); return; } const posInBody = displayIndex - s.extraHead; const i = s.inserts.indexOf(posInBody); if (i >= 0){ s.inserts.splice(i, 1); saveSlotOverrides(week, all); } }
+
+  // ===== Undo / Redo =====
+  let undoStack = [];
+  let redoStack = [];
+  function snapshotState(){ return { timeovr: loadTimeOverrides(currentMonday), slotovr: loadSlotOverrides(currentMonday), notes: loadNotes(currentMonday), dayoff: loadDayOff(currentMonday), emerg: loadEmerg(currentMonday) }; }
+  function restoreState(snap){ if(!snap) return; localStorage.setItem('timeovr_' + weekKey(currentMonday), JSON.stringify(snap.timeovr || {})); localStorage.setItem('slotovr_' + weekKey(currentMonday), JSON.stringify(snap.slotovr || {})); localStorage.setItem('notes_'  + weekKey(currentMonday), JSON.stringify(snap.notes  || {})); localStorage.setItem('dayoff_' + weekKey(currentMonday), JSON.stringify(snap.dayoff || {})); localStorage.setItem('emerg_'  + weekKey(currentMonday), JSON.stringify(snap.emerg  || {})); }
+  const __saveTimeOverrides = saveTimeOverrides; saveTimeOverrides = function(week, obj){ try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){} __saveTimeOverrides(week, obj); };
+  const __saveSlotOverrides = saveSlotOverrides; saveSlotOverrides = function(week, obj){ try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){} __saveSlotOverrides(week, obj); };
+  function undo(){ if(undoStack.length === 0){ alert('戻せる操作がありません'); return; } const prev = undoStack.pop(); const cur  = snapshotState(); redoStack.push(cur); restoreState(prev); render(); }
+  function redo(){ if(redoStack.length === 0){ alert('やり直し可能な操作がありません'); return; } const next = redoStack.pop(); const cur  = snapshotState(); undoStack.push(cur); restoreState(next); render(); }
+  document.getElementById('undoBtn')?.addEventListener('click', undo);
+  document.getElementById('redoBtn')?.addEventListener('click', redo);
+  function isTypingContext(e){ const el = e.target; const tag = (el?.tagName || '').toLowerCase(); return el?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'; }
+  document.addEventListener('keydown', (e)=>{
+  if(isTypingContext(e)) return;
+  const k = e.key.toLowerCase(); 
+  if((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'z'){        // Undo
+    e.preventDefault();
+    applyUndoWithFocus();
+  }else if((e.ctrlKey || e.metaKey) && (k === 'y' || (e.shiftKey && k === 'z'))){ // Redo
+    e.preventDefault();
+    applyRedoWithFocus();
+  }
+  }, true);
+
+
+// ===== 編集ロック判定（祝日/休止→編集不可。臨時/緊急は除外） =====
+function isSlotLockedForEdit(slotEl){
+  if (!slotEl) return true;                       // 要素が無ければ安全側で不可
+  if (slotEl.classList.contains('emergency-slot')) return false; // 緊急は常に可
+  if (slotEl.classList.contains('temp-slot'))      return false; // 臨時（週末など）も可
+
+  // セクション/時刻による休止 → .off が付く
+  if (slotEl.classList.contains('off')) return true;
+
+  // 祝日（.day に is-holiday が付く）は編集不可
+  const day = slotEl.closest('.day');
+  if (day && day.classList.contains('is-holiday')) return true;
+
+  return false;
+}
+
+  // ===== レイアウト切替 =====
+  const MODE_KEY = 'layoutMode';
+  let layoutMode = localStorage.getItem(MODE_KEY) || '2';
+function applyLayout(mode){
+  // dayFocus 中はレイアウト変更を無効化
+  if (document.body.classList.contains('dayFocus')) return;
+
+  layoutMode = mode;
+  document.body.classList.remove('fiveCols','fourCols');
+  if(mode==='5') document.body.classList.add('fiveCols');
+  if(mode==='4') document.body.classList.add('fourCols');
+  localStorage.setItem(MODE_KEY, layoutMode);
+  render();
+}
+
+  mode2?.addEventListener('click', ()=> applyLayout('2'));
+  mode4?.addEventListener('click', ()=> applyLayout('4'));
+  mode5?.addEventListener('click', ()=> applyLayout('5'));
+
+  // ===== 祝日（オフライン自動計算＋上書き） =====
+  function ymd(d){ return d.toISOString().slice(0,10); }
+  function isoToDate(iso){ const [Y,M,D]=iso.split('-').map(Number); return new Date(Y, M-1, D); }
+  function vernalEquinoxDay(Y){ return Math.floor(20.8431 + 0.242194*(Y-1980) - Math.floor((Y-1980)/4)); }
+  function autumnalEquinoxDay(Y){ return Math.floor(23.2488 + 0.242194*(Y-1980) - Math.floor((Y-1980)/4)); }
+  function nthWeekdayOfMonth(Y, M, weekday, n){ const d = new Date(Y, M-1, 1); const first = d.getDay(); const delta = (weekday - first + 7) % 7; return 1 + delta + 7*(n-1); }
+  function genHolidaysAuto(year){ const H = new Set(); const push = (m, d)=> H.add(`${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`); push(1,1); push(2,11); if(year >= 2020) push(2,23); push(4,29); push(5,3); push(5,4); push(5,5); push(8,11); push(11,3); push(11,23); const MON=1,SUN=0; push(1, nthWeekdayOfMonth(year, 1, MON, 2)); push(7, nthWeekdayOfMonth(year, 7, MON, 3)); push(9, nthWeekdayOfMonth(year, 9, MON, 3)); push(10, nthWeekdayOfMonth(year,10, MON, 2)); push(3, vernalEquinoxDay(year)); push(9, autumnalEquinoxDay(year)); const isHoliday = (iso)=> H.has(iso); const addSubstitute = (isoStart)=>{ let d = isoToDate(isoStart); do { d.setDate(d.getDate()+1); } while (d.getDay() === SUN || isHoliday(ymd(d))); H.add(ymd(d)); }; for(const iso of Array.from(H)){ const dt = isoToDate(iso); if (dt.getDay() === SUN) addSubstitute(iso); } const span = (m)=> new Date(year, m, 0).getDate(); for(let m=1;m<=12;m++){ for(let d=2; d<span(m-1); d++){ const cur = `${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const prev = ymd(new Date(year, m-1, d-1)); const next = ymd(new Date(year, m-1, d+1)); const wd = isoToDate(cur).getDay(); if (!H.has(cur) && H.has(prev) && H.has(next) && wd !== SUN){ H.add(cur); } } } return H; }
+  function loadHolidayAuto(year){ try{ const s = localStorage.getItem('holidays_auto_'+year); return s? new Set(JSON.parse(s)) : new Set(); }catch(_){ return new Set(); }
+  }
+  function saveHolidayAuto(year, set){ localStorage.setItem('holidays_auto_'+year, JSON.stringify(Array.from(set||[]))); }
+  function ensureHolidayAuto(year){ let s = loadHolidayAuto(year); if(!s || s.size===0){ s = genHolidaysAuto(year); saveHolidayAuto(year, s); } return s; }
+  function loadHolidayPatch(year){ try{ return JSON.parse(localStorage.getItem('holidays_patch_'+year))||{}; }catch(_){ return {}; } }
+  function saveHolidayPatch(year,obj){ localStorage.setItem('holidays_patch_'+year, JSON.stringify(obj||{})); }
+  function loadHolidayManual(){ try{ return JSON.parse(localStorage.getItem('holidays_manual'))||{}; }catch(_){ return {}; } }
+  function saveHolidayManual(obj){ localStorage.setItem('holidays_manual', JSON.stringify(obj||{})); }
+  function isHolidayISO(iso){ const Y = Number(iso.slice(0,4)); const manual = loadHolidayManual(); if (manual[iso] === true)  return true; if (manual[iso] === false) return false; const patch = loadHolidayPatch(Y); if (patch[iso]) return true; const auto = ensureHolidayAuto(Y); return auto.has(iso); }
+  function toggleHolidayManual(iso, toFlag){ const m = loadHolidayManual(); m[iso] = toFlag; saveHolidayManual(m); }
+
+  // ===== ノート =====
+  function loadNotes(week){ try{ return JSON.parse(localStorage.getItem('notes_'+weekKey(week))) || {}; }catch(e){ return {}; } }
+  function getDayNote(week, dayKey){ const obj = loadNotes(week); return String(obj[dayKey]||''); }
+  function setDayNote(week, dayKey, text, opts){ const o = loadNotes(week); o[dayKey] = String(text||''); try{ if(opts&&opts.snapshot){ undoStack.push(snapshotState()); redoStack.length=0; } }catch(_){ } localStorage.setItem('notes_'+weekKey(week), JSON.stringify(o)); }
+
+function restoreSelection(){
+  try{
+    if (!window.lastSelectedKey) return;
+    const el = document.querySelector(`.slot[data-key="${window.lastSelectedKey}"]`);
+    if (el) {
+      setActiveSlot(el);
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } else {
+      setActiveSlot(null);
+    }
+  }catch(_){}
+}
+
+// 表現形テキストを枠内に2行までで収める（1行=13px, 溢れたら10px）
+function autoFitContentLines(){
+  // 2列/4列/5列 いずれのレイアウトでも DOM を組み終わった後に呼ぶこと
+  const nodes = document.querySelectorAll('.slot .content-left');
+  nodes.forEach(el => {
+    // いったん通常サイズに戻してから判定
+    el.style.fontSize = '13px';
+    // レイアウトが反映されるまで1フレーム待つ必要があればここで計測を分ける
+    const fits = el.scrollHeight <= el.clientHeight + 0.5; // 誤差吸収
+    if (!fits){
+      el.style.fontSize = '10px'; // 2行相当になるよう少し縮める
+      // それでもオーバー分は CSS の overflow:hidden で隠す
+    }
+  });
+}
+
+function applyGaColoring(){
+  const st = loadWeek(currentMonday);
+  document.querySelectorAll('.slot').forEach(el=>{
+    const d = st[el.dataset.key];
+    // tail は塗らず、head/単枠のみ色付け（方針どおり）
+    if (d && d.ga && !d.tail) el.classList.add('ga-slot');
+    else el.classList.remove('ga-slot');
+  });
+}
+// ISO(YYYY-MM-DD)を「ローカル日付の正午」で作る（DSTや境界でも安全）
+function parseISODateLocal(iso){
+  if(!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if(!m) return null;
+  return new Date(+m[1], +m[2]-1, +m[3], 12, 0, 0, 0); // ← 正午固定がコツ
+}
+
+// ローカル日付に「n日」を安全に加減算（正午固定で扱う）
+function addDaysLocal(date, n){
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+// ISOに戻す（ゼロ詰め）
+function toISODate(d){
+  const z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+}
+
+  // ===== 描画 =====
+  function render(){
+　　applyDatalists(appLists);
+   window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
+  if (document.body.classList.contains('dayFocus') && window.focusDate) {
+    // フォーカス中はピッカーを当日に保つ（イベントは発火させない）
+    window.__suppressWeekChange = true;
+    weekPicker.value = window.focusDate;
+    setTimeout(()=> window.__suppressWeekChange = false, 0);
+  } else {
+    weekPicker.value = dateISO(currentMonday);
+  }
+    leftCol.innerHTML=''; rightCol.innerHTML='';
+
+    if(layoutMode==='5'){
+      leftCol.appendChild(buildDay('Mon', 0));
+      leftCol.appendChild(buildDay('Tue', 1));
+      leftCol.appendChild(buildDay('Wed', 2));
+      leftCol.appendChild(buildDay('Thu', 3));
+      const friStack = document.createElement('div');
+      friStack.className = 'dayStack';
+      friStack.appendChild(buildDay('Fri', 4));
+      friStack.appendChild(buildWeekend());
+      leftCol.appendChild(friStack);
+      restoreSelection();
+　　　paintSlotsFromStore();
+　　　autoFitContentLines();
+      document.querySelectorAll('.slots').forEach(sl => applyMerges(sl, loadWeek(currentMonday)));
+      applyGaColoring();
+      return;
+    }
+
+    if(layoutMode==='4'){
+      leftCol.appendChild(buildDay('Mon', 0));
+      leftCol.appendChild(buildDay('Tue', 1));
+      leftCol.appendChild(buildDayStack([
+        ['Wed', 2, { combined: true }],
+        ['Thu', 3, {}]
+      ]));
+      const friStack4 = document.createElement('div');
+      friStack4.className = 'dayStack';
+      friStack4.appendChild(buildDay('Fri', 4));
+      friStack4.appendChild(buildWeekend());
+      leftCol.appendChild(friStack4);
+      restoreSelection();
+　　　paintSlotsFromStore();
+　　　autoFitContentLines();
+      document.querySelectorAll('.slots').forEach(sl => applyMerges(sl, loadWeek(currentMonday)));
+      applyGaColoring();
+      return;
+    }
+
+    leftCol.appendChild(buildDay('Mon', 0));
+    leftCol.appendChild(buildDay('Tue', 1));
+    leftCol.appendChild(buildDay('Wed', 2, { combined: true }));
+    rightCol.appendChild(buildDay('Thu', 3));
+    rightCol.appendChild(buildDay('Fri', 4));
+    rightCol.appendChild(buildWeekend());
+    restoreSelection();
+　　paintSlotsFromStore();
+　　autoFitContentLines();
+    document.querySelectorAll('.slots').forEach(sl => applyMerges(sl, loadWeek(currentMonday)));
+    applyGaColoring();
+	enforceFocusView(); 
+// --- 曜日バッジ更新（フォーカス中は既に正しいので再更新しない）
+if (!document.body.classList.contains('dayFocus')) {
+  const iso = document.getElementById('weekPicker')?.value;
+  window.__setWeekdayFromISO?.(iso);
+}
+  }
+
+  
+  // === フォーカス時のスクロール維持ヘルパ ===
+function __getScrollBox(){
+  // フォーカス中はその日の .slots が第一候補
+  const hit = document.querySelector('body.dayFocus .day[data-focus="true"] .slots');
+  if (hit && hit.scrollHeight > hit.clientHeight) return hit;
+  // 次に day 全体
+  const day = document.querySelector('body.dayFocus .day[data-focus="true"]');
+  if (day && day.scrollHeight > day.clientHeight) return day;
+  // 週表示などは schedule かドキュメント
+  const sch = document.getElementById('schedule');
+  if (sch && sch.scrollHeight > sch.clientHeight) return sch;
+  return document.scrollingElement || document.documentElement || document.body;
+}
+
+function preserveScrollWhile(doWork){
+  const box = __getScrollBox();
+  const top = box ? box.scrollTop : null;
+  // 実行
+  const ret = doWork();
+  // 何度かフレーム跨ぎで復元（再レイアウト対策）
+  const restore = ()=>{ if (box!=null && top!=null) box.scrollTop = top; };
+  requestAnimationFrame(restore);
+  requestAnimationFrame(()=> requestAnimationFrame(restore));
+  return ret;
+}
+
+  // === フォーカスモード時の再表示補正 ===
+function enforceFocusView(){
+
+  if (!document.body.classList.contains('dayFocus') || !window.focusDate) return;
+
+  const days = document.querySelectorAll('#schedule .day');
+  let hit = null;
+  days.forEach(d => {
+    if (d.dataset && d.dataset.date === window.focusDate) {
+      hit = d;
+    }
+  });
+  if (!hit) {
+    days.forEach(d => {
+      const txt = d.querySelector('.day-header-date')?.textContent || '';
+      const m = txt.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+      const iso = m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+      if (iso === window.focusDate) hit = d;
+    });
+  }
+   if (!hit) return;
+
+  days.forEach(d => {
+    d.style.display = (d === hit) ? 'block' : 'none';
+    if (d === hit) d.setAttribute('data-focus','true');
+    else d.removeAttribute('data-focus');
+  });
+ 
+   // フォーカス表示が確定した時点のピッカー値で曜日バッジを更新
+   const picker = document.getElementById('weekPicker');
+   if (picker) window.__setWeekdayFromISO?.(picker.value); 
+   window.__setWeekdayFromISO?.(window.focusDate);
+}
+
+
+  function buildDayStack(specList){
+    const stack = document.createElement('div');
+    stack.className = 'dayStack';
+    for(const [dk, off, opt] of specList){ stack.appendChild(buildDay(dk, off, opt||{})); }
+    return stack;
+  }
+
+  function buildDay(dayKey, offsetIdx, opt={}){
+    const dayDate = addDays(currentMonday, offsetIdx);
+    const wrap = document.createElement('section'); wrap.className = 'day';
+    const iso = dateISO(dayDate);
+    wrap.dataset.date = iso;             // ← ★これを追加（YYYY-MM-DD）	
+    const isHol = isHolidayISO(iso);
+    if (isHol){ wrap.classList.add('is-holiday', 'is-off'); }
+
+    const header = document.createElement('div'); header.className = 'day-header';
+    const dateEl = document.createElement('div'); dateEl.className = 'day-header-date'; dateEl.textContent = formatDateJP(dayDate);
+    const noteWrap = document.createElement('div'); noteWrap.className = 'day-note-inline';
+    const noteInput = document.createElement('textarea'); noteInput.rows = 2; noteInput.className = 'day-note-input';
+    noteWrap.appendChild(noteInput);
+    noteInput.value = getDayNote(currentMonday, dayKey);
+    noteInput.addEventListener('focus', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){}});
+    noteInput.addEventListener('input', ()=>{ setDayNote(currentMonday, dayKey, noteInput.value); });
+    header.appendChild(dateEl); header.appendChild(noteWrap); wrap.appendChild(header);
+// 日付ヘッダー：ダブルクリックでフォーカスON/OFF
+header.addEventListener('dblclick', (e)=>{
+  // 既にフォーカス中なら解除、そうでなければこの日をフォーカス
+  if (document.body.classList.contains('dayFocus')) {
+    exitDayFocus();
+  } else {
+    enterDayFocus(wrap);
+  }
+});
+
+
+    // 曜日ヘッダ 右クリックメニュー
+    header.addEventListener('contextmenu', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const off   = loadDayOff(currentMonday);
+      const isOff = !!(off[dayKey]?.day);
+      const menu = document.createElement('div');
+      menu.className = 'ctx-menu';
+      Object.assign(menu.style,{position:'fixed',zIndex:'99999',left:e.clientX+'px',top:e.clientY+'px',background:'#fff',border:'1px solid #ddd',borderRadius:'8px',boxShadow:'0 4px 18px rgba(0,0,0,.12)',padding:'6px',fontSize:'13px',minWidth:'220px'});
+      const addItem=(label,fn,opts={})=>{ const it=document.createElement('div'); it.textContent=label; it.style.padding='6px 10px'; it.style.cursor=opts.disabled?'not-allowed':'pointer'; it.style.color=opts.danger?'#b91c1c':''; if(!opts.disabled){ it.addEventListener('mouseenter',()=>it.style.background='#f5f5f7'); it.addEventListener('mouseleave',()=>it.style.background=''); it.addEventListener('click',()=>{ fn(); menu.remove(); }); } menu.appendChild(it); };
+      addItem(isHol ? 'この日の祝日扱いを解除（手動）' : 'この日を祝日として扱う（手動）', ()=>{ toggleHolidayManual(iso, !isHol); render(); });
+      addItem(isOff ? 'この日の「終日休止」を解除' : 'この日を「終日休止」にする', ()=>{ setDayOff(currentMonday, dayKey, { day: !isOff }, { snapshot:true }); render(); });
+      addItem('────────', ()=>{}, {disabled:true});
+      addItem('この日の休止を「全リセット」', ()=>{ if(confirm('この日の休止設定（終日/セクション/以後/以前）をすべて解除します。よろしいですか？')){ clearDayOffForDay(currentMonday, dayKey, { snapshot:true }); render(); } }, {danger:true});
+      addItem('────────', ()=>{}, {disabled:true});
+      addItem('この日の「枠の形」をデフォルトに戻す', ()=>{ if (confirm('この日の枠形状（先頭臨時・途中挿入・末尾臨時）をすべて解除して、初期の枠数に戻します。よろしいですか？')) { resetSlotLayoutForDay?.(currentMonday, dayKey, { snapshot:true }); render(); } });
+ addItem('この日を印刷（A4）', ()=> printDayElement(wrap));
+      const close=(ev)=>{ if(!menu.contains(ev.target)){ document.removeEventListener('mousedown',close,true); menu.remove(); } };
+      document.addEventListener('mousedown', close, true);
+      document.body.appendChild(menu);
+    });
+
+    const sections = CONFIG[dayKey];
+    const off = loadDayOff(currentMonday);
+    const dayIsOff = !!(off[dayKey]?.day);
+
+    // 午前
+    const am = sections[0];
+    const stAm = document.createElement('div'); stAm.className = 'section-title thin';
+    const titleSpan = document.createElement('span'); titleSpan.textContent = am.title; stAm.appendChild(titleSpan);
+    wrap.appendChild(stAm);
+
+// ここから置き換え
+stAm.addEventListener('contextmenu', (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+
+  const off = loadDayOff(currentMonday);
+  const cur = off[dayKey]?.sections?.[0] === true;
+
+  // シンプルなポップアップメニューを生成
+  const menu = document.createElement('div');
+  Object.assign(menu.style, {
+    position: 'fixed',
+    zIndex: '99999',
+    left: e.clientX + 'px',
+    top:  e.clientY + 'px',
+    background: '#fff',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    boxShadow: '0 4px 18px rgba(0,0,0,.12)',
+    padding: '6px',
+    fontSize: '13px',
+    minWidth: '240px'
+  });
+
+  const addItem = (label, onClick, opts={})=>{
+    const it = document.createElement('div');
+    it.textContent = label;
+    it.style.padding = '8px 12px';
+    it.style.cursor = opts.disabled ? 'not-allowed' : 'pointer';
+    if (opts.danger) it.style.color = '#b91c1c';
+    if (!opts.disabled) {
+      it.addEventListener('mouseenter', ()=> it.style.background = '#f5f5f7');
+      it.addEventListener('mouseleave', ()=> it.style.background = '');
+      it.addEventListener('click', ()=>{
+        // クリック時に閉じる → 実行
+        closeMenu();
+        try { onClick(); } catch(err){ console.error(err); }
+      });
+    }
+    menu.appendChild(it);
+  };
+
+  // 項目：午前の休止ON/OFF
+  addItem(cur ? '午前の「休止」を解除' : '午前を「休止」にする', ()=>{
+    const sections = Object.assign({}, off[dayKey]?.sections||{}, { 0: !cur });
+    setDayOff(currentMonday, dayKey, { sections }, { snapshot:true });
+    render();
+  });
+
+  // 仕切り
+  addItem('────────', ()=>{}, { disabled:true });
+
+// 項目：このセクションを印刷（午前=インデックス0だけ残す）
+addItem('このセクションを印刷（A4想定）', ()=>{
+  printDayKeepSections(wrap, [0]);   // ★ wrap は buildDay() 冒頭で作った section 要素
+});
+addItem('────────', ()=>{}, {disabled:true});
+
+// この日の「午前＋午後（手術室1）」を印刷
+addItem('午前＋午後（手術室1）を印刷', ()=>{
+  if (dayKey==='Tue' || dayKey==='Fri') {
+    printDayKeepSections(wrap, [0,1]); // 午前(0)＋午後(手術室1=1)
+  } else {
+    alert('この曜日には午後（手術室1）がありません。');
+  }
+});
+
+
+  // 画面に追加 & 外クリックで閉じる
+  const closeMenu = (ev)=>{
+    if (!ev || !menu.contains(ev.target)) {
+      document.removeEventListener('mousedown', closeMenu, true);
+      if (menu.parentNode) menu.parentNode.removeChild(menu);
+    }
+  };
+  document.addEventListener('mousedown', closeMenu, true);
+  document.body.appendChild(menu);
+});
+// ここまで置き換え
+
+
+    const slotsAm = document.createElement('div'); slotsAm.className = 'slots';
+slotsAm.dataset.day = (dayKey==='Wed'?'Wed':dayKey);  // ←追加
+slotsAm.dataset.section = '0';                         // ←追加
+    if (off[dayKey]?.sections?.[0]) { slotsAm.classList.add('section-off'); }
+    let count = am.slots;
+    if(dayKey==='Wed'){
+      if(opt.half==='first'){ count = Math.floor(am.slots/2); }
+      if(opt.half==='second'){ count = Math.ceil(am.slots/2); }
+    }
+    const dayId = (dayKey === 'Wed') ? 'Wed' : dayKey;
+    const extraAm = getExtraTailSlots(currentMonday, dayId, 0);
+    if (dayKey !== 'Wed' || opt.half === 'second' || opt.combined) count += extraAm;
+
+    const baseCount = count;
+    const layoutAm = getSectionLayout(currentMonday, (dayKey==='Wed'?'Wed':dayKey), 0, baseCount);
+    for (let i = 0; i < layoutAm.total; i++){
+      const time = getSlotTimeHHMMEx(am.start, currentMonday, (dayKey==='Wed'?'Wed':dayKey), 0, i);
+      const slot = createSlot({ d: dateISO(dayDate), day: (dayKey==='Wed'?'Wed':dayKey), section: 0, idx: i }, time);
+      if (layoutAm.isTemp(i)) slot.classList.add('temp-slot');
+      const isTemp = slot.classList.contains('temp-slot');
+      if (!isTemp) {
+        if (dayIsOff) { slot.classList.add('off'); }
+        const ca0 = off[dayKey]?.cutAfter?.[0];
+        const cb0 = off[dayKey]?.cutBefore?.[0];
+        if (ca0 && hhmmToMinutes(time) >= hhmmToMinutes(ca0)) slot.classList.add('off');
+        if (cb0 && hhmmToMinutes(time) <= hhmmToMinutes(cb0)) slot.classList.add('off');
+      }
+      { const k = `${dateISO(dayDate)}|${(dayKey==='Wed'?'Wed':dayKey)}|0|${i}`;
+        if (loadEmerg(currentMonday)[k]) { slot.classList.remove('off'); slot.classList.add('emergency-slot'); } }
+      slotsAm.appendChild(slot);
+    }
+    wrap.appendChild(slotsAm);
+
+    // 午後（火・金）
+    if (dayKey === 'Tue' || dayKey === 'Fri'){
+      for (let sidx = 1; sidx < sections.length; sidx++){
+        const sec = sections[sidx];
+        const st = document.createElement('div'); st.className = 'section-title';
+        const t = document.createElement('span'); t.textContent = sec.title; st.appendChild(t);
+        wrap.appendChild(st);
+
+// ここから置き換え
+st.addEventListener('contextmenu', (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+
+  const off = loadDayOff(currentMonday);
+  const cur = off[dayKey]?.sections?.[sidx] === true;
+
+  // シンプルな右クリックメニュー
+  const menu = document.createElement('div');
+  Object.assign(menu.style, {
+    position: 'fixed',
+    zIndex: '99999',
+    left: e.clientX + 'px',
+    top:  e.clientY + 'px',
+    background: '#fff',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    boxShadow: '0 4px 18px rgba(0,0,0,.12)',
+    padding: '6px',
+    fontSize: '13px',
+    minWidth: '240px'
+  });
+
+  const addItem = (label, onClick, opts={})=>{
+    const it = document.createElement('div');
+    it.textContent = label;
+    it.style.padding = '8px 12px';
+    it.style.cursor = opts.disabled ? 'not-allowed' : 'pointer';
+    if (opts.danger) it.style.color = '#b91c1c';
+    if (!opts.disabled) {
+      it.addEventListener('mouseenter', ()=> it.style.background = '#f5f5f7');
+      it.addEventListener('mouseleave', ()=> it.style.background = '');
+      it.addEventListener('click', ()=>{
+        closeMenu();
+        try { onClick(); } catch(err){ console.error(err); }
+      });
+    }
+    menu.appendChild(it);
+  };
+
+  // 午後の休止 ON/OFF
+  addItem(cur ? '午後の「休止」を解除' : '午後を「休止」にする', ()=>{
+    const sections = Object.assign({}, off[dayKey]?.sections||{}, { [sidx]: !cur });
+    setDayOff(currentMonday, dayKey, { sections }, { snapshot:true });
+    render();
+  });
+
+  // 仕切り
+  addItem('────────', ()=>{}, { disabled:true });
+
+// 項目：このセクションを印刷（この sidx だけ残す）
+addItem('このセクションを印刷（A4想定）', ()=>{
+  printDayKeepSections(wrap, [sidx]);  // 午後(手術室1)=1 / 午後(手術室8)=2
+});
+
+  // 外クリックで閉じる
+  const closeMenu = (ev)=>{
+    if (!ev || !menu.contains(ev.target)) {
+      document.removeEventListener('mousedown', closeMenu, true);
+      if (menu.parentNode) menu.parentNode.removeChild(menu);
+    }
+  };
+  document.addEventListener('mousedown', closeMenu, true);
+  document.body.appendChild(menu);
+});
+// ここまで置き換え
+
+
+        const slotsEl = document.createElement('div'); slotsEl.className = 'slots';
+        const offMap = loadDayOff(currentMonday);
+        if (offMap[dayKey]?.sections?.[sidx]) { slotsEl.classList.add('section-off'); }
+        const baseCount = sec.slots;
+        const layout = getSectionLayout(currentMonday, dayKey, sidx, baseCount);
+        for (let i = 0; i < layout.total; i++) {
+          const time = getSlotTimeHHMMEx(sec.start, currentMonday, dayKey, sidx, i);
+          const slot = createSlot({ d: dateISO(dayDate), day: dayKey, section: sidx, idx: i }, time);
+          if (layout.isTemp(i)) slot.classList.add('temp-slot');
+          const isTemp = slot.classList.contains('temp-slot');
+          if (!isTemp) {
+            const o = offMap[dayKey] || {};
+            if (dayIsOff || (o.sections && o.sections[sidx])) { slot.classList.add('off'); }
+            const caS = o.cutAfter && o.cutAfter[sidx];
+            const cbS = o.cutBefore && o.cutBefore[sidx];
+            if (caS && hhmmToMinutes(time) >= hhmmToMinutes(caS)) slot.classList.add('off');
+            if (cbS && hhmmToMinutes(time) <= hhmmToMinutes(cbS)) slot.classList.add('off');
+          }
+          { const k = `${dateISO(dayDate)}|${dayKey}|${sidx}|${i}`;
+            if (loadEmerg(currentMonday)[k]) { slot.classList.remove('off'); slot.classList.add('emergency-slot'); } }
+          slotsEl.appendChild(slot);
+        }
+        wrap.appendChild(slotsEl);
+      }
+    }
+
+    { const _off = loadDayOff(currentMonday); if(_off[dayKey]?.full === true){ wrap.classList.add('is-off'); } }
+    return wrap;
+  }
+
+  function buildWeekend(){
+    const dayKey = 'Weekend';
+    const dayDate = addDays(currentMonday, 6);
+    const wrap = document.createElement('section'); wrap.className = 'day weekend';
+    const off = loadDayOff(currentMonday); const dayIsOff = !!(off['Weekend']?.day);
+
+    const header = document.createElement('div'); header.className = 'day-header';
+    const title = document.createElement('div'); title.className = 'day-header-date'; title.textContent = '（土/日）';
+    const noteWrap = document.createElement('div'); noteWrap.className = 'day-note-inline';
+    const noteInput = document.createElement('textarea'); noteInput.className = 'day-note-input'; noteInput.rows = 2; noteWrap.appendChild(noteInput);
+    noteInput.value = getDayNote(currentMonday, dayKey);
+    noteInput.addEventListener('focus', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){ }});
+    noteInput.addEventListener('input', ()=>{ setDayNote(currentMonday, dayKey, noteInput.value); });
+    header.appendChild(title); header.appendChild(noteWrap); wrap.appendChild(header);
+
+    const secDef = CONFIG[dayKey][0];
+    const st = document.createElement('div'); st.className = 'section-title thin';
+    const addBtn = document.createElement('button'); addBtn.className = 'icon-btn'; addBtn.setAttribute('aria-label', '週末に臨時枠追加'); addBtn.textContent = '⊕'; addBtn.addEventListener('click', ()=>{ addExtraTailSlot(currentMonday, dayKey, 0, 1); render(); }); st.appendChild(addBtn);
+    const subBtn = document.createElement('button'); subBtn.className = 'icon-btn'; subBtn.setAttribute('aria-label', '週末の臨時枠を1つ削除'); subBtn.textContent = '⊖'; subBtn.addEventListener('click', ()=>{ removeExtraTailSlot(currentMonday, dayKey, 0); render(); }); st.appendChild(subBtn);
+    wrap.appendChild(st);
+
+    const slotsEl = document.createElement('div'); slotsEl.className = 'slots';
+    if (off['Weekend']?.sections?.[0]) { slotsEl.classList.add('section-off'); }
+    const cnt = (secDef.slots|0) + getExtraTailSlots(currentMonday, dayKey, 0);
+    for(let i=0;i<cnt;i++){
+      const time = getSlotTimeHHMMEx(secDef.start, currentMonday, dayKey, 0, i);
+      const slot = createSlot({ d: dateISO(dayDate), day: dayKey, section: 0, idx: i }, time);
+      slot.classList.add('temp-slot');
+      slotsEl.appendChild(slot);
+    }
+    wrap.appendChild(slotsEl);
+    if (dayIsOff) { wrap.classList.add('is-off'); }
+    return wrap;
+  }
+
+  function createSlot(meta, time){
+    const el = slotTpl.content.firstElementChild.cloneNode(true);
+    const timeEl = el.querySelector('.time'); timeEl.textContent = time ? String(time).replace(/^0/, '') : '';
+    timeEl.addEventListener('dblclick', (e)=>{ if(e.shiftKey || e.altKey) return; e.preventDefault(); e.stopPropagation(); const sec = Number(meta.section); const ii  = Number(meta.idx); const dayKey = meta.day; // この枠の現在時刻をロジックから再計算して初期値にする
+const base = (sec === 0 ? CONFIG[(dayKey==='Wed'?'Wed':dayKey)][0].start : CONFIG[dayKey][sec].start);
+const cur  = getSlotTimeHHMMEx(base, currentMonday, dayKey, sec, ii);
+
+const input = prompt('この枠の時刻（例 10:00 / 1000 / 950）', cur); if(input == null) return; const hhmm = normalizeTimeInput(input); if(!hhmm){ alert('形式が不正です。例：10:00 / 1000 / 0950 / 950'); return; } if(ii > 0){ const base = (sec===0 ? CONFIG[(dayKey==='Wed'?'Wed':dayKey)][0].start : CONFIG[dayKey][sec].start); const prevHHMM = getSlotTimeHHMMEx(base, currentMonday, dayKey, sec, ii-1); if(hhmmToMinutes(hhmm) <= hhmmToMinutes(prevHHMM)){ alert(`この枠は直前の枠（${prevHHMM}）より遅い時刻にしてください。`); return; } } setTimeOverride(currentMonday, dayKey, sec, ii, hhmm); render(); });
+    timeEl.addEventListener('dblclick', (e)=>{ if(!e.shiftKey) return; e.preventDefault(); e.stopPropagation(); const { day, section, idx } = meta; clearTimeOverrideFrom(currentMonday, day, Number(section), Number(idx)); render(); });
+    timeEl.addEventListener('dblclick', (e)=>{ if(!e.altKey) return; e.preventDefault(); e.stopPropagation(); const { day, section } = meta; clearTimeOverrideAll(currentMonday, day, Number(section)); render(); }, { capture:true });
+
+    el.dataset.key = `${meta.d}|${meta.day}|${meta.section}|${meta.idx}`;
+el.addEventListener('click', (e)=>{
+  if (isSlotLockedForEdit(el)) return; 
+  setActiveSlot(el);
+  window.lastSelectedKey = el.dataset.key;
+});
+    const leftEl = el.querySelector('.content-left'); const surgEl = el.querySelector('.surgeon-tag');
+    leftEl.textContent = '（空）'; surgEl.textContent = ''; el.classList.add('empty');
+
+
+    el.addEventListener('contextmenu', (e)=>{
+      e.preventDefault();
+      const dayKey  = meta.day; const section = meta.section; const idx = meta.idx;
+      const baseCount = CONFIG[dayKey][section].slots; const layout = getSectionLayout(currentMonday, dayKey, section, baseCount);
+      const menu = document.createElement('div');
+      Object.assign(menu.style,{position:'fixed',zIndex:'99999',left:e.clientX+'px',top:e.clientY+'px',background:'#fff',border:'1px solid #ddd',borderRadius:'8px',boxShadow:'0 4px 18px rgba(0,0,0,.12)',padding:'6px',fontSize:'13px',minWidth:'200px'});
+      function addItem(label, onClick){ const it=document.createElement('div'); it.textContent=label; it.style.padding='8px 12px'; it.style.cursor='pointer'; it.addEventListener('mouseenter', ()=> it.style.background='#f5f5f7'); it.addEventListener('mouseleave', ()=> it.style.background=''); it.addEventListener('click', ()=>{ onClick(); document.body.removeChild(menu); }); menu.appendChild(it); }
+
+      // 個別「臨時化（緊急）」
+      { const key = el.dataset.key; const em  = loadEmerg(currentMonday); const isEm = !!em[key]; addItem(isEm ? 'この枠の臨時化を解除' : 'この枠を臨時化（緊急）', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){ } setEmergency(currentMonday, key, !isEm); render(); }); }
+
+      addItem('この枠の前に臨時枠を挿入', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){} insertTempBefore(currentMonday, dayKey, section, idx); render(); });
+      addItem('この枠の後に臨時枠を挿入', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){} insertTempAfter(currentMonday, dayKey, section, idx); render(); });
+      if (layout.isTemp(idx)){ addItem('この臨時枠を削除', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){} removeTempAt(currentMonday, dayKey, section, idx); render(); }); }
+
+      // 休止（時刻基準）— 祝日は非表示
+      const slotHHMM = normalizeTimeInput(timeEl.textContent.trim()) || timeEl.textContent.trim();
+      const iso = meta.d;  const isHoliday = isHolidayISO(iso);
+      if (!isHoliday) {
+        addItem('────────', ()=>{});
+        addItem('この枠「以後」を休止', ()=>{ const off = loadDayOff(currentMonday); const cutAfter = Object.assign({}, off[dayKey]?.cutAfter || {}); cutAfter[section] = String(slotHHMM); setDayOff(currentMonday, dayKey, { cutAfter }, { snapshot:true }); render(); });
+        addItem('この枠「より前」を休止', ()=>{ const off = loadDayOff(currentMonday); const cutBefore = Object.assign({}, off[dayKey]?.cutBefore || {}); cutBefore[section] = String(slotHHMM); setDayOff(currentMonday, dayKey, { cutBefore }, { snapshot:true }); render(); });
+        addItem('このセクションの「時刻休止」をクリア', ()=>{ const off = loadDayOff(currentMonday); const cutAfter  = Object.assign({}, off[dayKey]?.cutAfter  || {}); const cutBefore = Object.assign({}, off[dayKey]?.cutBefore || {}); delete cutAfter[section]; delete cutBefore[section]; setDayOff(currentMonday, dayKey, { cutAfter, cutBefore }, { snapshot:true }); render(); });
+      }
+
+      function closeMenu(ev){ if (!menu.contains(ev.target)) { document.removeEventListener('mousedown', closeMenu, true); if (menu.parentNode) menu.parentNode.removeChild(menu); } }
+      document.addEventListener('mousedown', closeMenu, true); document.body.appendChild(menu);
+    }, {passive:false});
+
+    return el;
+  }
+
+  // ===== ナビゲーション =====
+  prevWeekBtn.addEventListener('click', ()=>{ currentMonday = addDays(currentMonday,-7); render(); });
+  nextWeekBtn.addEventListener('click', ()=>{ currentMonday = addDays(currentMonday, 7); render(); });
+  todayBtn.addEventListener('click', ()=>{ currentMonday = startOfWeek(new Date()); render(); });
+  weekPicker.addEventListener('change', (e)=>{if (window.__suppressWeekChange) return;  // ★フォーカス中ピッカー更新を抑止
+ const v=e.target.value; if(!v) return; const [y,m,d]=v.split('-').map(Number); currentMonday = startOfWeek(new Date(y, m-1, d)); render(); });
+
+printBtn.addEventListener('click', ()=>{
+  // 現在フォーカス中の .day があればそれ、なければ
+  // アクティブスロットのある .day、無ければ先頭の .day
+   const cur = getActiveSlot?.();
+   const day = document.querySelector('.day.is-focused')
+            || (cur && cur.closest('.day'))
+            || document.querySelector('.day');
+  if(!day){ window.print(); return; }
+
+  // 1列化して印刷
+  document.body.classList.add('printDay');
+  try {
+    window.print();
+  } finally {
+    document.body.classList.remove('printDay');
+  }
+});
+const printSelectionBtn = document.getElementById('printSelectionBtn');
+printSelectionBtn?.addEventListener('click', ()=>{
+  // ルール：アクティブスロットの属する「直近の .slots」を印刷
+   const base = getActiveSlot?.() || document.querySelector('.slot');
+  if(!base){
+    alert('印刷するセクションが特定できません（枠を1つ選択してから押してください）');
+    return;
+  }
+  const slotsEl = base.closest('.slots');
+  if(!slotsEl){
+    alert('この枠に対応するセクションが見つかりませんでした');
+    return;
+  }
+  printSection(slotsEl);
+});
+
+// ==== 設定ボタンとダイアログ ====
+const settingsBtn   = document.getElementById('settingsBtn');
+const settingsDlg   = document.getElementById('settings');
+const settingsForm  = document.getElementById('settingsForm');
+const settingsSave  = document.getElementById('settingsSaveBtn');
+
+// 開く：現在の値をテキストエリアに流し込む（1行=1候補）
+settingsBtn?.addEventListener('click', ()=>{
+  document.getElementById('optIolTypes').value  = (appLists.iolTypes||[]).join('\n');
+  document.getElementById('optProc1').value     = (appLists.proc1||[]).join('\n');
+  document.getElementById('optProc2').value     = (appLists.proc2||[]).join('\n');
+  document.getElementById('optProc3').value     = (appLists.proc3||[]).join('\n');
+  document.getElementById('optSurgeons').value  = (appLists.surgeons||[]).join('\n');
+  settingsDlg.showModal();
+});
+
+// 保存
+settingsForm?.addEventListener('close', ()=>{/* noop（念のため） */});
+settingsSave?.addEventListener('click', (e)=>{
+  // <button value="save"> なので dialog は閉じる挙動ですが、確実に先に保存処理
+  e.preventDefault();
+
+  const lines = (t)=> t.split('\n').map(s=>s.trim()).filter(Boolean);
+
+  const next = {
+    iolTypes:  lines(document.getElementById('optIolTypes').value),
+    proc1:     lines(document.getElementById('optProc1').value),
+    proc2:     lines(document.getElementById('optProc2').value),
+    proc3:     lines(document.getElementById('optProc3').value),
+    surgeons:  lines(document.getElementById('optSurgeons').value)
+  };
+
+  appLists = next;
+  saveSettings(appLists);
+  applyDatalists(appLists);
+  settingsDlg.close();  // 閉じる
+});
+
+// 初期反映：起動時と毎描画時に最新を反映
+applyDatalists(appLists);
+
+
+  // 祝日データ キャッシュ（当年＋前後1年）
+  (function ensureHolidayCaches(){ const y = new Date().getFullYear(); [y - 1, y, y + 1].forEach(ensureHolidayAuto); })();
+
+// ★ ダブルクリック編集を委譲で一括対応（F5直後でも必ず効く）
+ // =============================
+ // 選択状態（SST）とユーティリティ
+ // =============================
+ (function initSlotCursorCore(){
+   if (!window.__slotCursor)
+     window.__slotCursor = { activeSlotEl: null, activeDayIndex: null };
+ 
+   // 現在選択を取得
+   window.getActiveSlot = function(){ return window.__slotCursor.activeSlotEl; };
+ 
+function isSelectableSlot(el){
+  // 基本ガード
+  if (!el || !el.classList?.contains('slot')) return false;
+  if (el.hidden) return false;                              // <div hidden> 対応
+  if (el.classList.contains('hiddenRow')) return false;     // 結合枠 tail 除外
+  if (el.classList.contains('disabled')) return false;
+  if (el.classList.contains('locked')) return false;
+  if (getComputedStyle(el).display === 'none') return false; // CSS非表示除外
+
+  // 例外：臨時/緊急は最優先で「選択可」
+  const isTempOrEmergency = el.classList.contains('temp-slot') || el.classList.contains('emergency-slot');
+  if (isTempOrEmergency) return true;
+
+  // 手動オフ（個別休止）＝原則「選択不可」
+  if (el.classList.contains('off')) return false;
+
+  // セクション休止（親 .slots.section-off）＝「選択不可」
+  const slotsWrap = el.closest?.('.slots');
+  if (slotsWrap?.classList?.contains('section-off')) return false;
+
+  // 祝日/終日休止（親 .day が is-holiday / is-off）＝「選択不可」
+  const day = el.closest?.('.day');
+  if (day && (day.classList.contains('is-holiday') || day.classList.contains('is-off'))) return false;
+
+  return true;
+}
+
+// 祝日/休診日の day 判定（集中管理）
+function isOffDay(dayEl){
+  return !!(dayEl && (dayEl.classList.contains('is-holiday') || dayEl.classList.contains('is-off')));
+}
+
+  // 廃止: setActiveSlot に統合済み。互換確保のため当面は no-op（後日削除可）
+  function syncFocused(){ /* no-op */ }
+ 
+// （重複していた旧統合版は削除）
+  // 統合版: setActiveSlot は青枠・状態更新・スクロールまで一元管理
+  window.setActiveSlot = function(el, opts){
+    opts = opts || {};
+    const doScroll = opts.scroll !== false;
+
+    // 無効要素 → 全解除
+    if (!isSelectableSlot(el)) {
+      const prev0 = window.__slotCursor?.activeSlotEl || document.querySelector('.slot.focused');
+      if (prev0?.classList) prev0.classList.remove('focused');
+      if (window.__slotCursor) window.__slotCursor.activeSlotEl = null;
+      window.__navCurSlot = null;
+      window.lastSelectedKey = null;
+      return;
+    }
+
+  // 祝日/休診日の day を渡された場合は「営業日の最初の枠」へ寄せる
+  (function normalizeAwayFromHoliday(){
+    // ★ 緊急/臨時は“寄せず”にその場で選択させる
+    const isEmOrTemp = el?.classList?.contains('emergency-slot') || el?.classList?.contains('temp-slot');
+    if (isEmOrTemp) return;  
+    const day = el.closest?.('.day');
+    if (!isOffDay(day)) return;
+    const days = Array.from(document.querySelectorAll('.day'));
+    let idx = days.indexOf(day);
+    // 右（翌日）優先で営業日を探す → なければ左へ
+    let j = idx + 1, found = null;
+    for(; j < days.length; j++){
+      if (!isOffDay(days[j])){ found = days[j]; break; }
+    }
+    if (!found){
+      for(j = idx - 1; j >= 0; j--){
+        if (!isOffDay(days[j])){ found = days[j]; break; }
+      }
+    }
+    if (found){
+      const first = window.findFirstSelectableInDay?.(found);
+      if (first) el = first; // ← “渡された祝日枠”はここで置換
+    }
+  })();
+  
+    // hiddenRow（結合枠tail）の場合は head へ寄せる
+    while (el && el.classList.contains('hiddenRow')) el = el.previousElementSibling;
+
+    const prev = window.__slotCursor?.activeSlotEl || document.querySelector('.slot.focused');
+    if (prev && prev !== el) prev.classList.remove('focused');
+
+    // 状態同期
+    if (window.__slotCursor) window.__slotCursor.activeSlotEl = el;
+    window.__navCurSlot = el; // 簡易ナビと同期
+    window.lastSelectedKey = el?.dataset?.key || null;
+
+    // day index 更新
+    const day = el.closest?.('.day');
+    if (day && window.__slotCursor) {
+      const idx = Array.from(day.parentElement?.querySelectorAll?.('.day') || []).indexOf(day);
+      if (idx >= 0) window.__slotCursor.activeDayIndex = idx;
+    }
+
+    // 青枠＋フォーカス＋スクロール
+    el.classList.add('focused');
+    try { el.focus?.({ preventScroll: true }); } catch(_){}
+    if (doScroll) try { el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch(_){}
+  };
+
+// 互換：現在のアクティブ枠を取得
+window.getActiveSlot = function(){
+  return window.__slotCursor?.activeSlotEl || document.querySelector('.slot.focused') || null;
+};
+// 旧APIは空実装に
+window.syncFocused = function(){ /* unified into setActiveSlot */ };
+ 
+   window.findFirstSelectableInDay = function(dayEl){
+     if (!dayEl) return null;
+     const list = dayEl.querySelectorAll('.slot');
+     for (const el of list) if (isSelectableSlot(el)) return el;
+     return null;
+   };
+ 
+   window.ensureInitialSelectionForDay = function(dayEl){
+     if (window.__slotCursor.activeSlotEl?.closest?.('.day') === dayEl) return;
+     const first = findFirstSelectableInDay(dayEl);
+     if (first) setActiveSlot(first);
+   };
+ 
+   window.moveVertWithinDay = function(fromEl, delta){
+     if (!isSelectableSlot(fromEl)) return false;
+     const dayEl = fromEl.closest?.('.day');
+     if (!dayEl) return false;
+     const list = Array.from(dayEl.querySelectorAll('.slot')).filter(isSelectableSlot);
+     const i = list.indexOf(fromEl);
+     if (i < 0) return false;
+     const j = i + (delta > 0 ? 1 : -1);
+     if (j < 0 || j >= list.length) return false; // 端では止まる
+     setActiveSlot(list[j]);
+	 keepSlotVisibleNearest(list[j]);   // 同日内は“見切れ防止”だけ
+     return true;	 
+   };
+ })();
+ 
+    function moveVertWithCrossDay(fromEl, delta) {
+  const inFocus = document.body.classList.contains('dayFocus');
+  if (inFocus) {
+    // フォーカス表示では同日内のみ（セクションまたぎ可）
+    moveVertWithinDay(fromEl, delta);
+    return;
+  }
+
+  // --- 週モード（日またぎあり） ---
+  const curDay = fromEl.closest('.day');
+  if (!curDay) return;
+
+  // 同日内に次スロットがあれば優先
+  if (moveVertWithinDay(fromEl, delta)) return;
+
+  // 日またぎ処理（“選択可能なスロット”がある日だけへ
+  const allDays = Array.from(document.querySelectorAll('.day'));
+  const step = (delta > 0 ? 1 : -1);
+  let i = allDays.indexOf(curDay) + step;
+  // 選択可能判定：存在すれば window.isSelectableSlot を優先
+  const isSel = (el)=>{
+    if (typeof window.isSelectableSlot === 'function') return window.isSelectableSlot(el);
+    // フォールバック（最低限）
+    if (!el || !el.classList?.contains('slot')) return false;
+    if (el.hidden || el.classList.contains('hiddenRow') || el.classList.contains('disabled') || el.classList.contains('locked')) return false;
+    const wrap = el.closest?.('.slots');
+    if (wrap?.classList?.contains('section-off')) return false;
+    if (el.classList.contains('off')) return false;
+    const day = el.closest?.('.day');
+    if (day && (day.classList.contains('is-holiday') || day.classList.contains('is-off'))) return false;
+    return true;
+  };
+  while (i >= 0 && i < allDays.length) {
+    const nextDay = allDays[i];
+    // その日の“選択可能なスロット”だけを候補にする
+    const list = Array.from(nextDay.querySelectorAll('.slot')).filter(isSel);
+    if (!list.length) { i += step; continue; }
+    const target = (delta > 0) ? list[0] : list[list.length - 1];
+    setActiveSlot(target);
+    target.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  // 着地先が無ければ何もしない
+}
+  // 初期適用＆描画
+  applyLayout(layoutMode);
+
+// ✅（任意）画面サイズ変更でも再調整したいならここに追加
+let _fitT = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_fitT);
+  _fitT = setTimeout(() => autoFitContentLines(), 150);
+}, { passive: true });
+
+// 「編集」ボタン：選択中（複数対応）→ なければアクティブ → それも無ければ先頭
+editBtn?.addEventListener('click', () => {
+  // まず DOM 要素で候補を集める
+  const candEls = [];
+
+  if (typeof multiSelected !== 'undefined' && multiSelected.size){
+    for (const k of multiSelected){
+      const el = document.querySelector(`.slot[data-key="${k}"]`);
+      if (el) candEls.push(el);
+    }
+   } else {
+     const cur = getActiveSlot?.();
+     if (cur) {
+       candEls.push(cur);
+     } else {
+       const first = document.querySelector('.slot');
+       if (first) candEls.push(first);
+     }
+   }
+
+  if (!candEls.length){
+    alert('編集する枠が見つかりません');
+    return;
+  }
+
+  // ★ 祝日/休止ロックを除外（緊急・臨時は除外されず残る）
+  const unlockedEls = candEls.filter(el => !isSlotLockedForEdit(el));
+
+  if (!unlockedEls.length){
+    // 何か選ばれてはいるが、全部ロック枠だった
+    alert('祝日/休止のため編集できる枠がありません');
+    return;
+  }
+
+  const keys = unlockedEls.map(el => el.dataset.key);
+  openEditor(keys);
+});
+
+// 保存済みデータで画面の各スロットを塗り直す
+function paintSlotsFromStore(){
+  const st = (typeof loadWeek === 'function') ? loadWeek(currentMonday) : {};
+  const em = loadEmerg(currentMonday) || {}; // ← 今週の緊急マップを読む
+  // フォールバック用の親フラグを一度リセット
+  document.querySelectorAll('.day, .slots').forEach(n => n.classList.remove('has-emergency'));
+  // 内容（左テキスト＋術者タグ）
+  document.querySelectorAll('.slot').forEach(el=>{
+    const key  = el.dataset.key;
+    const data = st[key];
+    const left = el.querySelector('.content-left');
+    const surg = el.querySelector('.surgeon-tag');
+
+    // いったん初期化
+    el.classList.remove('empty','mergeHead','hiddenRow');
+    el.style.gridRowEnd = '';
+
+    // ★ 緊急フラグをDOMに反映（ここが唯一の反映ポイントでOK）
+    const isEm = !!(key && em[key]);
+    el.classList.toggle('emergency-slot', isEm);
+    if (isEm){
+      // :has 非対応ブラウザ向けに親へフォールバックフラグ
+      el.closest('.day')?.classList.add('has-emergency');
+      el.closest('.slots')?.classList.add('has-emergency');
+      el.tabIndex = 0; // キーボード選択可（任意）
+    }
+
+    if (data && !data.tail) {
+      // 本体（head も含む）
+      if (typeof fmtContent === 'function') {
+        left.innerHTML = fmtContent(data);
+      } else {
+        // 予備：最低限
+        left.textContent = [data.io, data.name, data.pid, data.age, data.eye, data.iolType, data.iolPower, data.proc1, data.proc2, data.proc3, data.note]
+          .filter(Boolean).join(' / ');
+      }
+      surg.textContent = data.surgeon ? String(data.surgeon) : '';
+      el.classList.remove('empty');
+    } else if (data && data.tail) {
+      // tail 行はあとでまとめて非表示にする
+      left.textContent = '（空）';
+      surg.textContent = '';
+      el.classList.add('empty');
+    } else {
+      left.textContent = '（空）';
+      surg.textContent = '';
+      el.classList.add('empty');
+    }
+  });
+
+  // 結合表示（grid-row span と tail の視覚非表示）
+  document.querySelectorAll('.slots').forEach(container=>{
+    const children = Array.from(container.children);
+    for (let i=0;i<children.length;i++){
+      const el  = children[i];
+      const key = el.dataset.key;
+      const st  = loadWeek(currentMonday) || {};
+      const d   = st[key];
+
+      // 初期化は上で済み
+
+      if (d && d.head && Number(d.span||1) > 1){
+        const span = Number(d.span);
+        el.classList.add('mergeHead');
+        el.style.gridRowEnd = `span ${span}`;
+        // tail 行は見た目を隠す
+        for (let k=1;k<span && i+k<children.length;k++){
+          children[i+k].classList.add('hiddenRow');
+        }
+      }
+      if (d && d.tail){
+        el.classList.add('hiddenRow');
+      }
+    }
+  });
+}
+
+/* ======================  旧版→新コード 拡張層  ====================== */
+
+/** 週データ（手術枠）ストア：schedule_<week> */
+function loadWeek(date){ try{ const k='schedule_'+weekKey(date); return JSON.parse(localStorage.getItem(k))||{}; }catch(_){ return {}; } }
+function saveWeek(date,data){
+  try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){}
+  const k='schedule_'+weekKey(date);
+  localStorage.setItem(k, JSON.stringify(data||{}));
+}
+
+/** Undo スナップショット＆復元に schedule を統合 */
+const __snapshotState = snapshotState;
+snapshotState = function(){
+  const base = __snapshotState();
+  base.schedule = loadWeek(currentMonday);
+  return base;
+};
+const __restoreState = restoreState;
+restoreState = function(snap){
+  __restoreState(snap);
+  if (snap && snap.schedule){
+    localStorage.setItem('schedule_'+weekKey(currentMonday), JSON.stringify(snap.schedule||{}));
+  }
+};
+
+/** 共通ユーティリティ */
+function parseKey(key){ const [d,day,section,idx] = key.split('|'); return {d,day,section:Number(section),idx:Number(idx)}; }
+function slotKey(meta){ return `${meta.d}|${meta.day}|${meta.section}|${meta.idx}`; }
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+function toHalfWidthNum(str){ if(str==null) return ""; return String(str).replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)); }
+function normalizeDiopter(s){ if(!s) return ''; const v = Number(String(s).replace(',', '.')); return isFinite(v) ? v.toFixed(1) : s; }
+function normalizePatientFields(obj){
+  if(!obj) return obj;
+  const o = {...obj};
+  if(o.pid != null) o.pid = toHalfWidthNum(o.pid).trim();
+  if(o.age != null) o.age = toHalfWidthNum(o.age).trim();
+  return o;
+}
+
+/** ---- 印刷フィルタ用：付け外し簡易ユーティリティ ---- */
+const __PRINT_HIDDEN = new Set();
+function __hideForPrint(el){ if(!el) return; el.classList.add('hide-on-print'); __PRINT_HIDDEN.add(el); }
+function __clearPrintHides(){ __PRINT_HIDDEN.forEach(el=>el.classList.remove('hide-on-print')); __PRINT_HIDDEN.clear(); }
+
+/**
+ * 指定の1日のラップ（buildDayが返す wrap）で、残したいセクションだけを印刷する。
+ * keepIdxes は [0]（午前）/ [1]（午後1）/ [2]（午後8）/ [0,1]（午前+午後1）など。
+ */
+function printDayKeepSections(dayWrap, keepIdxes){
+  // 他の曜日は全部隠す
+  document.querySelectorAll('.day').forEach(d => { if(d !== dayWrap) __hideForPrint(d); });
+  // ヘッダー以外のUIも隠す（topbar等）
+  __hideForPrint(document.querySelector('.topbar'));
+
+  // dayWrap 内の .section-title と 直後の .slots をペア取り
+  const kids = Array.from(dayWrap.children);
+  const pairs = [];
+  for (let i=0; i<kids.length; i++){
+    if (kids[i].classList?.contains('section-title')){
+      const t = kids[i];
+      const s = kids[i+1] && kids[i+1].classList?.contains('slots') ? kids[i+1] : null;
+      if (s) pairs.push([t,s]);
+    }
+  }
+  // 不要なセクションを隠す
+  pairs.forEach((pair, idx) => {
+    if (!keepIdxes.includes(idx)) {
+      __hideForPrint(pair[0]);
+      __hideForPrint(pair[1]);
+    }
+  });
+
+  // 印刷 → 後始末
+  try { window.print(); }
+  finally { __clearPrintHides(); }
+}
+
+function printCombinedSections(elA, elB, titleText){
+  // 印刷用の一時コンテナ
+  const sheet = document.createElement('div');
+  sheet.className = 'print-sheet';
+  // シート内にタイトル（任意）と2セクションを複製して入れる
+  if (titleText) {
+    const h = document.createElement('h2');
+    h.textContent = titleText;
+    h.style.margin = '0 0 8px';
+    h.style.fontSize = '16px';
+    sheet.appendChild(h);
+  }
+
+  // クローンして追加（元DOMは触らない）
+  const cloneA = elA.cloneNode(true);
+  const cloneB = elB.cloneNode(true);
+  sheet.appendChild(cloneA);
+  sheet.appendChild(document.createElement('hr'));
+  sheet.appendChild(cloneB);
+
+  // 画面上では隠しておき、印刷だけ表示
+  const style = document.createElement('style');
+  style.textContent = `
+@media print{
+  body > *:not(.print-sheet){ display:none !important; }
+  .print-sheet{
+    display:block !important;
+    width: 190mm;           /* A4 210mm から左右余白を少し */
+    margin: 10mm auto;      /* 上下左右の余白 */
+    font-size: 12px;
+  }
+  .print-sheet .slot{
+    break-inside: avoid;    /* 枠がページまたぎで分断されにくく */
+  }
+}
+@media screen{
+  .print-sheet{ display:none; }
+}`;
+  document.head.appendChild(style);
+  document.body.appendChild(sheet);
+
+  const cleanup = ()=>{
+    sheet.remove();
+    style.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  window.print();
+}
+
+/** dayKey と section index で探して印刷 */
+function printTwoSectionsByKey(dayKey, idxA, idxB){
+  const a = document.querySelector(`.slots[data-day="${dayKey}"][data-section="${idxA}"]`);
+  const b = document.querySelector(`.slots[data-day="${dayKey}"][data-section="${idxB}"]`);
+  if(!a || !b){ alert('対象セクションが見つかりません'); return; }
+  const ttl = `${dayKey} 手術室1（午前＋午後）`;
+  printCombinedSections(a, b, ttl);
+}
+
+// --- 選択印刷用：一時コンテナ ---
+function ensurePrintSandbox(){
+  let box = document.getElementById('printSandbox');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'printSandbox';
+    // 画面では非表示（印刷時だけ表示）
+    box.style.display = 'none';
+    document.body.appendChild(box);
+  }
+  box.innerHTML = '';
+  return box;
+}
+function clearPrintSandbox(){
+  const box = document.getElementById('printSandbox');
+  if(box) box.innerHTML = '';
+}
+function printSection(slotsEl){
+  if(!slotsEl) return;
+
+  const box = ensurePrintSandbox();
+
+  // タイトル（曜日・日付・セクション名）を拾って載せる
+  const day = slotsEl.closest('.day');
+  const titleEl = day?.querySelector('.day-header-date')?.cloneNode(true) || null;
+  const sectionTitle = slotsEl.previousElementSibling?.classList?.contains('section-title')
+    ? slotsEl.previousElementSibling.cloneNode(true) : null;
+
+  // 複製（見た目を保つため slots を丸ごと clone）
+  const clone = slotsEl.cloneNode(true);
+
+  // ラッパー
+  const wrap = document.createElement('section');
+  wrap.className = 'day'; // 既存スタイルをそのまま使うため
+  const head = document.createElement('div');
+  head.className = 'day-header';
+  if(titleEl) head.appendChild(titleEl);
+  box.appendChild(wrap);
+  wrap.appendChild(head);
+  if(sectionTitle) wrap.appendChild(sectionTitle);
+  wrap.appendChild(clone);
+
+  // 印刷フラグを付けて印刷
+  document.body.classList.add('printRange');
+  try {
+    window.print();
+  } finally {
+    document.body.classList.remove('printRange');
+    clearPrintSandbox();
+  }
+}
+
+// どこに：既存の印刷ユーティリティ（printSection 等）がある付近
+function printDayElement(dayEl){
+  if (!dayEl) return;
+  const days = document.querySelectorAll('#schedule .day');
+  // この日以外を印刷時だけ隠す（CSSの .hide-on-print が効く）
+  days.forEach(d => { if (d !== dayEl) d.classList.add('hide-on-print'); });
+  try {
+    window.print();
+  } finally {
+    days.forEach(d => d.classList.remove('hide-on-print'));
+  }
+}
+
+
+// ひらがな→カタカナ→半角カタカナ
+function toHalfWidthKana(str){
+  if (!str) return "";
+  // 1) ひらがな → カタカナ
+  str = str.replace(/[\u3041-\u3096]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) + 0x60)
+  );
+  // 2) 全角カタカナ → 半角カタカナ（主要文字を網羅）
+  const map = {
+    '。':'｡','、':'､','・':'･','「':'｢','」':'｣','ー':'ｰ','゛':'ﾞ','゜':'ﾟ',
+    'ァ':'ｧ','ア':'ｱ','ィ':'ｨ','イ':'ｲ','ゥ':'ｩ','ウ':'ｳ','ェ':'ｪ','エ':'ｴ','ォ':'ｫ','オ':'ｵ',
+    'カ':'ｶ','ガ':'ｶﾞ','キ':'ｷ','ギ':'ｷﾞ','ク':'ｸ','グ':'ｸﾞ','ケ':'ｹ','ゲ':'ｹﾞ','コ':'ｺ','ゴ':'ｺﾞ',
+    'サ':'ｻ','ザ':'ｻﾞ','シ':'ｼ','ジ':'ｼﾞ','ス':'ｽ','ズ':'ｽﾞ','セ':'ｾ','ゼ':'ｾﾞ','ソ':'ｿ','ゾ':'ｿﾞ',
+    'タ':'ﾀ','ダ':'ﾀﾞ','チ':'ﾁ','ヂ':'ﾁﾞ','ッ':'ｯ','ツ':'ﾂ','ヅ':'ﾂﾞ','テ':'ﾃ','デ':'ﾃﾞ','ト':'ﾄ','ド':'ﾄﾞ',
+    'ナ':'ﾅ','ニ':'ﾆ','ヌ':'ﾇ','ネ':'ﾈ','ノ':'ﾉ',
+    'ハ':'ﾊ','バ':'ﾊﾞ','パ':'ﾊﾟ','ヒ':'ﾋ','ビ':'ﾋﾞ','ピ':'ﾋﾟ','フ':'ﾌ','ブ':'ﾌﾞ','プ':'ﾌﾟ','ヘ':'ﾍ','ベ':'ﾍﾞ','ペ':'ﾍﾟ','ホ':'ﾎ','ボ':'ﾎﾞ','ポ':'ﾎﾟ',
+    'マ':'ﾏ','ミ':'ﾐ','ム':'ﾑ','メ':'ﾒ','モ':'ﾓ',
+    'ャ':'ｬ','ヤ':'ﾔ','ュ':'ｭ','ユ':'ﾕ','ョ':'ｮ','ヨ':'ﾖ',
+    'ラ':'ﾗ','リ':'ﾘ','ル':'ﾙ','レ':'ﾚ','ロ':'ﾛ',
+    'ワ':'ﾜ','ヲ':'ｦ','ン':'ﾝ','ヴ':'ｳﾞ','ヵ':'ｶ','ヶ':'ｹ'
+  };
+  return str.replace(/[\u30A1-\u30FA\u30FC\u309B\u309C\u3001\u3002\u30FB\u300C\u300D]/g, ch => map[ch] || ch);
+}
+
+function flipEye(v){ if(!v) return v; if(v==='R') return 'L'; if(v==='L') return 'R'; if(v==='右') return '左'; if(v==='左') return '右'; return v; }
+
+/** 表示整形（旧版準拠） */
+function fmtContent(d){
+  const parts=[];
+  if(d.io) parts.push(d.io);
+  if(d.name) parts.push(d.name);
+  if(d.pid) parts.push('#'+toHalfWidthNum(d.pid));
+  if(d.age) parts.push(String(toHalfWidthNum(d.age)));
+
+  if(d.eye){ parts.push(`<span class="eye-mark">${d.eye.trim()}</span>`); }
+
+  if(d.iolType || d.iolPower){
+    let p = (d.iolPower||'').toString().trim();
+    if(p && !isNaN(Number(p))) p = Number(p).toFixed(1);
+    parts.push(`${(d.iolType||'').trim()} ${p}`.trim());
+  }
+
+  if(d.proc1) parts.push(d.proc1);
+  if(d.proc2) parts.push(d.proc2);
+  if(d.proc3) parts.push(d.proc3);
+  if(d.note)  parts.push('※'+d.note);
+
+  return parts.join(' / ');
+}
+
+/** datalist（最低限） */
+(function ensureDatalists(){
+  const powers=[]; for(let v=15.0; v<=30.001; v+=0.5){ powers.push(v.toFixed(1)); }
+  const types=["AcrySof IQ","TECNIS","HOYA Vivinex","PanOptix","EDOF"];
+  const dlT = document.getElementById('iolTypes'); const dlP = document.getElementById('iolPowers');
+  if(dlT && !dlT.children.length) types.forEach(v=>{const o=document.createElement('option');o.value=v;dlT.appendChild(o);});
+  if(dlP && !dlP.children.length) powers.forEach(v=>{const o=document.createElement('option');o.value=v;dlP.appendChild(o);});
+})();
+
+
+const multiSelected = new Set();
+function clearMultiSelection(){
+  multiSelected.forEach(k=>{
+    const el = document.querySelector(`.slot[data-key="${k}"]`);
+    if(el) el.classList.remove('multiSelected');
+  });
+  multiSelected.clear();
+}
+function addMultiSelect(el){
+  const k = el?.dataset?.key; if(!k) return;
+  if(!multiSelected.has(k)){ multiSelected.add(k); el.classList.add('multiSelected'); }
+}
+function toggleMultiSelect(el){ const k=el?.dataset?.key; if(!k) return; if(multiSelected.has(k)){ multiSelected.delete(k); el.classList.remove('multiSelected'); } else addMultiSelect(el); }
+function findRangeSameDay(aEl,bEl){
+  const day=aEl.closest('.day'); if(!day || day!==bEl.closest('.day')) return [];
+  const list=Array.from(day.querySelectorAll('.slot'));
+  const i=list.indexOf(aEl), j=list.indexOf(bEl); if(i<0||j<0) return [];
+  const [s,e]=i<=j?[i,j]:[j,i]; return list.slice(s,e+1);
+}
+
+/* ---------- 結合表示（head/tail/span） ---------- */
+function applyMerges(container, store){
+  const children = Array.from(container.children);
+  for(let i=0;i<children.length;i++){
+    const el = children[i];
+    const data = store[el.dataset.key];
+
+    // まず初期化
+    el.style.gridRowEnd = '';
+    el.classList.remove('mergeHead','hiddenRow');
+
+    // ★時刻セル内の古いバッジは掃除（F5直後や再描画の取りこぼし防止）
+    const timeEl = el.querySelector('.time');
+if (timeEl){
+      timeEl.querySelectorAll('.merge-badge').forEach(n => n.remove());
+      timeEl.querySelectorAll('.ga-badge').forEach(n => n.remove()); // ← 追加
+    }
+    // tail は見た目を隠すだけ
+    if (data && data.tail){
+      el.classList.add('hiddenRow');
+      continue;
+    }
+
+    // head かつ span>1 のとき：縦方向へ結合＋バッジを時刻の下に置く
+    if (data && data.head && Number(data.span) > 1){
+      const span = Number(data.span);
+      el.style.gridRowEnd = `span ${span}`;
+      el.classList.add('mergeHead');
+
+      // ★ここを「leftEl に付ける」のではなく timeEl に付ける
+      if (timeEl){
+        const b = document.createElement('span');
+        b.className = 'merge-badge';
+        b.textContent = `${span}枠`;   // ← 短く「4枠」
+        timeEl.appendChild(b);
+
+   // ② 全麻バッジ（ga が true かつ span>=4 の時だけ）
+        if (data.ga && span >= 3){
+          const g = document.createElement('span');
+          g.className = 'ga-badge';
+          g.textContent = '全麻';
+          timeEl.appendChild(g);  // margin-top:auto で最下段に来る
+        }
+      }
+
+      // 後続の “見た目” 行は隠す
+      for (let k=1; k<span; k++){
+        const t = children[i+k];
+        if (t) t.classList.add('hiddenRow');
+      }
+    }
+  }
+}
+
+/* ---------- schedule レンダリングを createSlot にブリッジ ---------- */
+const __createSlot = createSlot; // 既存生成を流用
+createSlot = function(meta, time){
+  const el = __createSlot(meta, time);
+  const key = el.dataset.key;
+
+  // クリックで選択（単体／Ctrl/Shiftで複数・範囲）
+  el.addEventListener('click',(e)=>{
+    if (isSlotLockedForEdit(el)) return;
+    const multi = e.ctrlKey || e.metaKey || e.shiftKey;
+    if(!multi){ clearMultiSelection(); }
+     const cur = getActiveSlot?.();
+     if(e.shiftKey && cur){
+       findRangeSameDay(cur, el).forEach(addMultiSelect);
+       setActiveSlot(el);
+       return;
+     }
+    if(multi){ toggleMultiSelect(el); setActiveSlot(el); return; }
+    addMultiSelect(el); setActiveSlot(el);
+  }, true);
+
+  // ダブルクリックで編集（時間セルは既存 dblclick で占有済みなので除外）
+  el.addEventListener('dblclick',(e)=>{
+    if(e.target.closest('.time')) return;
+  const slotEl = e.currentTarget.closest('.slot');
+  if (isSlotLockedForEdit(slotEl)) return;
+    openEditor([key]);
+  });
+
+  // 祝日・休止でも右クリックは通る（新コードCSSが許可済み）
+
+  // ここで schedule を埋め込む
+  const store = loadWeek(currentMonday);
+  const d = store[key];
+  const leftEl = el.querySelector('.content-left');
+  const surgEl = el.querySelector('.surgeon-tag');
+  if (d && !d.tail){
+    leftEl.innerHTML = fmtContent(d);
+    surgEl.textContent = d.surgeon ? String(d.surgeon) : '';
+    el.classList.remove('empty');
+    if(d.head) el.classList.add('mergeHead');
+  }else{
+    leftEl.textContent = '（空）';
+    surgEl.textContent = '';
+    el.classList.add('empty');
+  }
+  if (d && d.ga) {
+    el.classList.add('ga-slot');
+  }
+
+  return el;
+};
+
+/* ---------- render をフック：結合スパン反映 ---------- */
+const __render = render;
+render = function(){
+  __render();
+  const store = loadWeek(currentMonday);
+  // 各セクション .slots に対して結合表示を適用
+  document.querySelectorAll('.slots').forEach(sl => applyMerges(sl, store));
+};
+
+// ひらがな→カタカナ、半角→全角（長音・濁点はそのまま）
+function toKatakana(input){
+  if (!input) return "";
+  // 半角カナ等を正規化してから
+  let s = input.normalize('NFKC');
+  // ひらがな(U+3041〜3096)をカタカナ(U+30A1〜30F6)へ
+  s = s.replace(/[\u3041-\u3096]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) + 0x60)
+  );
+  return s;
+}
+
+/* ---------- エディタ ---------- */
+function openEditor(keys){
+  const editor = document.getElementById('editor');
+  const f = document.getElementById('editorForm');
+  const st = loadWeek(currentMonday);
+ try {
+    f.iolType?.setAttribute('list', 'iolTypes');
+    f.proc1?.setAttribute('list', 'procList');
+    f.proc2?.setAttribute('list', 'procList2');
+    f.proc3?.setAttribute('list', 'procList3');
+    f.surgeon?.setAttribute('list', 'surgeonsList');
+   applyDatalists();
+  } catch (_) {}
+  // tail を開いたら head に寄せる
+  let firstKey = keys[0];
+  const d0 = st[firstKey];
+  if(d0 && d0.tail && d0.head){ firstKey = d0.head; }
+  const first = st[firstKey] || {};
+  const isHead = !!first.head;
+
+  document.getElementById('editorTitle').textContent =
+    keys.length>1 ? `選択枠の一括編集（${keys.length}件）` :
+    (isHead ? `結合枠の編集（${first.span||1}枠）` : '枠の編集');
+
+  // 既存値を反映
+  f.name.value = first.name || '';
+  f.pid.value  = first.pid  || '';
+  f.age.value  = first.age  || '';
+  f.eye.value  = first.eye  || '';
+  f.io.value   = first.io   || '';
+  f.iolType.value  = first.iolType  || '';
+  f.iolPower.value = first.iolPower || '';
+  f.proc1.value = first.proc1 || '';
+  f.proc2.value = first.proc2 || '';
+  f.proc3.value = first.proc3 || '';
+  f.surgeon.value = first.surgeon || '';
+  f.note.value  = first.note || '';
+  f.mergeSlots.checked = isHead || keys.length>1;
+  f.mergeSpan.value = isHead ? (first.span||1) : Math.max(1, keys.length);
+  f.ga.checked = !!first.ga;
+// ▼ 氏名入力欄にIMEカタカナモードを指示
+(function(){
+  const nameInput = f.name;
+  if (nameInput) {
+    nameInput.style.imeMode = 'active';
+    nameInput.setAttribute('inputmode','katakana');
+  }
+})();
+
+  editor.returnValue='';
+// ▼ 氏名欄：IME確定後 or 非変換入力のときに即カタカナ化する
+(function(){
+  const nameInput = f.name;
+  if (!nameInput) return;
+
+  // 入力モードのヒント（効かない環境も多い）
+  nameInput.style.imeMode = 'active';
+  nameInput.setAttribute('inputmode', 'katakana');
+
+  let composing = false;
+
+  nameInput.addEventListener('compositionstart', () => { composing = true; });
+  nameInput.addEventListener('compositionend', () => {
+    composing = false;
+    // IME確定直後に変換
+    const pos = nameInput.selectionStart;
+    nameInput.value = toKatakana(nameInput.value);
+    // 位置は基本同長なので軽く復元
+    try { nameInput.setSelectionRange(pos, pos); } catch(_) {}
+  });
+
+  nameInput.addEventListener('input', () => {
+    if (composing) return; // 変換中は触らない
+    const pos = nameInput.selectionStart;
+    nameInput.value = toKatakana(nameInput.value);
+    try { nameInput.setSelectionRange(pos, pos); } catch(_) {}
+  });
+
+  // 念のためフォーカス離脱時にも正規化
+  nameInput.addEventListener('blur', () => {
+    nameInput.value = toKatakana(nameInput.value);
+  });
+})();
+
+  editor.showModal();
+
+  const onEnterToSave = (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.isComposing) return; // IME変換中は無視
+
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'textarea' && e.shiftKey) return; // メモ等で Shift+Enter は改行
+
+    e.preventDefault();
+
+    // datalist/IME確定を反映
+    try { document.activeElement?.blur(); } catch(_) {}
+
+    editor.returnValue = 'save';
+    editor.close();  // ↓の close ハンドラで保存処理が走る
+  };
+  editor.addEventListener('keydown', onEnterToSave, true);
+
+  editor.addEventListener('close', function handler(){
+    editor.removeEventListener('close', handler);
+    if(editor.returnValue==='save'){
+      let nd = {
+        name: toHalfWidthKana(f.name.value.trim()),
+        pid:  f.pid.value.trim(),
+        age:  f.age.value.trim(),
+        eye:  f.eye.value,
+        io:   f.io.value,
+        iolType: f.iolType.value.trim(),
+        iolPower: normalizeDiopter(f.iolPower.value.trim()),
+        proc1: f.proc1.value.trim(),
+        proc2: f.proc2.value.trim(),
+        proc3: f.proc3.value.trim(),
+        surgeon: f.surgeon.value.trim(),
+        note:  f.note.value.trim(),
+        ga: !!f.ga.checked
+      };
+      nd = normalizePatientFields(nd);
+
+      const merge = f.mergeSlots.checked;
+      let span = Math.max(1, parseInt(f.mergeSpan.value||'1',10));
+      const data = loadWeek(currentMonday);
+
+      // 先頭から n 枠キー列
+      function seqKeys(headKey, n){
+        const {d,day,section,idx} = parseKey(headKey);
+        const keys=[headKey];
+        for(let i=1;i<n;i++){ keys.push(`${d}|${day}|${section}|${idx+i}`); }
+        return keys;
+      }
+
+      // 既存 head 編集は一旦解除
+      if(first.head){
+        const oldKeys = seqKeys(firstKey, first.span||1);
+        for(const k of oldKeys){ if(data[k]) delete data[k]; }
+      }
+
+      if(merge && span>1){
+        const keysToUse = keys.length>1 ? keys.slice().sort((a,b)=> a.localeCompare(b)) : seqKeys(firstKey, span);
+        // 上書き不可チェック（tail以外に何かあれば中止）
+        for(let i=1;i<keysToUse.length;i++){
+          const d = data[keysToUse[i]];
+          if(d && !d.tail){ alert('結合先に既存データがあります。先にクリアしてください。'); return; }
+        }
+        data[keysToUse[0]] = {...nd, head:true, span: keysToUse.length};
+        for(let i=1;i<keysToUse.length;i++) data[keysToUse[i]] = { tail:true, head: keysToUse[0] };
+      }else{
+        // 単枠／複数同一書き
+        if(Object.values(nd).every(v=>!v)){ delete data[firstKey]; }
+        else{ data[firstKey] = nd; }
+        if(keys.length>1){
+          for(let i=1;i<keys.length;i++){
+            if(Object.values(nd).every(v=>!v)) delete data[keys[i]];
+            else data[keys[i]] = nd;
+          }
+        }
+      }
+
+       // --- フォーカス維持のための退避 ---
+       const wasFocus = document.body.classList.contains('dayFocus');
+       const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+       // フォーカス日を特定するためのキー（data-day があれば最優先、なければ見出しテキスト）
+       const focusedDayKey =
+         focusedDayEl?.dataset?.day ??
+         focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
+         null;
+       const lastKeyBefore = window.lastSelectedKey || null;
+ 
+       saveWeek(currentMonday, data);
+       if (wasFocus) exitDayFocus();  // ← いったん解除してから
+       render();
+       // --- 再突入（同じ日へ） ---
+       if (wasFocus && focusedDayKey){
+         // data-day で探す → 無ければ見出しテキスト一致で探す
+         let dayEl =
+           document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+           Array.from(document.querySelectorAll('.day'))
+             .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+         if (dayEl) {
+           enterDayFocus(dayEl);
+           // 可能なら直前と同じスロットを再選択
+           if (lastKeyBefore){
+             const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+             if (sameSlot) setActiveSlot(sameSlot);
+             else ensureInitialSelectionForDay(dayEl);
+           } else {
+             ensureInitialSelectionForDay(dayEl);
+           }
+         }
+       }
+      // --- ★ 再描画後のフォーカス再同期（念のため） ---
+      const currentFocused = document.querySelector('.slot.focused');
+      if (!currentFocused) {
+        const fallbackDay = document.querySelector('.day[data-focus="true"]') || document.querySelector('.day');
+        if (fallbackDay) {
+          const firstSlot = findFirstSelectableInDay(fallbackDay);
+          if (firstSlot) setActiveSlot(firstSlot);
+        }
+      }	   
+    }else if(editor.returnValue==='clear'){
+      const data = loadWeek(currentMonday);
+      const dHead = data[firstKey];
+      if(dHead && dHead.head){
+        const {d,day,section,idx} = parseKey(firstKey);
+        for(let i=0;i<(dHead.span||1);i++){
+          const k = `${d}|${day}|${section}|${idx+i}`;
+          delete data[k];
+        }
+      }else{
+        delete data[firstKey];
+      }
+       const wasFocus = document.body.classList.contains('dayFocus');
+       const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+       const focusedDayKey =
+         focusedDayEl?.dataset?.day ??
+         focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
+         null;
+       const lastKeyBefore = window.lastSelectedKey || null;
+ 
+       saveWeek(currentMonday, data);
+       if (wasFocus) exitDayFocus();
+       render();
+       if (wasFocus && focusedDayKey){
+         let dayEl =
+           document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+           Array.from(document.querySelectorAll('.day'))
+             .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+         if (dayEl) {
+           enterDayFocus(dayEl);
+           if (lastKeyBefore){
+             const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+             if (sameSlot) setActiveSlot(sameSlot);
+             else ensureInitialSelectionForDay(dayEl);
+           } else {
+             ensureInitialSelectionForDay(dayEl);
+           }
+         }
+       }
+      // --- ★ 再描画後のフォーカス再同期（念のため） ---
+      const currentFocused = document.querySelector('.slot.focused');
+      if (!currentFocused) {
+        const fallbackDay = document.querySelector('.day[data-focus="true"]') || document.querySelector('.day');
+        if (fallbackDay) {
+          const firstSlot = findFirstSelectableInDay(fallbackDay);
+          if (firstSlot) setActiveSlot(firstSlot);
+        }
+      }
+    }
+  }, {once:true});
+}
+
+/* ---------- コピー / 貼り付け / 切り取り（単枠＆結合対応の最小核） ---------- */
+const appClipboard = { type:null, data:null };
+let lastCopySourceKey = null;
+
+function isOccupiedRecord(rec){
+  if (!rec) return false;
+  const f = ['head','tail','name','pid','age','eye','iolType','iolPower','proc1','proc2','proc3','surgeon','note','io','linkWith'];
+  return f.some(k => !!rec[k]);
+}
+
+function copySlotOrMerge(){
+  const el = getActiveSlot?.();
+  if(!el){ alert('スロットを選択してください'); return; }
+  const key = el.dataset.key;
+  const st  = loadWeek(currentMonday);
+  const d   = st[key];
+  if(!d){ alert('コピー対象がありません'); return; }
+
+  if (d.head && Number(d.span||1)>1){
+    appClipboard.type = 'merge';
+    appClipboard.data = { headKey:key, span:Number(d.span), headData:deepClone(d) };
+  }else{
+    appClipboard.type = 'single';
+    appClipboard.data = { key, data:deepClone(d) };
+    lastCopySourceKey = key;
+  }
+  el.animate([{opacity:1},{opacity:.5},{opacity:1}], {duration:160});
+}
+
+function pasteToActive({flip=false}={}){
+  const clip = appClipboard;
+  if(!clip?.type){ alert('コピーされていません'); return; }
+  const tEl = getActiveSlot?.(); if(!tEl){ alert('貼り付け先を選択してください'); return; }
+  const tKey = tEl.dataset.key;
+  const st = loadWeek(currentMonday);
+
+  if(clip.type==='single'){
+    if(isOccupiedRecord(st[tKey])){ alert('既にデータがあります'); return; }
+    const data = deepClone(clip.data.data);
+    if(flip && data.eye) data.eye = flipEye(data.eye);
+    delete data.linkWith;
+    st[tKey] = data;
+  saveWeek(currentMonday, st);
+  reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
+    return;
+  }
+
+  if(clip.type==='merge'){
+    const span = Number(clip.data.span||1); if(span<=1){ alert('結合情報が不正です'); return; }
+    // 同じ .day で連続 span 枚が空いているかチェック
+    const day = tEl.closest('.day'); if(!day){ alert('貼り付け先が不正です'); return; }
+    const list = Array.from(day.querySelectorAll('.slot'));
+    const base = list.indexOf(tEl); if(base<0 || base+span-1>=list.length){ alert('貼り付け範囲が日はみ出します'); return; }
+    const destKeys = []; for(let i=0;i<span;i++) destKeys.push(list[base+i].dataset.key);
+    for(const k of destKeys){ if(isOccupiedRecord(st[k])){ alert('貼り付け先に既存データがあります'); return; } }
+    const headData = deepClone(clip.data.headData||{});
+    delete headData.head; delete headData.tail; delete headData.span; delete headData.linkWith;
+    const headKey = destKeys[0];
+    st[headKey] = {...headData, head:true, span};
+    for(let i=1;i<span;i++) st[destKeys[i]] = { tail:true, head:headKey };
+  saveWeek(currentMonday, st);
+  reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
+    return;
+  }
+}
+
+function cutActive(){
+  const el = getActiveSlot?.(); if(!el) return;
+  copySlotOrMerge();
+  const st = loadWeek(currentMonday);
+  const key = el.dataset.key; const d=st[key]; if(!d) return;
+  if(d.head){ const {d:dd,day,section,idx}=parseKey(key); for(let i=0;i<(d.span||1);i++){ delete st[`${dd}|${day}|${section}|${idx+i}`]; } }
+  else { delete st[key]; }
+   // --- フォーカス維持ラッパー（保存時と同じパターン） ---
+   const wasFocus = document.body.classList.contains('dayFocus');
+   const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+   const focusedDayKey =
+     focusedDayEl?.dataset?.day ??
+     focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ?? null;
+   const lastKeyBefore = window.lastSelectedKey || null;
+ 
+   saveWeek(currentMonday, st);
+   if (wasFocus) exitDayFocus();
+   render();
+   if (wasFocus && focusedDayKey){
+     let dayEl =
+       document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+       Array.from(document.querySelectorAll('.day'))
+         .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+     if (dayEl) {
+       enterDayFocus(dayEl);
+       // 可能なら同じキーへ再選択、無ければ当日先頭
+       if (lastKeyBefore){
+         const same = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+         if (same) setActiveSlot(same);
+         else ensureInitialSelectionForDay(dayEl);
+       } else {
+         ensureInitialSelectionForDay(dayEl);
+       }
+     }
+   }
+}
+
+/* ---------- ショートカット（Ctrl/Cmd + C/V/X, Delete, Enter） ---------- */
+document.addEventListener('keydown',(e)=>{
+  if(isTypingContext(e)) return;
+  const k = e.key.toLowerCase();
+
+  if((e.ctrlKey||e.metaKey) && k==='c'){ e.preventDefault(); copySlotOrMerge(); }
+  if((e.ctrlKey||e.metaKey) && k==='v'){ e.preventDefault(); pasteToActive({flip:e.shiftKey}); }
+  if((e.ctrlKey||e.metaKey) && k==='x'){ e.preventDefault(); cutActive(); }
+
+  if(k==='delete' || k==='backspace'){
+    e.preventDefault();
+     const el = getActiveSlot?.(); if(!el) return;
+ 
+     // 1) head を特定（tail を選んでいても巻き戻す）
+     const head = (function resolveHead(n){
+       let p = n;
+       while (p && p.classList && p.classList.contains('slot')){
+         if (p.classList.contains('mergeHead')) return p; // 明示 head
+         if (!p.classList.contains('hiddenRow')) return p; // 単独＝head扱い
+         p = p.previousElementSibling;
+       }
+       return n;
+     })(el);
+ 
+     // 2) span を取得（style > dataset > 既定1）
+     function getSpan(h){
+       const s = h && h.style ? h.style.gridRowEnd : '';
+       const m = s && s.match(/span\s+(\d+)/i);
+       if (m){ const n = parseInt(m[1],10); if (Number.isFinite(n) && n>0) return n; }
+       const d = h && h.dataset ? h.dataset : {};
+       const raw = d.span || d.mergeSpan;
+       const n2 = parseInt(raw,10);
+       return (Number.isFinite(n2) && n2>0) ? n2 : 1;
+     }
+     const span = getSpan(head);
+ 
+     // 3) 週データを読み、head と tail 全部のキーを削除
+     const st = loadWeek(currentMonday);
+     if (head.dataset && head.dataset.key) delete st[head.dataset.key];
+     let p = head.nextElementSibling;
+     for (let i=1; i<span && p; i++){
+       if (!(p.classList && p.classList.contains('slot'))) break;
+       // tail 側の state も消す（←これが肝）
+       if (p.dataset && p.dataset.key) delete st[p.dataset.key];
+       // 4) DOM 上も hiddenRow を先に外しておく（掃除で消されるのを防止）
+       p.classList.remove('hiddenRow');
+       p = p.nextElementSibling;
+     }
+     // head の結合表示も外す（任意：見た目のチラつき抑止）
+     head.classList.remove('mergeHead');
+     if (head.style) head.style.gridRowEnd = '';
+     if (head.dataset){ delete head.dataset.span; delete head.dataset.mergeSpan; }
+ 
+     // 5) 保存→再描画（applyMerges はもう tail を隠せない）
+     saveWeek(currentMonday, st);
+     preserveScrollWhile(()=> render());
+  }
+
+if(k==='enter'){
+  e.preventDefault();
+  const el = getActiveSlot?.() || document.querySelector('.slot');
+  if(!el) return;
+
+  // ★ 祝日/休止ガードを追加
+  if (isSlotLockedForEdit(el)) {
+    // 必要なら案内を出す
+    // alert('この枠は祝日/休止のため編集できません');
+    return;
+  }
+
+  openEditor([el.dataset.key]);
+}
+}, true);
+
+ <!-- Ctrl+←／→ 統合ハンドラ：週＝前週/次週、フォーカス＝前日/翌日 -->
+ (()=> {
+   if (window.__bindCtrlArrowsUnified) return; window.__bindCtrlArrowsUnified = true;
+ 
+   const isEditable = (t)=>{ const tag=t?.tagName?.toLowerCase(); return tag==='input'||tag==='textarea'||t?.isContentEditable; };
+   const isDialogOpen = ()=> {
+     const ed=document.getElementById('editor'), st=document.getElementById('settings');
+     return !!((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open'))));
+   };
+   const z = n => String(n).padStart(2,'0');
+   const ymd = d => `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+ 
+   document.addEventListener('keydown', (e)=>{
+     if (!e.ctrlKey) return;
+     const isLeft  = (e.key === 'ArrowLeft');
+     const isRight = (e.key === 'ArrowRight');
+     if (!(isLeft || isRight)) return;
+     if (isEditable(e.target) || isDialogOpen()) return;
+ 
+     const dir = isRight ? +1 : -1; // 週：±7日 / フォーカス：±1日
+ 
+     // フォーカスモード：前日/翌日
+     if (document.body.classList.contains('dayFocus')) {
+       const hasJump = (typeof window.jumpFocusTo === 'function');
+       const getFd   = (typeof window.getFocusDate === 'function') ? window.getFocusDate : null;
+       let d = getFd ? getFd() : null;
+       if (!(d instanceof Date) || isNaN(+d)) {
+         const wp=document.getElementById('weekPicker');
+         if (wp?.value){ const [y,m,dd]=wp.value.split('-').map(Number); d=new Date(y,m-1,dd); }
+         else d = new Date();
+       }
+       d.setDate(d.getDate() + dir);
+       if (typeof window.snapWeekendDir === 'function') d = window.snapWeekendDir(d, dir);
+       e.preventDefault(); e.stopImmediatePropagation();
+       if (hasJump){
+         window.jumpFocusTo(d, dir);
+       } else {
+         // フォールバック：フォーカス時は週ボタンが「前日/翌日」に置換されている
+         const btn = document.getElementById(dir > 0 ? 'nextWeek' : 'prevWeek');
+         btn?.click();
+       }
+       return;
+     }
+ 
+     // 週モード：前週/次週
+     const wp = document.getElementById('weekPicker'); if (!wp) return;
+     const base = (window.currentMonday instanceof Date)
+       ? new Date(window.currentMonday)
+       : (wp.value ? new Date(wp.value) : new Date());
+     base.setDate(base.getDate() + (dir * 7));
+     e.preventDefault(); e.stopImmediatePropagation();
+     // ← 基準週を即時更新して“現在の週”を正しく追従させる
+     window.currentMonday = new Date(base.getFullYear(), base.getMonth(), base.getDate());	 
+     wp.value = ymd(base);
+     wp.dispatchEvent(new Event('change', { bubbles:true }));
+   }, { capture:true });
+ })();
+
+ <!-- Ctrl＋.：週表示→フォーカス表示で今日にジャンプ -->
+ (() => {
+   if (window.__bindCtrlDotFocus) return; window.__bindCtrlDotFocus = true;
+ 
+   const isEditable = t => { const tag = t?.tagName?.toLowerCase(); return tag==='input'||tag==='textarea'||t?.isContentEditable; };
+   const isDialogOpen = () => {
+     const ed = document.getElementById('editor'), st = document.getElementById('settings');
+     return !!((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open'))));
+   };
+ 
+   document.addEventListener('keydown', e => {
+     if (!(e.ctrlKey && e.key === '.')) return;
+     if (isEditable(e.target) || isDialogOpen()) return;
+ 
+     e.preventDefault(); e.stopImmediatePropagation();
+ 
+     // フォーカス表示へ確実に切替して「今日」に合わせる
+     (async ()=>{
+       const today = new Date();
+       if (typeof window.jumpFocusTo === 'function') {
+         window.jumpFocusTo(today, 0);
+         return;
+       }
+       // ▼ jumpFocusTo がグローバルで使えない場合のフォールバック
+       const z = n => String(n).padStart(2,'0');
+       const ymd = d => `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+       // 月曜始まりの当週（月曜=0..日曜=6）
+       const mon0 = (d)=> (d.getDay()+6)%7;
+       const mondayOf = (d)=>{ const t=new Date(d.getFullYear(),d.getMonth(),d.getDate()); t.setDate(t.getDate()-mon0(t)); return t; };
+ 
+       // 1) 当週へ合わせて再描画
+       const needWeek = !(window.currentMonday instanceof Date) ||
+                        window.currentMonday.getTime() !== mondayOf(today).getTime();
+       if (needWeek){
+         window.currentMonday = mondayOf(today);
+         if (typeof window.render === 'function') window.render();
+         // DOM確定を2フレーム待つ
+         await new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
+       }
+       // 2) 今日の列を特定してフォーカスへ
+       const days = document.querySelectorAll('.day');
+       const idx  = Math.min(mon0(today), Math.max(0, days.length-1));
+       const hit  = days[idx];
+       if (hit && typeof window.enterDayFocus === 'function') {
+         window.enterDayFocus(hit);
+       }
+       document.body.classList.add('dayFocus'); // 念のため
+       // 3) ピッカー/曜日バッジを同期
+       const picker = document.getElementById('weekPicker');
+       if (picker){ picker.value = ymd(today); picker.dispatchEvent(new Event('change',{bubbles:true})); }
+       window.__setWeekdayFromISO?.(ymd(today));
+     })();
+   }, { capture:true });
+ })();
+
+ <!-- Ctrl＋,：今週へ（フォーカス中は週表示に戻す） -->
+ (()=> {
+   if (window.__bindCtrlCommaWeek) return; window.__bindCtrlCommaWeek = true;
+   const isEditable = t => { const tag=t?.tagName?.toLowerCase(); return tag==='input'||tag==='textarea'||t?.isContentEditable; };
+   const isDialogOpen = () => {
+     const ed=document.getElementById('editor'), st=document.getElementById('settings');
+     return !!((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open'))));
+   };
+   const z = n => String(n).padStart(2,'0');
+   const ymd = d => `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+   const mondayOf = (d)=>{ const t=new Date(d.getFullYear(),d.getMonth(),d.getDate()); t.setDate(t.getDate()-((t.getDay()+6)%7)); return t; };
+ 
+   document.addEventListener('keydown', (e)=>{
+     if (!(e.ctrlKey && e.key === ',')) return;
+     if (isEditable(e.target) || isDialogOpen()) return;
+     const picker = document.getElementById('weekPicker'); if (!picker) return;
+ 
+     e.preventDefault(); e.stopImmediatePropagation();
+     // 今日（必要なら週末スナップ）
+     let today = new Date();
+     if (typeof window.snapWeekendDir === 'function') today = window.snapWeekendDir(today, 0);
+     // ▼ 今週の「月曜」を厳密に算出
+     const mon = mondayOf(today);
+ 
+     // フォーカス中なら週表示へ戻す（先にクラスを外してラベル等を正常化）
+     if (document.body.classList.contains('dayFocus')) {
+       if (typeof window.exitDayFocus === 'function') {
+         window.exitDayFocus();
+       } else {
+         document.body.classList.remove('dayFocus',);
+       }
+     }
+     // 今週へ：ピッカーも currentMonday も“月曜”で統一してから change 発火
+     window.currentMonday = mon;
+     picker.value = ymd(mon);                  // ← 本日の曜日ではなく“今週の月曜”をセット
+     picker.dispatchEvent(new Event('change', { bubbles:true }));
+     // 曜日バッジ等は「今日」を示したい場合のみ任意で同期
+     window.__setWeekdayFromISO?.(ymd(today));	 
+   }, { capture:true });
+ })();
+
+ (function bindArrowNavOnce(){
+   if (window.__slotNavBound) return; window.__slotNavBound = true;
+
+  // --- 初期自動選択：.focused が無ければ、左上から最初の選択可能スロットを青枠にする ---
+  function ensureInitialSelectionGlobal(){
+    if (document.querySelector('.slot.focused')) return; // 既に青枠があれば何もしない
+    const days = Array.from(document.querySelectorAll('.day'));
+    for (const d of days){
+      const first = window.findFirstSelectableInDay?.(d);
+      if (first) { window.setActiveSlot(first, {scroll:false}); return; }
+    }
+  }
+  // ページ読み込み時
+  if (document.readyState !== 'loading') { ensureInitialSelectionGlobal(); }
+  document.addEventListener('DOMContentLoaded', ensureInitialSelectionGlobal, {once:true});
+  window.addEventListener('load', ensureInitialSelectionGlobal, {once:true});
+  // 週変更後（render 等の直後になるよう、ゼロ遅延でキューイング）
+  (function(){
+    const wp = document.getElementById('weekPicker');
+    if (!wp) return;
+    wp.addEventListener('change', ()=> setTimeout(ensureInitialSelectionGlobal, 0));
+  })();  
+   document.addEventListener('keydown', (e)=>{
+    if (e.defaultPrevented) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    // Ctrl押下時・入力中・ダイアログ開中は無効化（ショートカット／編集優先）
+    if (e.ctrlKey) return;
+    const t = e.target, tag = t?.tagName?.toLowerCase();
+    if (tag==='input' || tag==='textarea' || t?.isContentEditable) return;
+    const ed=document.getElementById('editor'), st=document.getElementById('settings');
+    if ((ed&&(ed.open||ed.classList?.contains('is-open'))) ||
+        (st&&(st.open||st.classList?.contains('is-open')))) return;
+ 
+     const inFocus = document.body.classList.contains('dayFocus');
+     let cur = getActiveSlot?.();
+ 
+     // 未選択のとき：表示モードに応じて当日先頭/週の既定日先頭を選ぶ
+     if (!cur) {
+       if (inFocus) {
+         const dayEl = document.querySelector('.day[data-focus="true"]');
+         if (dayEl) ensureInitialSelectionForDay(dayEl);
+         cur = getActiveSlot?.();
+       } else {
+        // 週表示：青枠が無ければ全体の左上から初期自動選択
+        ensureInitialSelectionGlobal();
+        cur = getActiveSlot?.();
+       }
+       if (!cur) return; // まだなければ何もしない
+     }
+ 
+     // 上下移動：週モードでは日またぎあり、フォーカスでは同日で止まる
+     e.preventDefault();
+     const delta = (e.key === 'ArrowDown' ? +1 : -1);
+     moveVertWithCrossDay(cur, delta);
+   });
+ })();
+  </script>
+  <script>
+(function(){
+  const JP = ['日','月','火','水','木','金','土'];
+
+  function ensureBadge(){
+    const picker = document.getElementById('weekPicker');
+    if (!picker) return null;
+    let badge = document.getElementById('weekPickerWeekday');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.id = 'weekPickerWeekday';
+      picker.insertAdjacentElement('afterend', badge);
+    }
+    return badge;
+  }
+
+function setWeekdayFromISO(iso){
+  const badge = ensureBadge();
+  if (!badge || !iso) return;
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0, 0);
+  dt.setHours(12,0,0,0); // ← この行を追加（正午固定）
+  if (!isNaN(dt)) badge.textContent = `（${JP[dt.getDay()]}）`;
+}
+
+
+
+  // ピッカー操作でも更新
+  const picker = document.getElementById('weekPicker');
+  if (picker) {
+  picker.addEventListener('input',  () => {
+    if (window.__suppressWeekChange) return;
+    window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
+  });
+  picker.addEventListener('change', () => {
+    if (window.__suppressWeekChange) return;
+    window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
+  });
+    // 初期表示
+    setWeekdayFromISO(picker.value);
+  }
+
+  // 他スクリプトから使えるように公開（1行呼ぶだけ）
+  window.__setWeekdayFromISO = setWeekdayFromISO;
+})();
+
+ // ===== フォーカスモード中に「週ボタン/ピッカー」を日移動に切り替える拡張 =====
+(()=> {
+  // ---- ボタン／ピッカー ----
+  const $prev   = document.getElementById('prevWeek');
+  const $next   = document.getElementById('nextWeek');
+  const $today  = document.getElementById('todayBtn');
+  const $picker = document.getElementById('weekPicker');
+  if (!$prev || !$next || !$today || !$picker) return;
+
+  // ---- 状態判定（当初うまくいっていた軽量版）----
+  const inDayFocus = () =>
+    document.body.classList.contains('dayFocus');
+
+  // ---- ユーティリティ ----
+  const pad = n => String(n).padStart(2,'0');
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const mon0 = d => (d.getDay() + 6) % 7;     // Mon=0..Sun=6（あなたのルール）
+  const mondayOf = dt => startOfWeek(dt);     // 既存の startOfWeek を利用
+   // 方向付き 週末スキップ
+   // dir: -1=前日方向 / +1=翌日方向 / 0=今日（週末は月曜へ寄せる）
+   const snapWeekendDir = (date, dir=0) => {
+     const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+     const wd = d.getDay(); // 0:Sun ... 6:Sat
+     if (dir > 0) {               // 翌日方向：Fri(+1)=>Sat→Mon / Sat→Mon / Sun→Mon
+       if (wd === 6) d.setDate(d.getDate()+2); // Sat -> Mon
+       else if (wd === 0) d.setDate(d.getDate()+1); // Sun -> Mon
+     } else if (dir < 0) {        // 前日方向：Mon(-1)=>Sun→Fri / Sun→Fri / Sat→Fri
+       if (wd === 0) d.setDate(d.getDate()-2); // Sun -> Fri
+       else if (wd === 6) d.setDate(d.getDate()-1); // Sat -> Fri
+     } else {                     // 今日ボタンなど：週末は営業日に寄せる（Sun->Mon / Sat->Fri）
+       if (wd === 0) d.setDate(d.getDate()+1); // Sun -> Mon
+       if (wd === 6) d.setDate(d.getDate()-1); // Sat -> Fri
+     }
+     return d;
+   };
+  const sameWeek = (a,b) => mondayOf(a).getTime() === mondayOf(b).getTime();
+
+  // ---- フォーカス日ストア ----
+  function getFocusDate(){
+    if (window.currentFocusDate instanceof Date) return new Date(window.currentFocusDate);
+    if ($picker.value){ const [y,m,d]= $picker.value.split('-').map(Number); return new Date(y,m-1,d); }
+    return new Date();
+  }
+  function setFocusDateStore(d){
+    window.currentFocusDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  // ---- 既存フォーカス印を必ずクリア（多重フォーカス防止）----
+  function clearFocusedDays(){
+    document.querySelectorAll('.day[data-focus="true"]').forEach(el => el.removeAttribute('data-focus'));
+  }
+
+  // ---- ラベル切替（当初の方式）----
+  function updateLabels(){
+    const prev  = document.getElementById('prevWeek');
+    const next  = document.getElementById('nextWeek');
+    const today = document.getElementById('todayBtn');
+    if (!prev || !next || !today) return;
+    if (inDayFocus()){
+      prev.textContent  = '« 前日';
+      next.textContent  = '翌日 »';
+      today.textContent = '今日';
+    } else {
+      prev.textContent  = '« 前週';
+      next.textContent  = '次週 »';
+      today.textContent = '今週';
+    }
+  }
+  new MutationObserver(updateLabels).observe(document.body, {attributes:true, attributeFilter:['class']});
+  updateLabels();
+
+  // ---- 日付ヘッダー dblclick でフォーカスに入った瞬間、当日を保存＆ピッカー同期 ----
+  document.addEventListener('dblclick', (e)=>{
+    const hdr = e.target.closest('.day-header-date, .day-header, .date, .date-cell, .day-title, .hdr');
+    if (!hdr) return;
+    const m = (hdr.textContent||'').match(/(\d{4})\/(\d{2})\/(\d{2})/);
+    if (m){
+      const d = new Date(+m[1], +m[2]-1, +m[3]);
+      setFocusDateStore(d);
+      if (inDayFocus()) $picker.value = ymd(d);
+      requestAnimationFrame(updateLabels);
+    }
+  }, true);
+
+  // ---- コア：日ジャンプ（週跨ぎOK・週末スキップ・常に日フォーカス維持）----
+   async function jumpFocusTo(targetDate, dir=0){
+    let target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+     target = snapWeekendDir(target, dir);         // 方向付きで週末補正
+    setFocusDateStore(target);
+
+    // 1) 週が変わるなら currentMonday を更新して既存の render() 実行
+    if (!sameWeek(target, currentMonday)) {
+      currentMonday = mondayOf(target);
+	  currentMonday = mondayOf(target);
+      render();
+      // DOM確定待ち（2フレーム）
+      await new Promise(r => requestAnimationFrame(()=> requestAnimationFrame(r)));
+    }
+
+    // 2) 対象列を index で取得（Mon=0.. → days.length にクリップ）
+    clearFocusedDays();
+    const days = document.querySelectorAll('.day');
+    let idx = mon0(target);
+    idx = Math.min(Math.max(0, idx), Math.max(0, days.length-1));
+    const hit = days[idx];
+    if (!hit){ exitDayFocus(); return; }
+
+    // 3) フォーカス表示にする
+    enterDayFocus(hit);                            // 既存の関数をそのまま使う
+    document.body.classList.add('dayFocus'); // 念のため
+
+    // 4) 実際に表示されている“その列の日付”を厳密に反映（ピッカー/ストアを揃える）
+    const shown = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate());
+    shown.setDate(shown.getDate() + idx);
+    setFocusDateStore(shown);
+    $picker.value = ymd(shown);
+
+    updateLabels();
+	window.__setWeekdayFromISO?.(ymd(shown));
+  }
+
+  // ---- フォーカス中のみ、週ボタンを「前日/翌日/今日」に差し替え（当初のキャプチャ方式）----
+  function captureWhenFocus(fn){
+    return function(e){
+      if (inDayFocus()){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        fn();
+      }
+    };
+  }
+   $prev .addEventListener('click', captureWhenFocus(()=>{ const d=getFocusDate(); d.setDate(d.getDate()-1); jumpFocusTo(d, -1); }), true);
+   $next .addEventListener('click', captureWhenFocus(()=>{ const d=getFocusDate(); d.setDate(d.getDate()+1); jumpFocusTo(d, +1); }), true);
+   $today.addEventListener('click', captureWhenFocus(()=>{ jumpFocusTo(new Date(), 0); }), true);
+
+  // ---- フォーカス中のピッカー：その日に直接ジャンプ（週ロジックは通さない）----
+   $picker.addEventListener('change', (e)=>{
+    if (!inDayFocus()) return;     // 週モード時は既存の週ロジックに任せる
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const v = $picker.value; if (!v) return;
+    const [y,m,d] = v.split('-').map(Number);
+     jumpFocusTo(new Date(y, m-1, d), 0);  // ピッカーは「その日」基準。週末は営業日に寄せる
+  }, true);
+})();
+
+
+</script>
+  <button id="helpBtn" aria-haspopup="dialog" aria-controls="helpDialog">❔</button>
+  <script>
+  (function(){
+    const btn = document.getElementById('helpBtn');
+    if(!btn) return;
+    // 候補となるツールバー要素（存在するものに挿入）
+    const selectors = [
+      '#topbar','.topbar','#toolbar','.toolbar',
+      '.header-actions','#header .actions',
+      '#controls','.controls','#rightButtons'
+    ];
+    const host = selectors.map(s=>document.querySelector(s)).find(el=>el);
+    if(host){
+      btn.classList.add('docked');
+      host.appendChild(btn);
+    }
+  })();
+  </script>
+  <dialog id="helpDialog">
+    <div style="min-width:420px;max-width:640px;padding:20px;">
+      <h2>操作ヘルプ</h2>
+      <table class="help-table">
+        <tr><th><kbd>↑</kbd> / <kbd>↓</kbd></th><td>同日のスロットを上下に移動</td></tr>
+        <tr><th><kbd>Enter</kbd></th><td>編集開始（編集ウィンドウを開く）</td></tr>
+        <tr><th><kbd>ESC</kbd></th><td>編集終了／週表示に戻る</td></tr>
+        <tr><th>日付セルをダブルクリック</th><td>その日のフォーカス表示へ切替</td></tr>
+        <tr><th>時刻セルをダブルクリック</th><td>開始時刻を編集（例：<code>1100</code> → <code>11:00</code>）</td></tr>
+        <tr><th><kbd>Shift</kbd>＋ダブルクリック<br><small>（時刻セル）</small></th><td>その日の全スロットの「時刻」をデフォルトに一括リセット</td></tr>
+        <tr><th><kbd>Alt</kbd>＋ダブルクリック<br><small>（時刻セル）</small></th><td>そのスロットのみ「時刻」をデフォルトにリセット</td></tr>
+        <tr><th><kbd>Ctrl</kbd>＋<kbd>C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></th><td>コピー／貼り付け／切り取り</td></tr>
+        <tr><th><kbd>Ctrl</kbd>＋<kbd>Z</kbd> / <kbd>Y</kbd></th><td>元に戻す／やり直し</td></tr>
+      </table>
+      <p style="margin-top:1rem;">その他の操作は順次ここに追記予定です。</p>
+      <button id="helpCloseBtn">閉じる</button>
+    </div>
+  </dialog>  
+  <script>
+  (function(){
+    const btn = document.getElementById('helpBtn');
+    const dlg = document.getElementById('helpDialog');
+    const closeBtn = document.getElementById('helpCloseBtn');
+    if(!btn || !dlg) return;
+ 
+    // 開く
+    btn.addEventListener('click', ()=> {
+      if (!dlg.open) dlg.showModal();
+    });
+ 
+    // 閉じる（ボタン）
+    closeBtn?.addEventListener('click', ()=> dlg.close());
+ 
+    // 背景クリックで閉じる
+    dlg.addEventListener('click', (e)=>{
+      if (e.target === dlg) dlg.close();
+    });
+  })();
+  </script>
+  <script>
+  (function(){
+    const dlg = document.getElementById('helpDialog');
+    if(!dlg) return;
+    // ダイアログ内のESCは外へ伝播させない（週表示への切替などを防止）
+    dlg.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){ e.stopPropagation(); }
+    });
+    // 開閉にあわせてフラグを付与（他のESC制御が参照できるように）
+    dlg.addEventListener('close', ()=> { delete document.body.dataset.modalOpen; });
+    dlg.addEventListener('cancel', (e)=>{ e.stopPropagation(); }); // 念のため
+    const openObs = new MutationObserver(()=>{
+      if(dlg.open) document.body.dataset.modalOpen = '1';
+    });
+    openObs.observe(dlg, { attributes:true, attributeFilter:['open'] });
+  })();
+  </script>
+  </body>
+</html>
