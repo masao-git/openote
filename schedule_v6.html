@@ -1204,21 +1204,27 @@ function enterDayFocus(dayEl) {
     else d.removeAttribute('data-focus');
   });
 
-  // --- ピッカーを当日へ（change発火を抑止） ---
-  const txt = dayEl.querySelector('.day-header-date')?.textContent || '';
-  const m = txt.match(/(\d{4})\/(\d{2})\/(\d{2})/);
-  if (m) {
-    const picker = document.getElementById('weekPicker');
-    if (picker) {
-      window.__suppressWeekChange = true;
-      picker.value = `${m[1]}-${m[2]}-${m[3]}`;
-      // バッジをここで明示的に更新（抑止解除前に）
-      window.__setWeekdayFromISO?.(picker.value);
-      setTimeout(() => (window.__suppressWeekChange = false), 100);
-       try { window.__setWeekdayFromISO?.(picker.value); } catch(_) {}	  
-    }
-  }
+  // --- ピッカー/内部状態を当日に“統一”（changeは発火しない） ---
+  (function syncPickerAndState(){
+    const iso = dayEl?.dataset?.date; // 例: "2025-11-06"
+    if (!iso) return;
+    const [y,m,d] = iso.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
 
+    // ① フォーカス日の単一の真実を確定
+    if (typeof setFocusDateStore === 'function') setFocusDateStore(dt);
+    else window.currentFocusDate = dt;
+    if (typeof mondayOf === 'function') window.currentMonday = mondayOf(dt);
+
+    // ② ピッカーは当日へ（週ロジックは抑止：changeは発火しない）
+    const picker = document.getElementById('weekPicker');
+    if (picker){
+      window.__suppressWeekChange = true;
+      picker.value = iso;
+      window.__setWeekdayFromISO?.(iso); // バッジだけ同期
+      window.__suppressWeekChange = false; // ここで即解除
+    }
+  })();
   // --- 戻るボタン（存在しなければ追加） ---
   if (!document.getElementById('focusBackBtn')) {
     const btn = document.createElement('button');
@@ -1237,37 +1243,48 @@ function enterDayFocus(dayEl) {
 }
 
 function exitDayFocus() {
-  // --- モード解除 ---
+  // ---- フラグ（呼び元で制御）----
+  const skipRestore = !!window.__skipRestoreOnExit;         // Ctrl+, など「復元せずに外部で合わせる」用
+  window.__skipRestoreOnExit = false;
+  const targetMon = window.__targetMondayOnExit || null;    // 明示ターゲット（月曜Date）指定用（任意）
+  window.__targetMondayOnExit = null;
+
+  // ---- モード解除（UIのみ）----
   document.body.classList.remove('dayFocus');
   document.querySelectorAll('#schedule .day').forEach(d => {
-    // ★ フォーカス時に付けた inline display をクリア（CSSに委ねる）
-    d.style.display = '';
+    d.style.display = '';         // フォーカス時の inline を解除
     d.removeAttribute('data-focus');
   });
   document.getElementById('focusBackBtn')?.remove();
   window.focusDate = null;
 
-  // --- ピッカーをフォーカス前の週に戻す ---
-  const p = document.getElementById('weekPicker');
-  if (p && window.__weekStartBeforeFocus) {
-    window.__suppressWeekChange = true;
-    p.value = window.__weekStartBeforeFocus;
-    // ★ 抑止解除の前に、現在のピッカー値で曜日バッジを更新
-    window.__setWeekdayFromISO?.(p.value);
-    setTimeout(() => (window.__suppressWeekChange = false), 100);
-     try { window.__setWeekdayFromISO?.(p.value); } catch(_) {}
-  }
-   window.__weekStartBeforeFocus = null;
-   document.body.classList.remove('dayFocus');
-// 週モードに戻るのでピッカーを週頭（currentMonday）へ
-const pickerEl = document.getElementById('weekPicker');
-if (pickerEl) {
-  window.__suppressWeekChange = true;
-  pickerEl.value = dateISO(currentMonday);     // ← weekStartは使わずcurrentMondayをそのまま
-  window.__setWeekdayFromISO?.(pickerEl.value); // バッジも同期
-  setTimeout(() => window.__suppressWeekChange = false, 0);
-}
+  // 以降は「復元」ロジック。スキップ指定ならここで終了（ピッカー/週は呼び元が責任を持つ）
+  if (skipRestore) return;
 
+  const picker = document.getElementById('weekPicker');
+  const z = n => String(n).padStart(2,'0');
+  const ymd = d => `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+
+  // A) 明示ターゲット（月曜）に合わせる指示がある場合
+  if (targetMon && picker instanceof HTMLInputElement) {
+    const mon = new Date(targetMon.getFullYear(), targetMon.getMonth(), targetMon.getDate());
+    window.currentMonday = mon;
+    picker.value = ymd(mon);
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    window.__weekStartBeforeFocus = null;
+    return;
+  }
+
+  // B) 従来の「フォーカス前の週」に戻す（戻るボタン等）
+  if (picker instanceof HTMLInputElement && window.__weekStartBeforeFocus) {
+    // __weekStartBeforeFocus は "YYYY-MM-DD" 想定
+    const [Y,M,D] = String(window.__weekStartBeforeFocus).split('-').map(Number);
+    const mon = new Date(Y, (M||1)-1, D||1);
+    window.currentMonday = mon;
+    picker.value = ymd(mon);
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  window.__weekStartBeforeFocus = null;
 }
 
 // 固定ヘッダー高（常に差し引く）
@@ -3843,7 +3860,7 @@ function setWeekdayFromISO(iso){
     <div style="min-width:420px;max-width:640px;padding:20px;">
       <h2>操作ヘルプ</h2>
       <table class="help-table">
-        <tr><th><kbd>↑</kbd> / <kbd>↓</kbd></th><td>同日のスロットを上下に移動</td></tr>
+        <tr><th><kbd>↑</kbd> / <kbd>↓</kbd> / <kbd>←</kbd> / <kbd>→</kbd></th><td>スロットを上下左右に移動</td></tr>r>
         <tr><th><kbd>Enter</kbd></th><td>編集開始（編集ウィンドウを開く）</td></tr>
         <tr><th><kbd>ESC</kbd></th><td>編集終了／週表示に戻る</td></tr>
         <tr><th>日付セルをダブルクリック</th><td>その日のフォーカス表示へ切替</td></tr>
@@ -3852,6 +3869,8 @@ function setWeekdayFromISO(iso){
         <tr><th><kbd>Alt</kbd>＋ダブルクリック<br><small>（時刻セル）</small></th><td>そのスロットのみ「時刻」をデフォルトにリセット</td></tr>
         <tr><th><kbd>Ctrl</kbd>＋<kbd>C</kbd> / <kbd>V</kbd> / <kbd>X</kbd></th><td>コピー／貼り付け／切り取り</td></tr>
         <tr><th><kbd>Ctrl</kbd>＋<kbd>Z</kbd> / <kbd>Y</kbd></th><td>元に戻す／やり直し</td></tr>
+		<tr><th><kbd>Ctrl</kbd>＋<kbd>.</kbd> ／ <kbd>,</kbd></th><td><kbd>Ctrl</kbd>＋<kbd>.</kbd>：本日へ移動　／　<kbd>Ctrl</kbd>＋<kbd>,</kbd>：今週へ移動</td></tr>
+		<tr><th><kbd>Ctrl</kbd>＋<kbd>←</kbd> ／ <kbd>→</kbd></th><td>週表示：前週／翌週　｜　フォーカス表示：前日／翌日</td></tr>
       </table>
       <p style="margin-top:1rem;">その他の操作は順次ここに追記予定です。</p>
       <button id="helpCloseBtn">閉じる</button>
@@ -3895,5 +3914,35 @@ function setWeekdayFromISO(iso){
     openObs.observe(dlg, { attributes:true, attributeFilter:['open'] });
   })();
   </script>
+<!-- Ctrl+¥（Backslash）: 週表示で“アクティブ日のフォーカス”へ入る -->
+<script>
+(()=> {
+  if (window.__bindCtrlBackslashFocus) return; window.__bindCtrlBackslashFocus = true;
+
+  const isEditable = t => { const tag=t?.tagName?.toLowerCase(); return tag==='input'||tag==='textarea'||t?.isContentEditable; };
+  const isDialogOpen = () => {
+    const ed=document.getElementById('editor'), st=document.getElementById('settings');
+    return !!((ed&&(ed.open||ed.classList?.contains('is-open'))) || (st&&(st.open||st.classList?.contains('is-open'))));
+  };
+
+  document.addEventListener('keydown', (e)=>{
+    if (!e.ctrlKey) return;
+    const isBackslash = (e.code==='Backslash'||e.code==='IntlYen'||['\\','¥','￥'].includes(e.key));
+    if (!isBackslash) return;
+    if (isEditable(e.target) || isDialogOpen()) return;
+    if (document.body.classList.contains('dayFocus')) return; // 既にフォーカス中は何もしない
+
+    const slot = document.querySelector('.slot.focused');
+    if (!slot) return; // アクティブなし
+    const dayEl = slot.closest('.day');
+    if (!dayEl) return;
+
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (typeof window.enterDayFocus === 'function') {
+      window.enterDayFocus(dayEl);
+    }
+  }, {capture:true});
+})();
+</script>  
   </body>
 </html>
