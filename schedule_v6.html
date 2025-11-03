@@ -1640,6 +1640,43 @@ function applyLayout(mode){
   mode4?.addEventListener('click', ()=> applyLayout('4'));
   mode5?.addEventListener('click', ()=> applyLayout('5'));
 
+// === Ctrl+2 / Ctrl+4 / Ctrl+5 でレイアウト切替（2列/4列/5列） ===
+(function(){
+  if (window.__bindCtrlLayout) return;
+  window.__bindCtrlLayout = true;
+
+  const isEditable = (t)=>{
+    const tag = t?.tagName?.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || t?.isContentEditable;
+  };
+  const isDialogOpen = ()=>{
+    const ed = document.getElementById('editor');
+    const st = document.getElementById('settings');
+    return !!((ed && (ed.open || ed.classList?.contains('is-open'))) ||
+              (st && (st.open || st.classList?.contains('is-open'))));
+  };
+
+  document.addEventListener('keydown', (e)=>{
+    if (!e.ctrlKey) return;
+    if (isEditable(e.target) || isDialogOpen()) return;
+
+    // 数字キー（上段/テンキー両対応）
+    const k = e.key;                     // '2','4','5' など
+    const c = e.code;                    // 'Digit2','Numpad2' など
+    const is2 = (k === '2' || c === 'Digit2' || c === 'Numpad2');
+    const is4 = (k === '4' || c === 'Digit4' || c === 'Numpad4');
+    const is5 = (k === '5' || c === 'Digit5' || c === 'Numpad5');
+
+    if (is2 || is4 || is5) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (typeof window.applyLayout !== 'function') return;
+      if (is2) return window.applyLayout('2');
+      if (is4) return window.applyLayout('4');
+      if (is5) return window.applyLayout('5');
+    }
+  }, {capture:true});
+})();
+
   // ===== 祝日（オフライン自動計算＋上書き） =====
   function ymd(d){ return d.toISOString().slice(0,10); }
   function isoToDate(iso){ const [Y,M,D]=iso.split('-').map(Number); return new Date(Y, M-1, D); }
@@ -3989,6 +4026,7 @@ function setWeekdayFromISO(iso){
 		<tr><th><kbd>Ctrl</kbd>＋<kbd>.</kbd> ／ <kbd>,</kbd></th><td><kbd>Ctrl</kbd>＋<kbd>.</kbd>：本日へ移動　／　<kbd>Ctrl</kbd>＋<kbd>,</kbd>：今週へ移動</td></tr>
 		<tr><th><kbd>Ctrl</kbd>＋<kbd>←</kbd> ／ <kbd>→</kbd></th><td>週表示：前週／翌週　｜　フォーカス表示：前日／翌日</td></tr>
 		<tr><th><kbd>Ctrl</kbd>＋<kbd>￥</kbd>or<kbd>＼</kbd></th><td>選択中のスロットをフォーカス表示　｜　週表示に戻る</td></tr>
+		<tr><th><kbd>Ctrl</kbd>＋<kbd>2</kbd> / <kbd>4</kbd> / <kbd>5</kbd></th><td>レイアウト切替（2列／4列／5列表示）</td></tr>
       </table>
       <p style="margin-top:1rem;">その他の操作は順次ここに追記予定です。</p>
       <button id="helpCloseBtn">閉じる</button>
