@@ -112,12 +112,7 @@
   pointer-events: auto !important;
 }
 
-/* 結合ブロック head 見た目（右肩にバッジ） */
-.slot.mergeHead { background: #fefce8; }
-.slot.mergeHead .badge {
-  display:inline-block;margin-left:.5em;padding:0 .4em;border:1px solid #f59e0b;
-  border-radius:6px;font-size:11px;color:#b45309;background:#fffbeb;
-}
+
 /* tail行は DOM は残して非表示（高さ0） */
 .hiddenRow { display:none !important; }
 .slot.paired { outline: 2px dashed rgba(37,99,235,.4); outline-offset:-2px; }
@@ -175,47 +170,39 @@
   line-height: 1.3;
 }
 
-/* 念のため：結合枠の箱側でクリップしない */
-.slot.mergeHead{
-  overflow: visible;
-}
+/* 結合枠(head)の箱側で中身をクリップしない */
+.slot.mergeHead{ overflow: visible; }
 
-/* ✅ データの入ったスロットを薄い緑で表示 */
-.slot:not(.empty) {
-  background-color: #e6ffe6 !important;  /* 薄い緑 */
-}
+/* ✅ データの入ったスロットは薄い緑（mergeHead 含む） */
+.slot:not(.empty){ background-color: #e6ffe6 !important; }
+/* （重複回避のため .slot.mergeHead の背景指定は不要） */
 
-/* ✅ 結合枠(head)も同じく薄い緑で */
-.slot.mergeHead {
-  background-color: #e6ffe6 !important;
-}
-
-/* 時刻の下に小バッジを置けるように縦レイアウトに */
+/* 時刻の下に小バッジを置けるように縦レイアウト */
 .time{
   display: flex;
   flex-direction: column;
-  align-items: flex-start;   /* 左寄せ（必要なら center に） */
-  gap: 2px;                  /* 時刻との間隔 */
+  align-items: flex-start;  /* 必要なら center */
+  gap: 2px;                 /* 時刻との間隔 */
 }
 
 /* 「4枠」バッジ（時刻の下に小さく） */
-.merge-badge {
+.merge-badge{
   font-size: 11px;
   line-height: 1;
   padding: 1px 6px;
   border: 1px solid #94a3b8;   /* slate 系 */
   border-radius: 9999px;
-  background: #eef2ff;         /* 薄い青 or お好みで */
+  background: #eef2ff;         /* 薄い青 */
   color: #1e293b;
   user-select: none;
   pointer-events: none;         /* クリック無視 */
 }
 
-/* 全麻バッジ：横長の楕円／“4枠”と同じサイズ感 */
+/* 全麻バッジ：横長ピル（“4枠”と同じサイズ感） */
 .ga-badge{
-  display: inline-block;            /* ← これで1文字ずつ縦に崩れない */
-  writing-mode: horizontal-tb;      /* 念のため */
-  white-space: nowrap;              /* ← 改行させない */
+  display: inline-block;       /* 1文字ずつ縦崩れ防止 */
+  writing-mode: horizontal-tb; /* 念のため */
+  white-space: nowrap;         /* 改行なし */
 
   font-size: 11px;
   line-height: 1;
@@ -228,17 +215,12 @@
   pointer-events: none;
   user-select: none;
 
-  margin-top: auto; /* 結合バッジの下側に配置するための指定（必要なら残してOK） */
+  margin-top: auto; /* 結合バッジの下側に寄せる用途（必要なら残す） */
 }
 
-.ga-slot {
-  background: #fff9c4 !important;   /* 薄い黄色（変更可） */
-}
-
-/* --- GA(全麻) は薄い黄色に上書きする --- */
-/* データあり薄緑より強くするため、より具体＋最後＋!important */
-.slot.ga-slot:not(.empty) { background: #fff9c4 !important; }
-.mergeHead.ga-slot        { background: #fff9c4 !important; }
+/* --- GA(全麻) は薄い黄色に上書きする（1本化） --- */
+/* 薄緑 .slot:not(.empty) より後ろに置き、!important で確実に勝たせる */
+.slot.ga-slot { background: #fff9c4 !important; }
 
 /* 祝日/休止を優先したいなら何もしない（←このまま） */
 /* もし祝日/休止でも黄色にしたいなら、下を有効化：
@@ -1700,18 +1682,20 @@ function applyLayout(mode){
   function getDayNote(week, dayKey){ const obj = loadNotes(week); return String(obj[dayKey]||''); }
   function setDayNote(week, dayKey, text, opts){ const o = loadNotes(week); o[dayKey] = String(text||''); try{ if(opts&&opts.snapshot){ undoStack.push(snapshotState()); redoStack.length=0; } }catch(_){ } localStorage.setItem('notes_'+weekKey(week), JSON.stringify(o)); }
 
-function restoreSelection(){
-  try{
-    if (!window.lastSelectedKey) return;
-    const el = document.querySelector(`.slot[data-key="${window.lastSelectedKey}"]`);
-    if (el) {
-      setActiveSlot(el);
-      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    } else {
-      setActiveSlot(null);
-    }
-  }catch(_){}
-}
+ // 描画後の「青枠復元」専用：スクロールは一切させない
+ function restoreSelection(){
+   try{
+     if (!window.lastSelectedKey) return;
+     const el = document.querySelector(`.slot[data-key="${window.lastSelectedKey}"]`);
+     if (el) {
+       // ★ 必ずスクロール抑止
+       setActiveSlot(el, { scroll: false });
+       // ★ ここでは絶対に scrollIntoView を呼ばない
+     } else {
+       setActiveSlot(null);
+     }
+   }catch(_){}
+ }
 
 // 表現形テキストを枠内に2行までで収める（1行=13px, 溢れたら10px）
 function autoFitContentLines(){
@@ -1761,6 +1745,7 @@ function toISODate(d){
 
   // ===== 描画 =====
   function render(){
+  console.log('[render] called', new Error().stack);
 　　applyDatalists(appLists);
    window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
   if (document.body.classList.contains('dayFocus') && window.focusDate) {
@@ -2496,6 +2481,11 @@ function isOffDay(dayEl){
 
 // === 週ビュー：アクティブスロットを中央に寄せる（多段遅延で「最後に勝つ」） ===
 window.__centerActiveInWeekSoon = function(){
+  // ★ 抑止カウンタが立っている間は中央寄せをスキップ（render毎に1減）
+  if (window.__suppressCenterN > 0) {
+    window.__suppressCenterN--;
+    return;
+  }
   const run = ()=>{
     const el  = (window.getActiveSlot && window.getActiveSlot()) || document.querySelector('.slot.focused');
     if (!el) return;
@@ -3261,6 +3251,8 @@ function openEditor(keys){
   editor.addEventListener('close', function handler(){
     editor.removeEventListener('close', handler);
     if(editor.returnValue==='save'){
+  // ★ 保存直後は render が複数回走ることがあるため、中央寄せを「2回分」抑止
+  window.__suppressCenterN = (window.__suppressCenterN || 0) + 2;	
       let nd = {
         name: toHalfWidthKana(f.name.value.trim()),
         pid:  f.pid.value.trim(),
