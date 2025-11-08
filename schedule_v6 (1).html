@@ -1867,9 +1867,21 @@ if (!document.body.classList.contains('dayFocus')) {
       const iso = window.__snapTopTargetISO;
       window.__snapTopOnNextRender = false;
       window.__snapTopTargetISO    = null;
-      // 対象の day を取得（見つからなければ月曜列）
-      let dayEl = (typeof __findDayByISO==='function' && iso) ? __findDayByISO(iso) : null;
-      if (!dayEl) dayEl = document.querySelector('#schedule .day'); // フォールバック：先頭（日=月）
+      // 対象の day を取得：まず「アクティブスロットの属する日」を優先
+      let dayEl = null;
+      const activeSlot =
+        (window.getActiveSlot && window.getActiveSlot()) ||
+        document.querySelector('.slot.focused');
+      if (activeSlot) {
+        dayEl = activeSlot.closest('.day');
+      }
+      // アクティブが取れない場合は、これまで通り ISO（月曜）→先頭 day をフォールバック
+      if (!dayEl && typeof __findDayByISO === 'function' && iso) {
+        dayEl = __findDayByISO(iso);
+      }
+      if (!dayEl) {
+        dayEl = document.querySelector('#schedule .day'); // フォールバック：先頭（日=月）
+      }
       // 祝日/休診なら翌営業日に寄せる（なければそのまま）
       if (typeof isOffDay === 'function' && dayEl) {
         if (isOffDay(dayEl)) {
@@ -1890,9 +1902,26 @@ if (!document.body.classList.contains('dayFocus')) {
           const offsetTopWithin = (el, s)=>{
             let y=0,n=el; while(n && n!==s){ y += n.offsetTop||0; n = n.offsetParent; } return y;
           };
-          let target = offsetTopWithin(dayEl, scroller) - headerH; // “最上部”に揃える
-          const max  = Math.max(0, (scroller.scrollHeight - viewH));
-          scroller.scrollTop = Math.max(0, Math.min(Math.round(target), max));
+          const offset = offsetTopWithin(dayEl, scroller);
+          const max    = Math.max(0, (scroller.scrollHeight - viewH));
+
+          // ★ ④' ロジック：
+          //   - ページ最上部（scrollTop=0）からでも dayEl が十分「画面内」に入るなら 0 スタート
+          //   - そうでなければ dayEl をヘッダ直下までスナップ
+          //   （2列表示で水曜が下段に行く週などでは、ここでスナップされる）
+          const VISIBLE_RATIO = 0.7; // 画面高さの何割より下なら「見えにくい」とみなすかの閾値
+
+          let nextTop;
+          if (offset <= viewH * VISIBLE_RATIO) {
+            // ページトップからでも十分見える位置 → 先頭からスタート
+            nextTop = 0;
+          } else {
+            // ページトップでは dayEl がほぼ見えない → 従来どおりヘッダ直下までスナップ
+            const target = offset - headerH;
+            nextTop = Math.max(0, Math.min(Math.round(target), max));
+          }
+
+          scroller.scrollTop = nextTop;
 
           // ★ 予約があれば「今週の先頭“選択可能”枠」を青枠選択（スクロールはしない）
           if (window.__selectFirstOnNextRender) {
