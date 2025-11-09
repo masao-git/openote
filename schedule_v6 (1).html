@@ -3138,29 +3138,240 @@ function toHalfWidthKana(str){
 
 function flipEye(v){ if(!v) return v; if(v==='R') return 'L'; if(v==='L') return 'R'; if(v==='右') return '左'; if(v==='左') return '右'; return v; }
 
-/** 表示整形（旧版準拠） */
+/** 週表示用：優先表示＋「｜」区切りテキストを生成 */
 function fmtContent(d){
-  const parts=[];
-  if(d.io) parts.push(d.io);
-  if(d.name) parts.push(d.name);
-  if(d.pid) parts.push('#'+toHalfWidthNum(d.pid));
-  if(d.age) parts.push(String(toHalfWidthNum(d.age)));
+  if (!d) return '';
 
-  if(d.eye){ parts.push(`<span class="eye-mark">${d.eye.trim()}</span>`); }
+  const core = [];      // 重要項目（常に優先して入れる）
+  const optional = [];  // 枠に余裕があるときに足していく項目
 
-  if(d.iolType || d.iolPower){
-    let p = (d.iolPower||'').toString().trim();
-    if(p && !isNaN(Number(p))) p = Number(p).toFixed(1);
-    parts.push(`${(d.iolType||'').trim()} ${p}`.trim());
+  // 1) 入院/外来/当日
+  let ioLabel = d.io || '';
+  // もし「当日」の情報を別に持たせるなら、ここで付け足せる
+  // if (d.sameDay) ioLabel = (ioLabel ? ioLabel : '') + '当';
+  if (ioLabel) core.push(ioLabel);
+
+  // 2) 氏名
+  if (d.name) core.push(d.name);
+
+  // 3) 患者ID（#なし10桁）
+  if (d.pid){
+    const id = toHalfWidthNum(String(d.pid)).replace(/^#/, '').slice(0, 10);
+    core.push(id);
   }
 
-  if(d.proc1) parts.push(d.proc1);
-  if(d.proc2) parts.push(d.proc2);
-  if(d.proc3) parts.push(d.proc3);
-  if(d.note)  parts.push('※'+d.note);
+  // 4) 眼（右/左/両）
+  if (d.eye){
+    core.push(String(d.eye).trim());
+  }
 
-  return parts.join(' / ');
+  // 5) IOL種類・度数
+  if (d.iolType || d.iolPower){
+    let p = (d.iolPower || '').toString().trim();
+    if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
+    const iol = `${(d.iolType || '').trim()} ${p}`.trim();
+    if (iol) core.push(iol);
+  }
+
+  // 6) 術式1（メイン）
+  if (d.proc1) core.push(d.proc1);
+
+  // 7) 術式2,3, 備考は「枠に余裕があるとき」に追加
+  if (d.proc2) optional.push(d.proc2);
+  if (d.proc3) optional.push(d.proc3);
+  if (d.note)  optional.push('※' + d.note);
+
+  // --- ここから「長さ」に応じてどこまで入れるか決める ---
+
+  // まず「重要項目だけ」で組み立て
+  let text = core.join('｜');
+  const lenCore = text.length;
+
+  // ざっくりしきい値（必要ならあとで調整）
+  const MAX_NARROW = 24; // 狭い枠：このくらいまで
+  const MAX_MEDIUM = 40; // そこそこ広い枠
+
+  if (optional.length === 0){
+    // 追加項目が何もないならそのまま
+    return text;
+  }
+
+  if (lenCore <= MAX_NARROW){
+    // かなり短い → optional も全部入れてしまう
+    text = core.concat(optional).join('｜');
+  } else if (lenCore <= MAX_MEDIUM){
+    // そこそこ → optional の先頭だけ足す
+    text = core.concat(optional[0]).join('｜');
+  }
+  // それ以上長いときは core だけ（＝狭い枠は重要項目のみ）
+
+  return text;
 }
+
+
+// === ここから：週表示スロット用「優先表示」テキスト生成機能 ===
+
+// ★ スロット左側に表示するフィールド定義（優先度付き）
+//   priority=1: 枠が狭くても必ず表示したい項目
+//   priority>=2: 枠に余裕があるときに徐々に追加する項目
+const SLOT_FIELD_DEFS = [
+  // ★ ユーザー指定の「重要項目」
+  { key: 'io',        priority: 1 }, // 入院 / 外来 / 当日入院
+  // sameDay フラグを持っていればここで拾う想定（なければ無視）
+  { key: 'sameDay',   priority: 1 }, // 当日
+  { key: 'name',      priority: 1 }, // 氏名
+  { key: 'pid',       priority: 1 }, // ID（#なし10桁）
+  { key: 'eye',       priority: 1 }, // 右 / 左 / 両
+  { key: 'iol',       priority: 1 }, // IOL種類・度数
+  { key: 'procedure', priority: 1 }, // 術式（メイン）
+
+  // ここからは枠に余裕があるときに足していく項目
+  { key: 'proc2',     priority: 2 },
+  { key: 'proc3',     priority: 2 },
+  { key: 'note',      priority: 3 },
+];
+
+// ID 表示用：# を削って最大10桁にそろえる（表示専用の整形）
+function formatSlotId(raw){
+  if (!raw) return '';
+  const s = toHalfWidthNum(String(raw)).replace(/^#/, '');
+  return s.slice(0, 10); // 最大10桁
+}
+
+// 枠幅から「どの priority まで出すか」をざっくり決める
+function getSlotMaxPriority(width){
+  // 数値はあとで実際の見た目を見ながら調整してOK
+  if (!width || width <= 0) return 1;
+  if (width < 300) return 1; // 狭い → 最重要だけ
+  if (width < 480) return 2; // 中くらい
+  return 3;                  // 広い → ほぼ全部
+}
+
+/**
+ * 週表示のスロット左側に出す「優先表示テキスト」を生成する
+ *  - data : スロット1件分のデータ（loadWeek() で得られるオブジェクト）
+ *  - width: このスロットで使える表示幅（px）（getBoundingClientRect().width 想定）
+ * 戻り値:
+ *  - 「入/外/当日｜氏名｜ID｜眼｜IOL｜術式…」のような「｜」区切りの1行テキスト
+ *  - 術者はここには含めず、右端のバッジ（.surgeon-tag）で表示する前提
+ */
+function buildSlotMainText(data, width){
+  if (!data) return '';
+
+  const maxPri = getSlotMaxPriority(width);
+
+  // 優先度でソートして、今回使うフィールドだけ抽出
+  const fields = SLOT_FIELD_DEFS
+    .filter(def => def.priority <= maxPri)
+    .sort((a, b) => a.priority - b.priority);
+
+  const colTexts = [];
+
+  for (const def of fields){
+    let val = '';
+
+    switch(def.key){
+      case 'io':
+        // 入 / 外 / 当 など
+        val = data.io || '';
+        break;
+
+      case 'sameDay':
+        // data.sameDay 等のフラグがあれば「当日」を表示
+        if (data.sameDay) val = '当日';
+        break;
+
+      case 'name':
+        val = data.name || '';
+        break;
+
+      case 'pid':
+        val = formatSlotId(data.pid);
+        break;
+
+      case 'eye':
+        val = (data.eye || '').trim();
+        break;
+
+      case 'iol': {
+        let p = (data.iolPower || '').toString().trim();
+        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
+        val = `${(data.iolType || '').trim()} ${p}`.trim();
+        break;
+      }
+
+      case 'procedure':
+        // メイン術式として proc1 を採用（必要なら後で変更可）
+        val = data.proc1 || '';
+        break;
+
+      case 'proc2':
+        val = data.proc2 || '';
+        break;
+
+      case 'proc3':
+        val = data.proc3 || '';
+        break;
+
+      case 'note':
+        // 旧 fmtContent と同様に「※」を付ける
+        val = data.note ? `※${data.note}` : '';
+        break;
+    }
+
+    // 中身が空ならこのカラムはスキップ
+    if (!val) continue;
+
+    colTexts.push(val);
+  }
+
+  // すべて空なら空文字
+  if (!colTexts.length) return '';
+
+  // 「｜」区切りで1行にまとめる
+  return colTexts.join('｜');
+}
+
+/**
+ * 1つの .slot 要素に対して、優先表示テキストと術者バッジを反映する
+ *  - el   : .slot 要素
+ *  - data : loadWeek() で得られる1件分データ（tail は除外したいときは null を渡す）
+ */
+function applySlotMainTextToSlot(el, data){
+  if (!el) return;
+  const leftEl = el.querySelector('.content-left');
+  const surgEl = el.querySelector('.surgeon-tag');
+  if (!leftEl || !surgEl) return;
+
+  // tail やデータ無しの場合は「空」表示にして終了
+  if (!data || data.tail){
+    leftEl.textContent = '（空）';
+    surgEl.textContent = '';
+    return;
+  }
+
+  // 表示幅を取得（左側コンテンツ部分の幅を優先）
+  let width = leftEl.getBoundingClientRect().width;
+  if (!width || width <= 0){
+    const contentWrap = el.querySelector('.content');
+    if (contentWrap){
+      width = contentWrap.getBoundingClientRect().width;
+    } else {
+      width = el.getBoundingClientRect().width || 0;
+    }
+  }
+
+  const text = buildSlotMainText(data, width);
+
+  // 優先表示テキストを「｜」区切りで反映
+  leftEl.textContent = text || '（空）';
+
+  // 術者は右端バッジにのみ表示（枠内テキストには含めない）
+  surgEl.textContent = data.surgeon ? String(data.surgeon) : '';
+}
+
+// === ここまで：週表示スロット用「優先表示」テキスト生成機能 ===
+
 
 /** datalist（最低限） */
 (function ensureDatalists(){
