@@ -143,18 +143,96 @@
   /* font-size は JS で 13px or 10px を自動切替 */
 }
 
-/* ① 通常枠は2行まで＆はみ出し非表示（すでに入れている場合はこの定義を残す） */
+/* 週表示・スロット左側テキスト */
 .slot .content-left{
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;   /* 2行でカット */
-  overflow: hidden;        /* 下の行は隠す */
+  -webkit-line-clamp: 2;   /* 2行でカット（これはこのままでもOK） */
+  overflow: hidden;
   max-height: calc(2 * 1.2em);
   line-height: 1.2;
-  font-size: 10px;         /* 2行時の指定フォント */
+  font-size: 13px;         /* ★ ここを 10px → 13px に戻す */
   word-break: break-word;
   white-space: normal;
 }
+/* 列用の基本スタイル（すでにあればそのままでOK） */
+.slot .content-left .slot-col{
+  display: inline-block;
+  vertical-align: top;
+}
+
+.slot .content-left .slot-sep{
+  display: inline-block;
+  padding: 0 2px;   /* 「｜」前後の余白（必要なら微調整） */
+}
+
+  /* 共通：列・セパレーター */
+  .slot .content-left .slot-col{
+    display: inline-block;
+    vertical-align: top;
+  }
+ 
+  .slot .content-left .slot-sep{
+    display: inline-block;
+    padding: 0 2px;   /* 「｜」前後の余白 */
+  }
+ 
+  /* 入・外・当日（1文字幅＋中央寄せ） */
+  .slot .content-left .slot-col-io{
+    min-width: 1ch;
+    text-align: center;
+  }
+ 
+  /* 氏名（半角カナ11文字＋中央寄せ） */
+  .slot .content-left .slot-col-name{
+    min-width: 11.5ch;
+    text-align: center;
+  }
+ 
+  /* ID（10桁＋中央寄せ） */
+  .slot .content-left .slot-col-pid{
+    min-width: 10ch;
+    text-align: center;
+  }
+ 
+  /* 眼 R/L/B（1文字＋中央寄せ） */
+  .slot .content-left .slot-col-eye{
+    min-width: 1ch;
+    text-align: center;
+  }
+ 
+  /* 年齢（半角3桁＋中央寄せ） */
+  .slot .content-left .slot-col-age{
+    min-width: 3ch;
+    text-align: center;
+  }
+ 
+  /* IOL種類・度数（ぎりぎり入る＋中央寄せ） */
+  .slot .content-left .slot-col-iol{
+    min-width: 7.5ch;   /* 足りなければここを少し増やす */
+    text-align: center;
+  }
+ 
+  /* 術式1〜3（左寄せ） */
+  .slot .content-left .slot-col-proc1,
+  .slot .content-left .slot-col-proc2,
+  .slot .content-left .slot-col-proc3{
+    min-width: 6ch;
+    text-align: left;
+  }
+ 
+  /* 備考：末尾なので自由 */
+  .slot .content-left .slot-col-note{
+    padding-left: 4px;
+  }
+
+/* 眼の赤強調（お好みで） */
+.eye-mark{
+  color: #b91c1c;
+  font-weight: bold;
+}
+
+
 
 /* ② 結合枠（head）は行数制限を解除して自由に表示 */
 .slot.mergeHead .content-left{
@@ -372,6 +450,12 @@ body.dayFocus #weekPickerWeekday { display: inline; }
 html, body, #schedule, .day, .day .slots {
   scroll-behavior: auto;
 }
+
+.eye-mark{
+  color: #b91c1c;      /* 赤 */
+  font-weight: bold;
+}
+
   </style>
   <style>
    #helpBtn{
@@ -1119,8 +1203,8 @@ function defaultLists(){
   const powers = [];
   for (let v = 15.0; v <= 30.001; v += 0.5) powers.push(v.toFixed(1)); // 使うなら
   return {
-    iolTypes: ["Ni","Ho","HoT","Amo","AmoT","参","Len","LenT","Ko"],
-    proc1: ["PEA+IOL","PPC+IOL","IOL再固定","眼瞼内反手術"],
+    iolTypes: ["Ni","Ho","HoT","Am","AmT","参","Le","LeT","Ko"],
+    proc1: ["白内障","VIT+IOL","IOL強膜内固定","眼瞼内反手術"],
     proc2: ["眼内レンズ縫着","前房洗浄","瞳孔形成"],
     proc3: ["複合処置A","複合処置B"],
     surgeons: ["木村","岡部","後藤田","宮部","飯田","森山"]
@@ -1707,21 +1791,12 @@ function applyLayout(mode){
    }catch(_){}
  }
 
-// 表現形テキストを枠内に2行までで収める（1行=13px, 溢れたら10px）
+// 表現形テキストを枠内に2行までで収める（フォントサイズは固定）
 function autoFitContentLines(){
-  // 2列/4列/5列 いずれのレイアウトでも DOM を組み終わった後に呼ぶこと
-  const nodes = document.querySelectorAll('.slot .content-left');
-  nodes.forEach(el => {
-    // いったん通常サイズに戻してから判定
-    el.style.fontSize = '13px';
-    // レイアウトが反映されるまで1フレーム待つ必要があればここで計測を分ける
-    const fits = el.scrollHeight <= el.clientHeight + 0.5; // 誤差吸収
-    if (!fits){
-      el.style.fontSize = '10px'; // 2行相当になるよう少し縮める
-      // それでもオーバー分は CSS の overflow:hidden で隠す
-    }
-  });
+  // もう何もしない（CSSだけに任せる）
 }
+
+
 
 function applyGaColoring(){
   const st = loadWeek(currentMonday);
@@ -2833,12 +2908,214 @@ editBtn?.addEventListener('click', () => {
   openEditor(keys);
 });
 
+// === ここから：週表示スロット用「優先表示」テキスト生成機能 ===
+
+// スロット左側に表示するフィールド定義（優先度付き）
+// priority=1: 幅が狭くても必ず出したい
+// priority=2: 少し余裕があれば足す
+// priority=3: だいぶ余裕があるときに足す
+const SLOT_FIELD_DEFS = [
+  // ★ 最重要
+  { key: 'io',    priority: 1 }, // 入 / 外 / 当
+  { key: 'name',  priority: 1 }, // 氏名
+  { key: 'pid',   priority: 2 }, // ID（#なし10桁）
+  { key: 'age',   priority: 3 }, // 年齢（半角数字3桁）  
+  { key: 'eye',   priority: 1 }, // 眼（R/L/B）
+  { key: 'iol',   priority: 1 }, // IOL種類・度数
+  { key: 'proc1', priority: 1 }, // 術式1（メイン）
+
+  // ★ 余裕があれば足す
+
+  { key: 'proc2', priority: 3 }, // 術式2
+  { key: 'proc3', priority: 3 }, // 術式3
+
+  // ★ かなり余裕があるときだけ
+  { key: 'note',  priority: 3 }, // 備考
+  // 必要なら age もここに追加可能
+  // { key: 'age',   priority: 3 },
+];
+
+// ID 表示用：# を削って最大10桁にそろえる
+function formatSlotId(raw){
+  if (!raw) return '';
+  const s = toHalfWidthNum(String(raw)).replace(/^#/, '');
+  return s.slice(0, 10);
+}
+
+// スロット幅(px)から「どの priority まで出すか」を決める
+function getSlotMaxPriority(width){
+  if (!width || width <= 0) return 1;
+
+  // ★ かなり厳しめにする
+  // 〜300px：最小限（priority 1 のみ）
+  // 〜480px：priority 1 & 2（術式2/3を足す）
+  // 480px〜 ：priority 1〜3（備考も足す）
+  if (width < 400) return 1;
+  if (width < 520) return 2;
+  return 3;
+}
+
+
+/**
+ * スロット左側の「優先表示」テキストを生成する
+ *  - data : loadWeek() で得た1件分データ
+ *  - width: このスロットの横幅(px)
+ *
+ * 返り値: 「入｜氏名｜ID｜眼｜IOL｜術式1｜…」のような「｜」区切りテキスト
+ *   （術者はここには含めない：右端バッジで表示）
+ */
+function buildSlotMainText(data, width){
+  if (!data) return '';
+
+  const maxPri = getSlotMaxPriority(width);
+  const texts = [];
+
+  for (const def of SLOT_FIELD_DEFS){
+    // 今回の幅では表示対象外の priority はスキップ
+    if (def.priority > maxPri) continue;
+
+    let val = '';
+
+    switch(def.key){
+      case 'io':
+        val = data.io || '';
+        break;
+
+      case 'name':
+        val = data.name || '';
+        break;
+
+      case 'pid':
+        val = formatSlotId(data.pid);
+        break;
+
+      case 'eye':
+        val = (data.eye || '').trim();
+        break;
+
+      case 'iol': {
+        let p = (data.iolPower || '').toString().trim();
+        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
+        val = `${(data.iolType || '').trim()} ${p}`.trim();
+        break;
+      }
+
+      case 'proc1':
+        val = data.proc1 || '';
+        break;
+
+      case 'proc2':
+        val = data.proc2 || '';
+        break;
+
+      case 'proc3':
+        val = data.proc3 || '';
+        break;
+
+      case 'note':
+        val = data.note ? `※${data.note}` : '';
+        break;
+
+      // age を使う場合：
+      // case 'age':
+      //   val = data.age ? String(toHalfWidthNum(data.age)) : '';
+      //   break;
+    }
+
+    if (!val) continue;
+    texts.push(val);
+  }
+
+  if (!texts.length) return '';
+
+  return texts.join('｜');
+}
+
+// 幅に応じて「表示する項目の配列」を返す（文字列ではなく部品）
+function buildSlotMainParts(data, width){
+  if (!data) return [];
+
+  const maxPri = getSlotMaxPriority(width);
+  const parts = [];
+
+  for (const def of SLOT_FIELD_DEFS){
+    if (def.priority > maxPri) continue;
+
+    let val = '';
+
+    switch(def.key){
+      case 'io':
+        val = data.io || '';
+        break;
+
+      case 'name':
+        val = data.name || '';
+        break;
+
+      case 'pid':
+        val = formatSlotId(data.pid);
+        break;
+		
+     case 'age':
+       // 半角数字3桁相当で表示（toHalfWidthNum は既存関数）
+       val = data.age ? String(toHalfWidthNum(data.age)) : '';
+       break;
+ 		
+
+      case 'eye':
+        val = (data.eye || '').trim();
+        break;
+
+      case 'iol': {
+        let p = (data.iolPower || '').toString().trim();
+        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
+        val = `${(data.iolType || '').trim()} ${p}`.trim();
+        break;
+      }
+
+      case 'proc1':
+        val = data.proc1 || '';
+        break;
+
+      case 'proc2':
+        val = data.proc2 || '';
+        break;
+
+      case 'proc3':
+        val = data.proc3 || '';
+        break;
+
+      case 'note':
+        val = data.note ? `※${data.note}` : '';
+        break;
+    }
+
+    if (!val) continue;
+
+    parts.push({ key: def.key, label: val });
+  }
+
+  return parts;
+}
+
+// 既存の buildSlotMainText があれば、こうしておくと他の場所でも使える
+function buildSlotMainText(data, width){
+  const parts = buildSlotMainParts(data, width);
+  return parts.map(p => p.label).join('｜');
+}
+
+// === ここまで：週表示スロット用「優先表示」テキスト生成機能 ===
+
+
+
 // 保存済みデータで画面の各スロットを塗り直す
 function paintSlotsFromStore(){
   const st = (typeof loadWeek === 'function') ? loadWeek(currentMonday) : {};
   const em = loadEmerg(currentMonday) || {}; // ← 今週の緊急マップを読む
+
   // フォールバック用の親フラグを一度リセット
   document.querySelectorAll('.day, .slots').forEach(n => n.classList.remove('has-emergency'));
+
   // 内容（左テキスト＋術者タグ）
   document.querySelectorAll('.slot').forEach(el=>{
     const key  = el.dataset.key;
@@ -2862,20 +3139,93 @@ function paintSlotsFromStore(){
 
     if (data && !data.tail) {
       // 本体（head も含む）
-      if (typeof fmtContent === 'function') {
+
+  // ★ 結合枠(head)かどうかを判定
+  const isMergedHead = !!data.head && Number(data.span || 1) > 1;
+
+  try {
+    if (isMergedHead) {
+      const parts = [];
+ 
+      if (data.io)   parts.push({ key:'io',    label:data.io });
+      if (data.name) parts.push({ key:'name',  label:data.name });
+ 
+      if (data.pid){
+        const pid = toHalfWidthNum(String(data.pid)).replace(/^#/, '').slice(0, 10);
+        parts.push({ key:'pid', label:pid });
+      }
+ 
+      if (data.age){
+        parts.push({ key:'age', label:String(toHalfWidthNum(data.age)) });
+      }
+ 
+      if (data.eye){
+        parts.push({ key:'eye', label:String(data.eye).trim() });
+      }
+ 
+      if (data.iolType || data.iolPower){
+        let p = (data.iolPower || '').toString().trim();
+        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
+        const iol = `${(data.iolType || '').trim()} ${p}`.trim();
+        if (iol) parts.push({ key:'iol', label:iol });
+      }
+ 
+      if (data.proc1) parts.push({ key:'proc1', label:data.proc1 });
+      if (data.proc2) parts.push({ key:'proc2', label:data.proc2 });
+      if (data.proc3) parts.push({ key:'proc3', label:data.proc3 });
+ 
+      if (data.note) parts.push({ key:'note', label:'※' + data.note });
+ 
+      renderSlotColumns(left, parts);
+    } else {
+      // ▼ 通常枠：これまで通り「幅に応じた優先表示」
+      let width = 0;
+      const contentWrap = el.querySelector('.content');
+      if (contentWrap) {
+        const rect = contentWrap.getBoundingClientRect();
+        width = (rect && rect.width) || 0;
+      }
+      const safeWidth = width || 9999;
+
+        if (typeof buildSlotMainParts === 'function') {
+          const parts = buildSlotMainParts(data, safeWidth);
+          renderSlotColumns(left, parts);
+      } else if (typeof fmtContent === 'function') {
         left.innerHTML = fmtContent(data);
       } else {
-        // 予備：最低限
-        left.textContent = [data.io, data.name, data.pid, data.age, data.eye, data.iolType, data.iolPower, data.proc1, data.proc2, data.proc3, data.note]
-          .filter(Boolean).join(' / ');
+          const fallbackText = [
+            data.io, data.name, data.pid, data.age, data.eye,
+            data.iolType, data.iolPower,
+            data.proc1, data.proc2, data.proc3,
+            data.note
+          ].filter(Boolean).join('｜');
+          const fallbackParts = fallbackText.split('｜').map((v,i)=>({ key:'col'+i, label:v }));
+          renderSlotColumns(left, fallbackParts);
       }
-      surg.textContent = data.surgeon ? String(data.surgeon) : '';
-      el.classList.remove('empty');
+    }
+  } catch (e) {
+    // 何かあっても旧仕様にフォールバック
+    if (typeof fmtContent === 'function') {
+      left.innerHTML = fmtContent(data);
+    } else {
+      left.textContent = [
+        data.io, data.name, data.pid, data.age, data.eye,
+        data.iolType, data.iolPower,
+        data.proc1, data.proc2, data.proc3,
+        data.note
+      ].filter(Boolean).join(' / ');
+    }
+  }
+
+  surg.textContent = data.surgeon ? String(data.surgeon) : '';
+  el.classList.remove('empty');
+
     } else if (data && data.tail) {
       // tail 行はあとでまとめて非表示にする
       left.textContent = '（空）';
       surg.textContent = '';
       el.classList.add('empty');
+
     } else {
       left.textContent = '（空）';
       surg.textContent = '';
@@ -2909,6 +3259,49 @@ function paintSlotsFromStore(){
     }
   });
 }
+
+// 「項目ごとの部品配列」から列付き DOM を組み立てる
+// parts: [{ key:'io', label:'入' }, ...]
+function renderSlotColumns(leftEl, parts){
+  if (!leftEl) return;
+  const items = parts || [];
+  if (!items.length){
+    leftEl.textContent = '（空）';
+    return;
+  }
+
+  leftEl.textContent = '';
+
+  items.forEach((part, idx) => {
+    const key = part.key;
+    const label = String(part.label ?? '').trim();
+    if (!label) return;
+
+    // 2個目以降の前に「｜」セパレーター
+    if (idx > 0){
+      const sep = document.createElement('span');
+      sep.className = 'slot-sep';
+      sep.textContent = '｜';
+      leftEl.appendChild(sep);
+    }
+
+    const col = document.createElement('span');
+    col.className = 'slot-col slot-col-' + key;  // ★ ここがポイント：「項目名ベース」
+
+    // 眼だけ eye-mark で強調
+    if (key === 'eye' && (label === 'R' || label === 'L' || label === 'B')){
+      const eye = document.createElement('span');
+      eye.className = 'eye-mark';
+      eye.textContent = label;
+      col.appendChild(eye);
+    } else {
+      col.textContent = label;
+    }
+
+    leftEl.appendChild(col);
+  });
+}
+
 
 /* ======================  旧版→新コード 拡張層  ====================== */
 
@@ -3211,126 +3604,6 @@ function fmtContent(d){
 
 // === ここから：週表示スロット用「優先表示」テキスト生成機能 ===
 
-// ★ スロット左側に表示するフィールド定義（優先度付き）
-//   priority=1: 枠が狭くても必ず表示したい項目
-//   priority>=2: 枠に余裕があるときに徐々に追加する項目
-const SLOT_FIELD_DEFS = [
-  // ★ ユーザー指定の「重要項目」
-  { key: 'io',        priority: 1 }, // 入院 / 外来 / 当日入院
-  // sameDay フラグを持っていればここで拾う想定（なければ無視）
-  { key: 'sameDay',   priority: 1 }, // 当日
-  { key: 'name',      priority: 1 }, // 氏名
-  { key: 'pid',       priority: 1 }, // ID（#なし10桁）
-  { key: 'eye',       priority: 1 }, // 右 / 左 / 両
-  { key: 'iol',       priority: 1 }, // IOL種類・度数
-  { key: 'procedure', priority: 1 }, // 術式（メイン）
-
-  // ここからは枠に余裕があるときに足していく項目
-  { key: 'proc2',     priority: 2 },
-  { key: 'proc3',     priority: 2 },
-  { key: 'note',      priority: 3 },
-];
-
-// ID 表示用：# を削って最大10桁にそろえる（表示専用の整形）
-function formatSlotId(raw){
-  if (!raw) return '';
-  const s = toHalfWidthNum(String(raw)).replace(/^#/, '');
-  return s.slice(0, 10); // 最大10桁
-}
-
-// 枠幅から「どの priority まで出すか」をざっくり決める
-function getSlotMaxPriority(width){
-  // 数値はあとで実際の見た目を見ながら調整してOK
-  if (!width || width <= 0) return 1;
-  if (width < 300) return 1; // 狭い → 最重要だけ
-  if (width < 480) return 2; // 中くらい
-  return 3;                  // 広い → ほぼ全部
-}
-
-/**
- * 週表示のスロット左側に出す「優先表示テキスト」を生成する
- *  - data : スロット1件分のデータ（loadWeek() で得られるオブジェクト）
- *  - width: このスロットで使える表示幅（px）（getBoundingClientRect().width 想定）
- * 戻り値:
- *  - 「入/外/当日｜氏名｜ID｜眼｜IOL｜術式…」のような「｜」区切りの1行テキスト
- *  - 術者はここには含めず、右端のバッジ（.surgeon-tag）で表示する前提
- */
-function buildSlotMainText(data, width){
-  if (!data) return '';
-
-  const maxPri = getSlotMaxPriority(width);
-
-  // 優先度でソートして、今回使うフィールドだけ抽出
-  const fields = SLOT_FIELD_DEFS
-    .filter(def => def.priority <= maxPri)
-    .sort((a, b) => a.priority - b.priority);
-
-  const colTexts = [];
-
-  for (const def of fields){
-    let val = '';
-
-    switch(def.key){
-      case 'io':
-        // 入 / 外 / 当 など
-        val = data.io || '';
-        break;
-
-      case 'sameDay':
-        // data.sameDay 等のフラグがあれば「当日」を表示
-        if (data.sameDay) val = '当日';
-        break;
-
-      case 'name':
-        val = data.name || '';
-        break;
-
-      case 'pid':
-        val = formatSlotId(data.pid);
-        break;
-
-      case 'eye':
-        val = (data.eye || '').trim();
-        break;
-
-      case 'iol': {
-        let p = (data.iolPower || '').toString().trim();
-        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
-        val = `${(data.iolType || '').trim()} ${p}`.trim();
-        break;
-      }
-
-      case 'procedure':
-        // メイン術式として proc1 を採用（必要なら後で変更可）
-        val = data.proc1 || '';
-        break;
-
-      case 'proc2':
-        val = data.proc2 || '';
-        break;
-
-      case 'proc3':
-        val = data.proc3 || '';
-        break;
-
-      case 'note':
-        // 旧 fmtContent と同様に「※」を付ける
-        val = data.note ? `※${data.note}` : '';
-        break;
-    }
-
-    // 中身が空ならこのカラムはスキップ
-    if (!val) continue;
-
-    colTexts.push(val);
-  }
-
-  // すべて空なら空文字
-  if (!colTexts.length) return '';
-
-  // 「｜」区切りで1行にまとめる
-  return colTexts.join('｜');
-}
 
 /**
  * 1つの .slot 要素に対して、優先表示テキストと術者バッジを反映する
@@ -3456,6 +3729,15 @@ if (timeEl){
     }
   }
 }
+
+
+window.addEventListener('load', () => {
+  try {
+    paintSlotsFromStore();
+  } catch (e) {
+    console && console.warn && console.warn('paintSlotsFromStore error on load', e);
+  }
+});
 
 /* ---------- schedule レンダリングを createSlot にブリッジ ---------- */
 const __createSlot = createSlot; // 既存生成を流用
@@ -4386,6 +4668,21 @@ function setWeekdayFromISO(iso){
   }, true);
 })();
 
+// ウィンドウサイズ変更時にもスロット表示を再計算する
+(function(){
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      try {
+        paintSlotsFromStore();
+      } catch (e) {
+        // 失敗してもアプリ全体が死なないようにしておく
+        console && console.warn && console.warn('paintSlotsFromStore error on resize', e);
+      }
+    }, 200); // 連続resizeを少し待ってから実行
+  });
+})();
 
 </script>
   <button id="helpBtn" aria-haspopup="dialog" aria-controls="helpDialog">❔</button>
