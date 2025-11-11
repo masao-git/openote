@@ -318,8 +318,15 @@ body.dayFocus .day[data-focus="true"] {
 }
 
 /* フォーカス時の文字サイズを少しアップ（お好みで） */
-body.dayFocus .time { font-size: 16px; }
-body.dayFocus .content-left { font-size: 15px; line-height: 1.3; }
+body.dayFocus .time { font-size: 18px; }
+body.dayFocus .content-left { font-size: 20px; line-height: 1.3; }
+
+/* フォーカス時：結合枠も同じフォントサイズにする */
+body.dayFocus .slot.mergeHead .content-left {
+  font-size: 20px !important;
+  line-height: 1.3;
+}
+
 
 /* フォーカス時の戻るフローティングボタン */
 #focusBackBtn {
@@ -503,6 +510,35 @@ html, body, #schedule, .day, .day .slots {
       border-top:1px solid #eee; padding:.5rem .25rem; text-align:left; vertical-align:top;
     }
     #helpDialog table.help-table th{ width:32%; font-weight:600; }
+	
+/* グループ全体を右端に寄せて、ボタン同士はきっちり詰める */
+.json-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;           /* ボタン間のすき間 */
+  margin-left: auto;  /* ここで「右寄せ」の役割を担当 */
+}
+
+/* ? ボタンはグループのすぐ右に軽くくっつけるイメージ */
+#helpBtn {
+  margin-left: 4px !important;  /* もし元CSSで auto になっていても上書き */
+}
+
+/* 保存情報の文字を少しだけ小さく＆折り返しにくく */
+#saveInfo.save-info {
+  margin-left: 8px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+/* 読込・保存ボタンの余白を少なめに */
+#loadJsonBtn,
+#saveJsonBtn {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+	
 	
   </style>
   </head>
@@ -3138,47 +3174,12 @@ function paintSlotsFromStore(){
     }
 
     if (data && !data.tail) {
-      // 本体（head も含む）
+    // 本体（head も含む）
 
-  // ★ 結合枠(head)かどうかを判定
-  const isMergedHead = !!data.head && Number(data.span || 1) > 1;
+    const isMergedHead = !!data.head && Number(data.span || 1) > 1;
 
-  try {
-    if (isMergedHead) {
-      const parts = [];
- 
-      if (data.io)   parts.push({ key:'io',    label:data.io });
-      if (data.name) parts.push({ key:'name',  label:data.name });
- 
-      if (data.pid){
-        const pid = toHalfWidthNum(String(data.pid)).replace(/^#/, '').slice(0, 10);
-        parts.push({ key:'pid', label:pid });
-      }
- 
-      if (data.age){
-        parts.push({ key:'age', label:String(toHalfWidthNum(data.age)) });
-      }
- 
-      if (data.eye){
-        parts.push({ key:'eye', label:String(data.eye).trim() });
-      }
- 
-      if (data.iolType || data.iolPower){
-        let p = (data.iolPower || '').toString().trim();
-        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
-        const iol = `${(data.iolType || '').trim()} ${p}`.trim();
-        if (iol) parts.push({ key:'iol', label:iol });
-      }
- 
-      if (data.proc1) parts.push({ key:'proc1', label:data.proc1 });
-      if (data.proc2) parts.push({ key:'proc2', label:data.proc2 });
-      if (data.proc3) parts.push({ key:'proc3', label:data.proc3 });
- 
-      if (data.note) parts.push({ key:'note', label:'※' + data.note });
- 
-      renderSlotColumns(left, parts);
-    } else {
-      // ▼ 通常枠：これまで通り「幅に応じた優先表示」
+    try {
+      // ▼ 幅を一度だけ計測（単枠・結合枠どちらでも共通）
       let width = 0;
       const contentWrap = el.querySelector('.content');
       if (contentWrap) {
@@ -3187,35 +3188,45 @@ function paintSlotsFromStore(){
       }
       const safeWidth = width || 9999;
 
-        if (typeof buildSlotMainParts === 'function') {
-          const parts = buildSlotMainParts(data, safeWidth);
-          renderSlotColumns(left, parts);
+      if (typeof buildSlotMainParts === 'function') {
+        // ★ 単枠と同じ優先表示ロジックで parts を作る
+        let parts = buildSlotMainParts(data, safeWidth);
+
+        // ★ 結合枠(head)のときだけ：備考を「おまけ」で必ず末尾に追加
+        if (isMergedHead && data.note) {
+          const hasNote = parts.some(p => p.key === 'note');
+          if (!hasNote) {
+            parts = parts.concat({ key:'note', label:'※' + data.note });
+          }
+        }
+
+        renderSlotColumns(left, parts);
+
       } else if (typeof fmtContent === 'function') {
         left.innerHTML = fmtContent(data);
       } else {
-          const fallbackText = [
-            data.io, data.name, data.pid, data.age, data.eye,
-            data.iolType, data.iolPower,
-            data.proc1, data.proc2, data.proc3,
-            data.note
-          ].filter(Boolean).join('｜');
-          const fallbackParts = fallbackText.split('｜').map((v,i)=>({ key:'col'+i, label:v }));
-          renderSlotColumns(left, fallbackParts);
+        const fallbackText = [
+          data.io, data.name, data.pid, data.age, data.eye,
+          data.iolType, data.iolPower,
+          data.proc1, data.proc2, data.proc3,
+          data.note
+        ].filter(Boolean).join('｜');
+        const fallbackParts = fallbackText.split('｜').map((v,i)=>({ key:'col'+i, label:v }));
+        renderSlotColumns(left, fallbackParts);
+      }
+    } catch (e) {
+      // 何かあっても旧仕様にフォールバック
+      if (typeof fmtContent === 'function') {
+        left.innerHTML = fmtContent(data);
+      } else {
+        left.textContent = [
+          data.io, data.name, data.pid, data.age, data.eye,
+          data.iolType, data.iolPower,
+          data.proc1, data.proc2, data.proc3,
+          data.note
+        ].filter(Boolean).join(' / ');
       }
     }
-  } catch (e) {
-    // 何かあっても旧仕様にフォールバック
-    if (typeof fmtContent === 'function') {
-      left.innerHTML = fmtContent(data);
-    } else {
-      left.textContent = [
-        data.io, data.name, data.pid, data.age, data.eye,
-        data.iolType, data.iolPower,
-        data.proc1, data.proc2, data.proc3,
-        data.note
-      ].filter(Boolean).join(' / ');
-    }
-  }
 
   surg.textContent = data.surgeon ? String(data.surgeon) : '';
   el.classList.remove('empty');
@@ -4684,8 +4695,230 @@ function setWeekdayFromISO(iso){
   });
 })();
 
+// ================================
+// ★ JSON 保存／読み込みユーティリティ
+//   - 単一 JSON ファイルで localStorage の中身を保存・復元
+//   - メタ情報（保存日時・PC名）を記録
+//   - 現在のアプリのデータ構造には手を触れない
+// ================================
+
+// このPCの名前（例：外来PC1、自宅PC など）を保存・取得
+function getPcName() {
+  let name = localStorage.getItem('__pcName');
+  if (!name) {
+    name = window.prompt('このPCの名前を入力してください（例：自宅PC, 外来PC1 など）', '');
+    if (name) {
+      localStorage.setItem('__pcName', name);
+    } else {
+      name = '';
+    }
+  }
+  return name;
+}
+
+// 画面右上の「最終保存：…」表示を更新
+function updateSaveInfo(meta) {
+  const el = document.getElementById('saveInfo');
+  if (!el) return;
+
+  if (!meta) {
+    // 保存メタ情報を localStorage から復元を試みる
+    try {
+      const s = localStorage.getItem('__lastMeta');
+      if (s) meta = JSON.parse(s);
+    } catch (e) {
+      // 無視
+    }
+  }
+
+  if (!meta) {
+    el.textContent = '最終保存：未保存';
+    return;
+  }
+
+  const when = meta.savedAtLocal || meta.savedAt || '';
+  const who  = meta.savedBy || '';
+  el.textContent = `最終保存：${when}${who ? ' by ' + who : ''}`;
+}
+
+// localStorage の中身を全部まとめて取得（このHTMLアプリ専用のオリジンなので基本安全）
+function collectStorageForExport() {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    // このユーティリティ用の内部キーは除外
+    if (key === '__backup_last' || key === '__backup_beforeImport' || key === '__lastMeta' || key === '__pcName') continue;
+    data[key] = localStorage.getItem(key);
+  }
+  return data;
+}
+
+// 現在の状態を JSON にしてダウンロードさせる
+function exportScheduleToJson() {
+  const now = new Date();
+  const meta = {
+    savedAt: now.toISOString(),
+    savedAtLocal: now.toLocaleString(),
+    savedBy: getPcName()
+  };
+
+  const storage = collectStorageForExport();
+  const payload = { meta, storage };
+
+  const json = JSON.stringify(payload, null, 2);
+
+  // ローカルバックアップとしても保持（緊急用）
+  try {
+    localStorage.setItem('__backup_last', json);
+    localStorage.setItem('__lastMeta', JSON.stringify(meta));
+  } catch (e) {
+    console.warn('ローカルバックアップ保存に失敗しました:', e);
+  }
+
+  // 画面の表示更新
+  updateSaveInfo(meta);
+
+  // ファイルとしてダウンロード（ファイル名は固定：schedule_data.json）
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'schedule_data.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// JSONファイルから localStorage を復元
+function importScheduleFromJson(file) {
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const text = e.target.result;
+      const obj = JSON.parse(text);
+      if (!obj || typeof obj !== 'object' || !obj.storage) {
+        throw new Error('不正なデータ形式です（storage が見つかりません）。');
+      }
+
+      // いまの状態をバックアップとして保持しておく（万一の巻き戻し用）
+      try {
+        const backup = {};
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          backup[k] = localStorage.getItem(k);
+        }
+        localStorage.setItem('__backup_beforeImport', JSON.stringify(backup));
+      } catch (e2) {
+        console.warn('インポート前バックアップに失敗:', e2);
+      }
+
+      // いったんクリアしてから復元
+      localStorage.clear();
+      if (obj.storage && typeof obj.storage === 'object') {
+        for (const [k, v] of Object.entries(obj.storage)) {
+          localStorage.setItem(k, v);
+        }
+      }
+      if (obj.meta) {
+        localStorage.setItem('__lastMeta', JSON.stringify(obj.meta));
+      }
+
+      // アプリ全体を再描画（既存の render() を信頼）
+      if (typeof render === 'function') {
+        render();
+      }
+
+      updateSaveInfo(obj.meta || null);
+      window.alert('JSONからの読み込みが完了しました。');
+    } catch (err) {
+      console.error(err);
+      window.alert('JSONの読み込みに失敗しました：' + err.message);
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// 読込／保存ボタンと input にイベントをつなぐ
+ document.addEventListener('DOMContentLoaded', () => {
+   // === ヘルプボタンの左に「読込」「保存」「最終保存：…」を自動挿入 ===
+   const helpBtn = document.getElementById('helpBtn');
+   if (helpBtn && !document.getElementById('saveJsonBtn')) {
+     const parent =
+       helpBtn.parentElement ||
+       helpBtn.closest('div,header,form') ||
+       document.body;
+
+   // グループ用コンテナ
+   const group = document.createElement('span');
+   group.id = 'jsonControls';
+   group.className = 'json-controls';
+
+     const loadBtn = document.createElement('button');
+     loadBtn.id = 'loadJsonBtn';
+     loadBtn.type = 'button';
+     loadBtn.textContent = '読込';
+
+     const saveBtn = document.createElement('button');
+     saveBtn.id = 'saveJsonBtn';
+     saveBtn.type = 'button';
+     saveBtn.textContent = '保存';
+
+     const infoSpan = document.createElement('span');
+     infoSpan.id = 'saveInfo';
+     infoSpan.className = 'save-info';
+     infoSpan.textContent = '最終保存：未保存';
+
+   // グループの中にまとめて入れてから、helpBtn の直前に差し込む
+   group.appendChild(loadBtn);
+   group.appendChild(saveBtn);
+   group.appendChild(infoSpan);
+   parent.insertBefore(group, helpBtn);
+   }
+
+   // 非表示の <input type="file"> を必要なら作成
+   let fileInput = document.getElementById('jsonFileInput');
+   if (!fileInput) {
+     fileInput = document.createElement('input');
+     fileInput.id = 'jsonFileInput';
+     fileInput.type = 'file';
+     fileInput.accept = 'application/json';
+     fileInput.style.display = 'none';
+     document.body.appendChild(fileInput);
+   }
+
+   // 初期表示時に保存情報を更新
+   updateSaveInfo();
+
+   const saveBtn = document.getElementById('saveJsonBtn');
+   const loadBtn = document.getElementById('loadJsonBtn');
+
+   if (saveBtn) {
+     saveBtn.addEventListener('click', () => {
+       exportScheduleToJson();
+     });
+   }
+
+   if (loadBtn && fileInput) {
+     loadBtn.addEventListener('click', () => {
+       fileInput.click();
+     });
+
+     fileInput.addEventListener('change', (e) => {
+       const file = e.target.files[0];
+       if (file) {
+         importScheduleFromJson(file);
+       }
+       // 同じファイルを続けて選べるように value をリセット
+       e.target.value = '';
+     });
+   }
+ });
+
 </script>
+
   <button id="helpBtn" aria-haspopup="dialog" aria-controls="helpDialog">❔</button>
+ 
   <script>
   (function(){
     const btn = document.getElementById('helpBtn');
@@ -4800,5 +5033,6 @@ function setWeekdayFromISO(iso){
   }, {capture:true});
 })();
 </script>  
-  </body>
+ 
+ </body>
 </html>
