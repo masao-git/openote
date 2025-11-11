@@ -251,9 +251,10 @@
 /* 結合枠(head)の箱側で中身をクリップしない */
 .slot.mergeHead{ overflow: visible; }
 
-/* ✅ データの入ったスロットは薄い緑（mergeHead 含む） */
-.slot:not(.empty){ background-color: #e6ffe6 !important; }
-/* （重複回避のため .slot.mergeHead の背景指定は不要） */
+ /* 通常枠（データあり）は色を変えない（感染症あり/なしだけで色をつける） */
+ .slot:not(.empty){
+   background: transparent;
+ }
 
 /* 時刻の下に小バッジを置けるように縦レイアウト */
 .time{
@@ -296,9 +297,26 @@
   margin-top: auto; /* 結合バッジの下側に寄せる用途（必要なら残す） */
 }
 
-/* --- GA(全麻) は薄い黄色に上書きする（1本化） --- */
-/* 薄緑 .slot:not(.empty) より後ろに置き、!important で確実に勝たせる */
-.slot.ga-slot { background: #fff9c4 !important; }
+/* 感染症バッジ：全麻バッジと同じような横長ピル */
+.infection-badge{
+  display: inline-block;
+  writing-mode: horizontal-tb;
+  white-space: nowrap;
+
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  border: 1px solid #a855f7;   /* 紫系の枠線 */
+  background: #f5f3ff;         /* 薄い紫の背景 */
+  color: #6b21a8;              /* 濃いめの紫文字 */
+
+  pointer-events: none;
+  user-select: none;
+
+   margin-left: 0;
+   margin-top: 4px;             /* GAバッジの下に少し空けて表示 */
+}
 
 /* 祝日/休止を優先したいなら何もしない（←このまま） */
 /* もし祝日/休止でも黄色にしたいなら、下を有効化：
@@ -307,6 +325,34 @@
   background: #fff9c4 !important;
 }
 */
+
+/* --- 感染症あり：紫 --- */
+.slot.infection-slot {
+  background: rgba(180, 100, 255, 0.18) !important;
+}
+
+/* --- 感染症なし：従来の“薄い緑”をここに移す --- */
+.slot.noninfection-slot {
+  /* ここにさっきの .slot:not(.empty) の色を入れる */
+  background: #e8f7ec !important;  /* ← 元の薄い緑の色 */
+}
+
+/* --- GA(全麻) は薄い黄色 --- */
+.slot.ga-slot {
+  background: #fff9c4 !important;
+}
+
+/* ★ 感染症あり + 全麻 のときも GA の黄色を優先 */
+.slot.ga-slot.infection-slot {
+  background: #fff9c4 !important;
+}
+
+/* 感染症・全麻を縦並びにする */
+#editorForm label[for="infection"],
+#editorForm label[for="ga"] {
+  grid-column: 1 / -1;   /* 2列をまたいで配置 */
+}
+
 
 /* === 日フォーカス表示（方式A） ===================== */
 body.dayFocus { --slot-h: 44px; }              /* スロットを少し背高に */
@@ -463,6 +509,13 @@ html, body, #schedule, .day, .day .slots {
   font-weight: bold;
 }
 
+/* 結合チェックボックス＆ラベルを非表示にしたい場合（任意） */
+#mergeSlots,
+label[for="mergeSlots"] {
+  display: none;
+}
+
+
   </style>
   <style>
    #helpBtn{
@@ -596,10 +649,15 @@ html, body, #schedule, .day, .day .slots {
         <label for="mergeSlots">この枠から</label>
         <input name="mergeSpan" type="number" min="1" value="1" style="width:5em"> 枠
       </div>
-      <label for="ga">
-       全麻
-       <input type="checkbox" id="ga" name="ga" style="margin-right:6px;">
-     </label>
+       <label>感染症</label>
+       <div style="display:flex;gap:12px;align-items:center">
+         <label><input type="radio" name="infection" value="あり"> あり</label>
+         <label><input type="radio" name="infection" value="なし"> なし</label>
+       </div>
+       <label for="ga">
+         全麻
+         <input type="checkbox" id="ga" name="ga" style="margin-right:6px;">
+       </label>
      <div></div>
     </div>
     <menu style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
@@ -3172,6 +3230,16 @@ function paintSlotsFromStore(){
       el.closest('.slots')?.classList.add('has-emergency');
       el.tabIndex = 0; // キーボード選択可（任意）
     }
+ 
+     // ★ 感染症フラグの反映（週表示）
+     const infValue = data?.infection || '';
+     el.classList.remove('infection-slot', 'noninfection-slot');
+ 
+     if (infValue === 'あり') {
+       el.classList.add('infection-slot');
+     } else if (infValue === 'なし') {
+       el.classList.add('noninfection-slot');
+     }
 
     if (data && !data.tail) {
     // 本体（head も含む）
@@ -3230,7 +3298,32 @@ function paintSlotsFromStore(){
 
   surg.textContent = data.surgeon ? String(data.surgeon) : '';
   el.classList.remove('empty');
-
+ 
+     // ▼▼ 感染症バッジ（3枠以上の結合headのみ） ▼▼
+     // いったん既存の感染症バッジを削除
+     const oldInfBadge = el.querySelector('.infection-badge');
+     if (oldInfBadge) oldInfBadge.remove();
+ 
+     const span = Number(data.span || 1);
+     const isMergedHead3Plus = !!data.head && span >= 3;
+     const isInf = data.infection === 'あり';
+ 
+     if (isMergedHead3Plus && isInf) {
+       const badge = document.createElement('span');
+       badge.className = 'infection-badge';
+       badge.textContent = '感染';   // ★ 文言は2文字に
+ 
+       // GAバッジの直後に差し込む（あれば）
+       const gaBadge = el.querySelector('.ga-badge');
+       if (gaBadge && gaBadge.parentElement) {
+         gaBadge.insertAdjacentElement('afterend', badge);
+       } else {
+         // GAなしの場合のフォールバック：左側（時間セル）付近に置く
+         const timeCell = el.querySelector('.time') || el;
+         timeCell.appendChild(badge);
+       }
+     }
+     // ▲▲ ここまで感染症バッジ ▲▲
     } else if (data && data.tail) {
       // tail 行はあとでまとめて非表示にする
       left.textContent = '（空）';
@@ -3859,11 +3952,32 @@ function openEditor(keys){
   f.proc1.value = first.proc1 || '';
   f.proc2.value = first.proc2 || '';
   f.proc3.value = first.proc3 || '';
-  f.surgeon.value = first.surgeon || '';
-  f.note.value  = first.note || '';
-  f.mergeSlots.checked = isHead || keys.length>1;
-  f.mergeSpan.value = isHead ? (first.span||1) : Math.max(1, keys.length);
-  f.ga.checked = !!first.ga;
+   f.surgeon.value = first.surgeon || '';
+   f.note.value  = first.note || '';
+ 
+   // ★ 結合枠数の初期値
+   const initSpan =
+     isHead
+       ? (first.span || 1)   // 既存の結合枠 → 保存されている span
+       : 1;                  // 通常は 1 枠スタート
+ 
+   f.mergeSpan.value = initSpan;
+   // チェックボックスは「表示上の状態」だけ合わせておく（実際の判定には使わない）
+   if (f.mergeSlots) {
+     f.mergeSlots.checked = initSpan > 1;
+   }
+ 
+   f.ga.checked = !!first.ga;
+   
+   // 感染症フラグ（あり・なし・未選択）
+   if (first.infection) {
+     const inf = first.infection;
+     const radios = f.querySelectorAll('input[name="infection"]');
+     radios.forEach(r => { r.checked = (r.value === inf); });
+   } else {
+     const radios = f.querySelectorAll('input[name="infection"]');
+     radios.forEach(r => r.checked = false);
+   }
 // ▼ 氏名入力欄にIMEカタカナモードを指示
 (function(){
   const nameInput = f.name;
@@ -3945,13 +4059,19 @@ function openEditor(keys){
         proc3: f.proc3.value.trim(),
         surgeon: f.surgeon.value.trim(),
         note:  f.note.value.trim(),
-        ga: !!f.ga.checked
+         ga: !!f.ga.checked,
+         infection: (() => {
+           const checked = f.querySelector('input[name="infection"]:checked');
+           return checked ? checked.value : '';
+         })()
       };
-      nd = normalizePatientFields(nd);
-
-      const merge = f.mergeSlots.checked;
-      let span = Math.max(1, parseInt(f.mergeSpan.value||'1',10));
-      const data = loadWeek(currentMonday);
+       nd = normalizePatientFields(nd);
+ 
+       // ★ 「結合するかどうか」はチェックではなく枠数で決める
+       let span = Math.max(1, parseInt(f.mergeSpan.value || '1', 10));
+       const merge = span > 1;
+ 
+       const data = loadWeek(currentMonday);
 
       // 先頭から n 枠キー列
       function seqKeys(headKey, n){
