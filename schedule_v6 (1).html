@@ -256,25 +256,40 @@
    background: transparent;
  }
 
-/* 時刻の下に小バッジを置けるように縦レイアウト */
-.time{
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;  /* 必要なら center */
-  gap: 2px;                 /* 時刻との間隔 */
-}
 
-/* 「4枠」バッジ（時刻の下に小さく） */
-.merge-badge{
+/* 時間バッジ（結合バッジを横長ピルに統一） */
+.merge-badge,
+.span-badge,
+.mergeSpan-badge,
+.badge-merge{
+  display: inline-block !important;
+  writing-mode: horizontal-tb !important; /* 横書きに強制 */
+  white-space: nowrap !important;         /* 改行しない */
+  width: auto !important;
+  height: auto !important;
+
   font-size: 11px;
   line-height: 1;
   padding: 1px 6px;
-  border: 1px solid #94a3b8;   /* slate 系 */
   border-radius: 9999px;
-  background: #eef2ff;         /* 薄い青 */
-  color: #1e293b;
-  user-select: none;
-  pointer-events: none;         /* クリック無視 */
+
+  /* 見た目は控えめなグレー系ピル（必要なら調整OK） */
+  border: 1px solid #9ca3af;
+  background: #f3f4f6;
+  color: #111827;
+
+  /* GA/感染との間隔（必要なら微調整） */
+  margin-bottom: 4px;
+}
+
+/* バッジを縦積みしたい場合に効かせる（任意） */
+.ga-badge,
+.infection-badge,
+.merge-badge,
+.span-badge,
+.mergeSpan-badge,
+.badge-merge{
+  display: inline-block;
 }
 
 /* 全麻バッジ：横長ピル（“4枠”と同じサイズ感） */
@@ -316,6 +331,21 @@
 
    margin-left: 0;
    margin-top: 4px;             /* GAバッジの下に少し空けて表示 */
+}
+
+/* 備考内に入れる小さな紫ピル（インライン） */
+.infection-badge-note{
+  display:inline-block;
+  font-size:11px;
+  line-height:1;
+  padding:1px 6px;
+  border-radius:9999px;
+  border:1px solid #a855f7;
+  background:#f5f3ff;
+  color:#6b21a8;
+  white-space:nowrap;
+  vertical-align:baseline;
+  margin:0 6px 0 0; /* この後に本文が来るので右だけ空ける */
 }
 
 /* 祝日/休止を優先したいなら何もしない（←このまま） */
@@ -643,6 +673,8 @@ label[for="mergeSlots"] {
       <label>術式3</label><input name="proc3" />
       <label>術者</label><input name="surgeon" />
       <label>備考</label><textarea name="note" rows="3" style="resize:vertical"></textarea>
+      <label>所要時間（分）</label>
+      <input name="duration" type="number" min="0" step="5" placeholder="例: 45">	  
       <label>結合（枠数）</label>
       <div>
         <input type="checkbox" id="mergeSlots" name="mergeSlots">
@@ -3270,6 +3302,75 @@ function paintSlotsFromStore(){
 
         renderSlotColumns(left, parts);
 
+        // --- 単枠/2枠：左カラム全体を走査し「※（感染）/※(感染)/※感染」をバッジ化 ---
+        (function badgeifyInfectionInNote() {
+          const spanN = Number((data && data.span) || 1);
+          if (spanN > 2) return;                         // 3枠以上は時刻下バッジで扱う
+          if (!(data && data.infection === 'あり')) return;
+
+          const leftRoot =
+            el.querySelector('.content-left') ||
+            el.querySelector('.content') ||
+            el;
+          if (!leftRoot) return;
+
+          // 既存の備考側感染バッジを掃除（重複防止）
+          leftRoot.querySelectorAll('.infection-badge-note').forEach(n => n.remove());
+
+          // 1) テキストノード内に「※（感染）」等が含まれる場合を処理
+          const reToken = /※\s*(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u;
+          const tw = document.createTreeWalker(leftRoot, NodeFilter.SHOW_TEXT);
+          let found = false, node;
+          while ((node = tw.nextNode())) {
+            const txt = node.textContent || '';
+            const m = txt.match(reToken);
+            if (!m) continue;
+            // プレフィクス「※ 」は残す → バッジ → 残り本文
+            const idx = txt.indexOf(m[0]);
+            const prefix = txt.slice(0, idx).replace(/※\s*$/u, '※ ');
+            const suffix = txt.slice(idx + m[0].length);
+
+            const before = document.createTextNode(prefix);
+            const badge  = document.createElement('span');
+            badge.className = 'infection-badge-note';
+            badge.textContent = '感染';
+            const after  = document.createTextNode(suffix.startsWith(' ') ? suffix : (suffix ? ' ' + suffix : ''));
+
+            const p = node.parentNode;
+            p.insertBefore(before, node);
+            p.insertBefore(badge, node);
+            p.insertBefore(after, node);
+            p.removeChild(node);
+            found = true;
+            break;
+          }
+          if (found) return;
+
+          // 2) 「※」が別ノード、次ノード先頭が「（感染）」等のケースも拾う
+          const childNodes = Array.from(leftRoot.childNodes);
+          for (let i = 0; i < childNodes.length - 1; i++) {
+            const a = childNodes[i], b = childNodes[i + 1];
+            const aTxt = (a.nodeType === 3 ? a.textContent : a.textContent) || '';
+            const bTxt = (b.nodeType === 3 ? b.textContent : b.textContent) || '';
+            const aHasMark = /※\s*$/u.test(aTxt.trimEnd());
+            const bStartsInf = /^(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u.test(bTxt);
+            if (!(aHasMark && bStartsInf)) continue;
+
+            // a の末尾を「※ 」で整形、b の先頭からトークンを剥がす
+            const aNew = aTxt.replace(/※\s*$/u, '※ ');
+            if (a.nodeType === 3) a.textContent = aNew; else a.innerText = aNew;
+            const bNew = bTxt.replace(/^(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u, '');
+            if (b.nodeType === 3) b.textContent = (bNew.startsWith(' ') ? bNew : (bNew ? ' ' + bNew : '')); else b.innerText = (bNew.startsWith(' ') ? bNew : (bNew ? ' ' + bNew : ''));
+
+            const badge = document.createElement('span');
+            badge.className = 'infection-badge-note';
+            badge.textContent = '感染';
+            a.parentNode.insertBefore(badge, b);
+            break;
+          }
+        })();
+
+
       } else if (typeof fmtContent === 'function') {
         left.innerHTML = fmtContent(data);
       } else {
@@ -3298,32 +3399,61 @@ function paintSlotsFromStore(){
 
   surg.textContent = data.surgeon ? String(data.surgeon) : '';
   el.classList.remove('empty');
+
+  // ▼▼ 結合バッジの表示内容を「◯◯分」にする ▼▼
+  // 対象：結合head（span>1）。所要時間があればそれを優先、なければ span×20分
+  (function(){
+    const span = Number(data.span || 1);
+    if (span <= 1) return; // 単枠は従来通りバッジなし
+    const durNum = Number(data.duration || 0);
+    const displayMin = (Number.isFinite(durNum) && durNum > 0) ? durNum : (span * 20);
+    // 既存の結合バッジ候補を探す（環境差分に対応）
+    const badge = el.querySelector('.merge-badge, .span-badge, .mergeSpan-badge, .badge-merge');
+    if (badge) {
+      badge.textContent = `${displayMin}分`;      // 表示を「○○分」に
+      badge.setAttribute('aria-label', `${displayMin}分`);
+      badge.title = `${displayMin}分`;
+    }
+  })();
+  // ▲▲ ここまで ▼▼
  
-     // ▼▼ 感染症バッジ（3枠以上の結合headのみ） ▼▼
-     // いったん既存の感染症バッジを削除
-     const oldInfBadge = el.querySelector('.infection-badge');
-     if (oldInfBadge) oldInfBadge.remove();
- 
-     const span = Number(data.span || 1);
-     const isMergedHead3Plus = !!data.head && span >= 3;
-     const isInf = data.infection === 'あり';
- 
-     if (isMergedHead3Plus && isInf) {
-       const badge = document.createElement('span');
-       badge.className = 'infection-badge';
-       badge.textContent = '感染';   // ★ 文言は2文字に
- 
-       // GAバッジの直後に差し込む（あれば）
-       const gaBadge = el.querySelector('.ga-badge');
-       if (gaBadge && gaBadge.parentElement) {
-         gaBadge.insertAdjacentElement('afterend', badge);
-       } else {
-         // GAなしの場合のフォールバック：左側（時間セル）付近に置く
-         const timeCell = el.querySelector('.time') || el;
-         timeCell.appendChild(badge);
-       }
-     }
-     // ▲▲ ここまで感染症バッジ ▲▲
+    // ▼▼ 感染症バッジ（3枠以上の結合headのみ） ：描画完了後にGA直下へ ▼▼
+    // 既存の感染症バッジを一旦削除
+    el.querySelectorAll('.infection-badge')?.forEach(n => n.remove());
+
+    const span = Number(data.span || 1);
+    const isMergedHead3Plus = !!data.head && span >= 3;
+    const isInf = data.infection === 'あり';
+
+    if (isMergedHead3Plus && isInf) {
+      // rAFで他バッジ（枠数・GA）の描画完了を待ってから差し込む
+      requestAnimationFrame(() => {
+        // まだ存在していれば（再描画で消えていないか）だけ実行
+        if (!document.body.contains(el)) return;
+
+        const badge = document.createElement('span');
+        badge.className = 'infection-badge';
+        badge.textContent = '感染'; // 2文字
+
+        // 1) GAバッジがあれば → その直後（=「枠数」「GA」の次に「感染」）
+        const gaBadge = el.querySelector('.ga-badge');
+        if (gaBadge && gaBadge.parentElement) {
+          gaBadge.insertAdjacentElement('afterend', badge);
+          return;
+        }
+        // 2) GAが無ければ、枠数バッジ列の最後に追加（=「枠数」の次）
+        //   ※ よく使われるクラス名の候補を順に探し、最後の要素の後ろに付ける
+        const spanBadge =
+          el.querySelector('.merge-badge, .span-badge, .mergeSpan-badge, .badge-merge');
+        if (spanBadge && spanBadge.parentElement) {
+          spanBadge.insertAdjacentElement('afterend', badge);
+          return;
+        }
+        // 3) それも無ければ、時刻セルの末尾にフォールバック
+        (el.querySelector('.time') || el).appendChild(badge);
+      });
+    }
+    // ▲▲ ここまで感染症バッジ ▲▲
     } else if (data && data.tail) {
       // tail 行はあとでまとめて非表示にする
       left.textContent = '（空）';
@@ -3813,7 +3943,12 @@ if (timeEl){
       if (timeEl){
         const b = document.createElement('span');
         b.className = 'merge-badge';
-        b.textContent = `${span}枠`;   // ← 短く「4枠」
+       // 所要時間優先（未入力なら span×20 分）
+       const dur = Number(data.duration || 0);
+       const minutes = (Number.isFinite(dur) && dur > 0) ? dur : (span * 20);
+       b.textContent = `${minutes}分`;
+       b.setAttribute('aria-label', `${minutes}分`);
+       b.title = `${minutes}分`;
         timeEl.appendChild(b);
 
    // ② 全麻バッジ（ga が true かつ span>=4 の時だけ）
@@ -3954,7 +4089,10 @@ function openEditor(keys){
   f.proc3.value = first.proc3 || '';
    f.surgeon.value = first.surgeon || '';
    f.note.value  = first.note || '';
- 
+  // 所要時間（保存されていれば表示。未保存なら既存spanから推定してもよいが、まずは空で）
+  if (f.duration) {
+    f.duration.value = (first.duration && String(first.duration)) || '';
+  } 
    // ★ 結合枠数の初期値
    const initSpan =
      isHead
@@ -4059,7 +4197,12 @@ function openEditor(keys){
         proc3: f.proc3.value.trim(),
         surgeon: f.surgeon.value.trim(),
         note:  f.note.value.trim(),
-         ga: !!f.ga.checked,
+        ga: !!f.ga.checked,
+        duration: (() => { // 数値として持つ（未入力は空）
+          const v = (f.duration?.value || '').trim();
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? n : '';
+        })(),         ga: !!f.ga.checked,
          infection: (() => {
            const checked = f.querySelector('input[name="infection"]:checked');
            return checked ? checked.value : '';
@@ -4067,10 +4210,37 @@ function openEditor(keys){
       };
        nd = normalizePatientFields(nd);
  
-       // ★ 「結合するかどうか」はチェックではなく枠数で決める
-       let span = Math.max(1, parseInt(f.mergeSpan.value || '1', 10));
-       const merge = span > 1;
- 
+      // ★ 所要時間が入っていればそれを優先して結合枠数を自動決定
+      const durNum = Number(nd.duration || 0);
+      let spanFromDuration = (Number.isFinite(durNum) && durNum > 0) ? Math.ceil(durNum / 20) : 0;
+
+      // 「入力された所要時間が優先」。なければ mergeSpan を使う
+      let span = spanFromDuration > 0 ? spanFromDuration : Math.max(1, parseInt(f.mergeSpan?.value || '1', 10));
+      const merge = span > 1;
+
+      // ▼ 単枠/2枠：備考の先頭に「（感染）」を自動付与/削除（※は付けない）
+      if (span <= 2) {
+        const note0 = (nd.note || '').trim();
+        // 旧ルールで入っていた「※感染」などを一旦除去
+        let cleaned = note0
+          // 先頭の「※感染」「※ 感染」「(感染)」「（感染）」を削除
+          .replace(/^(?:※\s*)?(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u, '')
+          // 本文中に残っている先頭寄りの「※感染」を1回だけ掃除（誤爆防止で1回）
+          .replace(/(?:^|\s)(?:※\s*)?感染(?!\S)/u, (m) => m.startsWith(' ') ? ' ' : '');
+
+        if (nd.infection === 'あり') {
+          // 付与：既に（感染）が先頭に無ければ先頭へ追加（本文があれば後ろにスペース）
+          if (!/^（\s*感染\s*）/u.test(note0)) {
+            nd.note = cleaned ? `（感染） ${cleaned}` : '（感染）';
+          } else {
+            nd.note = note0; // 既にOK形式
+          }
+        } else {
+          // 削除：感染フラグが外れたらトークンを除去しておく
+          nd.note = cleaned;
+        }
+      }
+	  
        const data = loadWeek(currentMonday);
 
       // 先頭から n 枠キー列
@@ -4107,6 +4277,31 @@ function openEditor(keys){
           }
         }
       }
+
+      // ====== ★ 後続枠の時刻再計算（押し出し） ======
+      try {
+        const { d, day, section, idx } = parseKey(firstKey);
+        // 先頭の実開始時刻（20分刻みのアンカー考慮）
+        const baseStart = (CONFIG?.[day]?.[section]?.start) || '09:30';
+        // ★ dayKey には 'Mon'/'Tue'... の day を渡す（d ではない）
+        const headHHMM  = getSlotTimeHHMMEx(baseStart, currentMonday, day, section, idx);
+
+
+        // 次の枠の理想的開始時刻
+        const nextIdx = idx + Math.max(1, span);
+        // 所要時間（分）があればそれを優先、なければ span×20分
+        const effMinutes =
+          (Number.isFinite(durNum) && durNum > 0) ? durNum : (Math.max(1, span) * 20);
+        const nextHHMM = addMinutes(headHHMM, effMinutes);
+
+        // 既存の後続アンカーをクリア（先頭は残す）
+        clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
+        // 次の枠位置にアンカーを打つ
+        setTimeOverride(currentMonday, day, section, nextIdx, nextHHMM);
+      } catch (e) {
+        console.warn('time override adjust skipped:', e);
+      }
+      // ====== ここまで ======
 
        // --- フォーカス維持のための退避 ---
        const wasFocus = document.body.classList.contains('dayFocus');
@@ -4201,6 +4396,33 @@ function openEditor(keys){
   }, {once:true});
 }
 
+// 所要時間（duration）を優先して、次スロットの開始時刻アンカーを打つ
+function applyDurationAnchorForHead(headKey, store){
+  try {
+    // headKey = "2025-11-12|Tue|1|7" など
+    const { d, day, section, idx } = parseKey(headKey);
+    const head = store[headKey];
+    if (!head || head.tail) return;
+
+    const span = Math.max(1, Number(head.span || 1));
+    const dur  = Number(head.duration || 0);
+    const effMinutes = (Number.isFinite(dur) && dur > 0) ? dur : (span * 20);
+
+    // 先頭実開始
+    const baseStart = (CONFIG?.[day]?.[section]?.start) || '09:30';
+    const headHHMM  = getSlotTimeHHMMEx(baseStart, currentMonday, day, section, idx);
+
+    // 次の枠インデックス（結合時は head の次の枠）
+    const nextIdx = idx + span;
+
+    // 既存アンカーの後続分をクリアして、次枠に「開始+所要時間」でアンカー
+    clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
+    setTimeOverride(currentMonday, day, section, nextIdx, addMinutes(headHHMM, effMinutes));
+  } catch(e){
+    console.warn('applyDurationAnchorForHead skipped:', e);
+  }
+}
+
 /* ---------- コピー / 貼り付け / 切り取り（単枠＆結合対応の最小核） ---------- */
 const appClipboard = { type:null, data:null };
 let lastCopySourceKey = null;
@@ -4242,8 +4464,13 @@ function pasteToActive({flip=false}={}){
     const data = deepClone(clip.data.data);
     if(flip && data.eye) data.eye = flipEye(data.eye);
     delete data.linkWith;
-    st[tKey] = data;
-  saveWeek(currentMonday, st);
+     // 単枠でも duration があれば span=1 としてアンカーを打てるようにする
+     st[tKey] = data;
+     if (st[tKey] && !st[tKey].tail) {
+       if (!('span' in st[tKey])) st[tKey].span = 1; // head扱いで押し出し計算用
+       applyDurationAnchorForHead(tKey, st);
+     }
+     saveWeek(currentMonday, st);
   reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
     return;
   }
@@ -4258,10 +4485,13 @@ function pasteToActive({flip=false}={}){
     for(const k of destKeys){ if(isOccupiedRecord(st[k])){ alert('貼り付け先に既存データがあります'); return; } }
     const headData = deepClone(clip.data.headData||{});
     delete headData.head; delete headData.tail; delete headData.span; delete headData.linkWith;
+    if (flip && headData.eye) headData.eye = flipEye(headData.eye);  // ★ 結合でも左右反転
     const headKey = destKeys[0];
     st[headKey] = {...headData, head:true, span};
     for(let i=1;i<span;i++) st[destKeys[i]] = { tail:true, head:headKey };
-  saveWeek(currentMonday, st);
+     // 貼り付けた head の duration / span を元に次枠アンカーを打つ
+     applyDurationAnchorForHead(headKey, st);
+     saveWeek(currentMonday, st);
   reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
     return;
   }
