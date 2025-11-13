@@ -673,9 +673,13 @@ label[for="mergeSlots"] {
       <label>術式3</label><input name="proc3" />
       <label>術者</label><input name="surgeon" />
       <label>備考</label><textarea name="note" rows="3" style="resize:vertical"></textarea>
-      <label>所要時間（分）</label>
-      <input name="duration" type="number" min="0" step="5" placeholder="例: 45">	  
-      <label>結合（枠数）</label>
+   <label>所要時間</label>
+   <div style="display:flex;gap:8px;align-items:center">
+     <input name="durationH" type="text" inputmode="numeric" style="width:5em" placeholder="0">
+     <span>時間</span>
+     <input name="durationM" type="text" inputmode="numeric" style="width:5em" placeholder="0">
+     <span>分</span>
+   </div>      <label>結合（枠数）</label>
       <div>
         <input type="checkbox" id="mergeSlots" name="mergeSlots">
         <label for="mergeSlots">この枠から</label>
@@ -1333,7 +1337,7 @@ function defaultLists(){
     proc1: ["白内障","VIT+IOL","IOL強膜内固定","眼瞼内反手術"],
     proc2: ["眼内レンズ縫着","前房洗浄","瞳孔形成"],
     proc3: ["複合処置A","複合処置B"],
-    surgeons: ["木村","岡部","後藤田","宮部","飯田","森山"]
+    surgeons: ["木村","岡部","後藤田","宮部","飯田","森山","秦","内匠"]
   };
 }
 
@@ -1727,6 +1731,51 @@ function extractHHMMFromTimeEl(timeEl){
   function clearTimeOverrideFrom(week, dayKey, section, idx){ const store = loadTimeOverrides(week); const key = `${dayKey}|${section}`; if(store[key]){ for(const k of Object.keys(store[key])){ if(Number(k) >= idx) delete store[key][k]; } if(Object.keys(store[key]).length===0) delete store[key]; saveTimeOverrides(week, store); } }
   function clearTimeOverrideAll(week, dayKey, section){ const store = loadTimeOverrides(week); const key = `${dayKey}|${section}`; if(store[key]){ delete store[key]; saveTimeOverrides(week, store); } }
   function getSlotTimeHHMMEx(baseHHMM, week, dayKey, section, idx){ let store = {}; try { store = JSON.parse(localStorage.getItem('timeovr_' + weekKey(week))) || {}; } catch(_) {} const table = store[`${dayKey}|${section}`] || {}; let anchorIdx = -1, anchorHHMM = baseHHMM; for (const k of Object.keys(table)){ const n = Number(k); if (Number.isFinite(n) && n <= idx && n > anchorIdx){ anchorIdx = n; anchorHHMM = table[k]; } } const steps = idx - (anchorIdx >= 0 ? anchorIdx : 0); return addMinutes(anchorHHMM, steps * 20); }
+function debugTimeOverrides(label){
+  try {
+    const raw = localStorage.getItem('timeovr_' + weekKey(currentMonday));
+    const store = raw ? JSON.parse(raw) : {};
+    console.log('==== timeovr DEBUG:', label, '====');
+    console.log(JSON.stringify(store, null, 2));
+  } catch(e){
+    console.warn('debugTimeOverrides failed:', e);
+  }
+}
+
+// ★スロット削除時に、所要時間アンカーを片付ける共通ヘルパー
+function cleanupTimeOverrideOnDelete(firstKey, store){
+  try{
+    if (!firstKey) return;
+
+    let key = firstKey;
+    let rec = store[key];
+
+    // tail を指定して消すパターンにも対応（tail.head に head のキーが入っている前提）
+    if (rec && rec.tail && rec.head){
+      key = rec.head;
+      rec = store[key] || rec; // 念のため
+    }
+
+    const p = parseKey(key);   // { d, day, section, idx }
+    if (!p) return;
+
+    // head なら span を見る。なければ単枠扱いで 1
+    const span = (rec && rec.head)
+      ? Math.max(1, Number(rec.span || 1))
+      : 1;
+
+    // 「削除するブロックの末尾の次」から後ろのアンカーをクリア
+    clearTimeOverrideFrom(
+      currentMonday,
+      p.day,         // Mon / Tue ...
+      p.section,     // 0,1,2...
+      p.idx + span   // 末尾 idx + 1
+    );
+  }catch(e){
+    console.warn('cleanupTimeOverrideOnDelete failed:', e);
+  }
+}
+
 
   // ===== 休止情報 =====
   function loadDayOff(week){ try { return JSON.parse(localStorage.getItem('dayoff_'+weekKey(week))) || {}; } catch(_) { return {}; } }
@@ -1783,8 +1832,30 @@ function resetSlotLayoutForDay(week, dayKey, opts = {}) {
   // ===== Undo / Redo =====
   let undoStack = [];
   let redoStack = [];
-  function snapshotState(){ return { timeovr: loadTimeOverrides(currentMonday), slotovr: loadSlotOverrides(currentMonday), notes: loadNotes(currentMonday), dayoff: loadDayOff(currentMonday), emerg: loadEmerg(currentMonday) }; }
-  function restoreState(snap){ if(!snap) return; localStorage.setItem('timeovr_' + weekKey(currentMonday), JSON.stringify(snap.timeovr || {})); localStorage.setItem('slotovr_' + weekKey(currentMonday), JSON.stringify(snap.slotovr || {})); localStorage.setItem('notes_'  + weekKey(currentMonday), JSON.stringify(snap.notes  || {})); localStorage.setItem('dayoff_' + weekKey(currentMonday), JSON.stringify(snap.dayoff || {})); localStorage.setItem('emerg_'  + weekKey(currentMonday), JSON.stringify(snap.emerg  || {})); }
+  function snapshotState(){
+    return {
+      week:   loadWeek(currentMonday),             // ← ★ 本体スケジュール
+      timeovr: loadTimeOverrides(currentMonday),   // 所要時間アンカー
+      slotovr: loadSlotOverrides(currentMonday),
+      notes:   loadNotes(currentMonday),
+      dayoff:  loadDayOff(currentMonday),
+      emerg:   loadEmerg(currentMonday)
+    };
+  }
+  function restoreState(snap){
+    if(!snap) return;
+    const wk = weekKey(currentMonday);
+ 
+    // ★ スケジュール本体を戻す
+    localStorage.setItem('schedule_' + wk, JSON.stringify(snap.week || {}));
+ 
+    // 所要時間アンカーやその他の拡張テーブルも戻す
+    localStorage.setItem('timeovr_' + wk, JSON.stringify(snap.timeovr || {}));
+    localStorage.setItem('slotovr_' + wk, JSON.stringify(snap.slotovr || {}));
+    localStorage.setItem('notes_'  + wk, JSON.stringify(snap.notes  || {}));
+    localStorage.setItem('dayoff_' + wk, JSON.stringify(snap.dayoff || {}));
+    localStorage.setItem('emerg_'  + wk, JSON.stringify(snap.emerg  || {}));
+  }
   const __saveTimeOverrides = saveTimeOverrides; saveTimeOverrides = function(week, obj){ try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){} __saveTimeOverrides(week, obj); };
   const __saveSlotOverrides = saveSlotOverrides; saveSlotOverrides = function(week, obj){ try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){} __saveSlotOverrides(week, obj); };
   function undo(){ if(undoStack.length === 0){ alert('戻せる操作がありません'); return; } const prev = undoStack.pop(); const cur  = snapshotState(); redoStack.push(cur); restoreState(prev); render(); }
@@ -3467,31 +3538,10 @@ function paintSlotsFromStore(){
     }
   });
 
-  // 結合表示（grid-row span と tail の視覚非表示）
-  document.querySelectorAll('.slots').forEach(container=>{
-    const children = Array.from(container.children);
-    for (let i=0;i<children.length;i++){
-      const el  = children[i];
-      const key = el.dataset.key;
-      const st  = loadWeek(currentMonday) || {};
-      const d   = st[key];
-
-      // 初期化は上で済み
-
-      if (d && d.head && Number(d.span||1) > 1){
-        const span = Number(d.span);
-        el.classList.add('mergeHead');
-        el.style.gridRowEnd = `span ${span}`;
-        // tail 行は見た目を隠す
-        for (let k=1;k<span && i+k<children.length;k++){
-          children[i+k].classList.add('hiddenRow');
-        }
-      }
-      if (d && d.tail){
-        el.classList.add('hiddenRow');
-      }
-    }
-  });
+   // 結合表示＋バッジ（初回描画も含め常に applyMerges() に統一）
+   document.querySelectorAll('.slots').forEach(container=>{
+     applyMerges(container, st);
+   });
 }
 
 // 「項目ごとの部品配列」から列付き DOM を組み立てる
@@ -3943,12 +3993,13 @@ if (timeEl){
       if (timeEl){
         const b = document.createElement('span');
         b.className = 'merge-badge';
-       // 所要時間優先（未入力なら span×20 分）
-       const dur = Number(data.duration || 0);
-       const minutes = (Number.isFinite(dur) && dur > 0) ? dur : (span * 20);
-       b.textContent = `${minutes}分`;
-       b.setAttribute('aria-label', `${minutes}分`);
-       b.title = `${minutes}分`;
+        // 所要時間優先（未入力なら span×20 分）
+        const dur = Number(data.duration || 0);
+        const minutes = (Number.isFinite(dur) && dur > 0) ? dur : (span * 20);
+        const label = formatMinutesColon(minutes);
+        b.textContent = label;
+        b.setAttribute('aria-label', label);
+        b.title = label;
         timeEl.appendChild(b);
 
    // ② 全麻バッジ（ga が true かつ span>=4 の時だけ）
@@ -4089,10 +4140,14 @@ function openEditor(keys){
   f.proc3.value = first.proc3 || '';
    f.surgeon.value = first.surgeon || '';
    f.note.value  = first.note || '';
-  // 所要時間（保存されていれば表示。未保存なら既存spanから推定してもよいが、まずは空で）
-  if (f.duration) {
-    f.duration.value = (first.duration && String(first.duration)) || '';
-  } 
+   // 所要時間（保存値: 分）→ 時間/分の2入力に分配（全角数字はJS保存側で吸収）
+   if (f.durationH && f.durationM) {
+     const dmin = Number(first.duration || 0);
+     const hh = Math.floor(dmin / 60);
+     const mm = dmin % 60;
+     f.durationH.value = dmin > 0 ? String(hh) : '';
+     f.durationM.value = dmin > 0 ? String(mm) : '';
+   }
    // ★ 結合枠数の初期値
    const initSpan =
      isHead
@@ -4197,12 +4252,18 @@ function openEditor(keys){
         proc3: f.proc3.value.trim(),
         surgeon: f.surgeon.value.trim(),
         note:  f.note.value.trim(),
-        ga: !!f.ga.checked,
-        duration: (() => { // 数値として持つ（未入力は空）
-          const v = (f.duration?.value || '').trim();
-          const n = Number(v);
-          return Number.isFinite(n) && n > 0 ? n : '';
-        })(),         ga: !!f.ga.checked,
+         ga: !!f.ga.checked,
+         // 所要時間（H/M）：全角OK → 半角数値化 → 分へ合算
+         duration: (() => {
+           const hRaw = (f.durationH?.value ?? '').trim();
+           const mRaw = (f.durationM?.value ?? '').trim();
+           const h = hRaw ? parseInt(toHalfWidthNum(hRaw), 10) : 0;
+           const m = mRaw ? parseInt(toHalfWidthNum(mRaw), 10) : 0;
+           const okH = Number.isFinite(h) && h >= 0;
+           const okM = Number.isFinite(m) && m >= 0;
+           const total = (okH ? h : 0) * 60 + (okM ? m : 0);
+           return total > 0 ? total : '';
+         })(),
          infection: (() => {
            const checked = f.querySelector('input[name="infection"]:checked');
            return checked ? checked.value : '';
@@ -4301,6 +4362,7 @@ function openEditor(keys){
       } catch (e) {
         console.warn('time override adjust skipped:', e);
       }
+     debugTimeOverrides('after SAVE duration');	  
       // ====== ここまで ======
 
        // --- フォーカス維持のための退避 ---
@@ -4345,8 +4407,28 @@ function openEditor(keys){
         }
       }	   
     }else if(editor.returnValue==='clear'){
-      const data = loadWeek(currentMonday);
-      const dHead = data[firstKey];
+     const data = loadWeek(currentMonday);
+     const dHead = data[firstKey];
+ 
+     // ★削除前の情報を使って、所要時間アンカーを片付ける
+     cleanupTimeOverrideOnDelete(firstKey, data);
+
+   // ★ 結合枠削除時：残ったアンカーを除去（後続の時間を元に戻す）
+   try {
+     if (dHead && dHead.head) {
+       const { d, day, section, idx } = parseKey(firstKey);
+       const span = Number(dHead.span || 1);
+       // 結合枠の直後 idx+span から後ろのアンカーをクリア
+       clearTimeOverrideFrom(currentMonday, day, section, idx + span);
+     } else {
+       // 単枠でも duration などで後続にアンカーが付いた可能性がある
+       const { d, day, section, idx } = parseKey(firstKey);
+       clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
+     }
+   } catch(e) {
+     console.warn("clear-time-override-failed:", e);
+   }
+	  
       if(dHead && dHead.head){
         const {d,day,section,idx} = parseKey(firstKey);
         for(let i=0;i<(dHead.span||1);i++){
@@ -4356,6 +4438,7 @@ function openEditor(keys){
       }else{
         delete data[firstKey];
       }
+     debugTimeOverrides('before CLEAR saveWeek');  // ← ここで現在のアンカーを観察	  
        const wasFocus = document.body.classList.contains('dayFocus');
        const focusedDayEl = document.querySelector('.day[data-focus="true"]');
        const focusedDayKey =
@@ -4422,6 +4505,17 @@ function applyDurationAnchorForHead(headKey, store){
     console.warn('applyDurationAnchorForHead skipped:', e);
   }
 }
+
+
+function formatMinutesColon(min){
+  const m = Number(min)||0;
+  if (m <= 0) return '';
+  const h = Math.floor(m/60), r = m%60;
+  if (h && r) return `${h}:${r.toString().padStart(2,'0')}`;
+  if (h) return `${h}:00`;
+  return `${r}`;
+}
+
 
 /* ---------- コピー / 貼り付け / 切り取り（単枠＆結合対応の最小核） ---------- */
 const appClipboard = { type:null, data:null };
@@ -4502,6 +4596,10 @@ function cutActive(){
   copySlotOrMerge();
   const st = loadWeek(currentMonday);
   const key = el.dataset.key; const d=st[key]; if(!d) return;
+
+   // ★ 削除前に：所要時間アンカーを片付ける
+   cleanupTimeOverrideOnDelete(key, st);
+  
   if(d.head){ const {d:dd,day,section,idx}=parseKey(key); for(let i=0;i<(d.span||1);i++){ delete st[`${dd}|${day}|${section}|${idx+i}`]; } }
   else { delete st[key]; }
    // --- フォーカス維持ラッパー（保存時と同じパターン） ---
@@ -4572,6 +4670,12 @@ document.addEventListener('keydown',(e)=>{
  
      // 3) 週データを読み、head と tail 全部のキーを削除
      const st = loadWeek(currentMonday);
+ 
+    // ★ Delete / Backspace でも所要時間アンカーを先に片付ける
+    if (head && head.dataset && head.dataset.key){
+      cleanupTimeOverrideOnDelete(head.dataset.key, st);
+    }
+ 	 
      if (head.dataset && head.dataset.key) delete st[head.dataset.key];
      let p = head.nextElementSibling;
      for (let i=1; i<span && p; i++){
