@@ -1776,6 +1776,52 @@ function cleanupTimeOverrideOnDelete(firstKey, store){
   }
 }
 
+function autoRebuildTimeOverridesForSectionAfterDelete(anyKey, store){
+  try{
+    if (!anyKey) return;
+    const { day, section } = parseKey(anyKey);
+    if (!day || section == null) return;
+
+    // 1) この day/section のアンカーをいったん全削除
+    clearTimeOverrideFrom(
+      currentMonday,
+      day,
+      section,
+      0   // idx=0 から先を全部消すイメージ
+    );
+
+    // 2) 同じ day/section の「tail 以外」のレコードを idx 昇順に取得
+    const entries = Object.keys(store)
+      .map(k => ({ key: k, info: parseKey(k), rec: store[k] }))
+      .filter(o =>
+        o.rec &&
+        !o.rec.tail &&
+        o.info.day === day &&
+        o.info.section === section
+      )
+      .sort((a, b) => a.info.idx - b.info.idx);
+
+    if (!entries.length) return;
+
+    // 3) 各 head / duration 付き枠に対して、元のロジックと同じ方式でアンカーを張り直す
+    for (const { key, rec } of entries){
+      const hasDuration = Number(rec.duration || 0) > 0;
+      const isMergeHead = !!rec.head && Math.max(1, Number(rec.span || 1)) > 1;
+
+      // duration が入っている枠、または結合 head だけが「押し出しの起点」になる
+      if (hasDuration || isMergeHead){
+        applyDurationAnchorForHead(key, store);
+      }
+    }
+
+    if (typeof debugTimeOverrides === 'function'){
+      debugTimeOverrides('after autoRebuildTimeOverridesForSectionAfterDelete');
+    }
+  }catch(e){
+    console.warn('autoRebuildTimeOverridesForSectionAfterDelete failed:', e);
+  }
+}
+
 
   // ===== 休止情報 =====
   function loadDayOff(week){ try { return JSON.parse(localStorage.getItem('dayoff_'+weekKey(week))) || {}; } catch(_) { return {}; } }
@@ -1832,6 +1878,37 @@ function resetSlotLayoutForDay(week, dayKey, opts = {}) {
   // ===== Undo / Redo =====
   let undoStack = [];
   let redoStack = [];
+
+  // === Undo履歴のバッチング用フラグ ===
+  let undoBatchDepth = 0;
+  let undoBatchSnapshot = null;
+
+  function beginUndoBatch(){
+    if (undoBatchDepth === 0){
+      try{
+        undoBatchSnapshot = snapshotState();  // バッチ開始時の状態を1回だけ保存
+      }catch(e){
+        undoBatchSnapshot = null;
+      }
+    }
+    undoBatchDepth++;
+  }
+
+  function endUndoBatch(){
+    if (undoBatchDepth === 0) return;
+    undoBatchDepth--;
+    if (undoBatchDepth === 0 && undoBatchSnapshot){
+      // バッチの最初の状態を1ステップとして積む
+      undoStack.push(undoBatchSnapshot);
+      redoStack.length = 0;
+      undoBatchSnapshot = null;
+    }
+  }
+
+  function inUndoBatch(){
+    return undoBatchDepth > 0;
+  }
+
   function snapshotState(){
     return {
       week:   loadWeek(currentMonday),             // ← ★ 本体スケジュール
@@ -1856,8 +1933,21 @@ function resetSlotLayoutForDay(week, dayKey, opts = {}) {
     localStorage.setItem('dayoff_' + wk, JSON.stringify(snap.dayoff || {}));
     localStorage.setItem('emerg_'  + wk, JSON.stringify(snap.emerg  || {}));
   }
-  const __saveTimeOverrides = saveTimeOverrides; saveTimeOverrides = function(week, obj){ try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){} __saveTimeOverrides(week, obj); };
-  const __saveSlotOverrides = saveSlotOverrides; saveSlotOverrides = function(week, obj){ try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){} __saveSlotOverrides(week, obj); };
+  const __saveTimeOverrides = saveTimeOverrides;
+  saveTimeOverrides = function(week, obj){
+    // ★ バッチ中でなければ、ここで1ステップ履歴を積む
+    if (!inUndoBatch()){
+      try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){}
+    }
+  __saveTimeOverrides(week, obj);
+  };
+  const __saveSlotOverrides = saveSlotOverrides;
+  saveSlotOverrides = function(week, obj){
+    if (!inUndoBatch()){
+      try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){}
+    }
+  __saveSlotOverrides(week, obj);
+  };
   function undo(){ if(undoStack.length === 0){ alert('戻せる操作がありません'); return; } const prev = undoStack.pop(); const cur  = snapshotState(); redoStack.push(cur); restoreState(prev); render(); }
   function redo(){ if(redoStack.length === 0){ alert('やり直し可能な操作がありません'); return; } const next = redoStack.pop(); const cur  = snapshotState(); undoStack.push(cur); restoreState(next); render(); }
   document.getElementById('undoBtn')?.addEventListener('click', undo);
@@ -4645,6 +4735,10 @@ document.addEventListener('keydown',(e)=>{
     e.preventDefault();
      const el = getActiveSlot?.(); if(!el) return;
  
+    // ★ この削除操作全体を「Undo 1ステップ」にまとめる
+    beginUndoBatch();
+    try { 
+ 
      // 1) head を特定（tail を選んでいても巻き戻す）
      const head = (function resolveHead(n){
        let p = n;
@@ -4670,11 +4764,8 @@ document.addEventListener('keydown',(e)=>{
  
      // 3) 週データを読み、head と tail 全部のキーを削除
      const st = loadWeek(currentMonday);
- 
-    // ★ Delete / Backspace でも所要時間アンカーを先に片付ける
-    if (head && head.dataset && head.dataset.key){
-      cleanupTimeOverrideOnDelete(head.dataset.key, st);
-    }
+     const headKey = head?.dataset?.key || null;
+     // ※ この時点では time override はまだ触らない（autoRebuild に一任）
  	 
      if (head.dataset && head.dataset.key) delete st[head.dataset.key];
      let p = head.nextElementSibling;
@@ -4691,9 +4782,17 @@ document.addEventListener('keydown',(e)=>{
      if (head.style) head.style.gridRowEnd = '';
      if (head.dataset){ delete head.dataset.span; delete head.dataset.mergeSpan; }
  
-     // 5) 保存→再描画（applyMerges はもう tail を隠せない）
-     saveWeek(currentMonday, st);
-     preserveScrollWhile(()=> render());
+      // ★ 4. 同じ日・同じセクションの time override をここで丸ごと組み直す
+      if (headKey){
+        autoRebuildTimeOverridesForSectionAfterDelete(headKey, st);
+      }
+ 
+      // 5) 保存→再描画（applyMerges はもう tail を隠せない）
+      saveWeek(currentMonday, st);
+      preserveScrollWhile(()=> render());
+    } finally {
+      endUndoBatch();
+    }	  
   }
 
 if(k==='enter'){
