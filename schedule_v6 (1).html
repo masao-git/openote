@@ -545,6 +545,31 @@ label[for="mergeSlots"] {
   display: none;
 }
 
+/* 連続選択されているスロット自体の見た目（薄い背景だけにする例） */
+.slot.multiSelected {
+  background-color: rgba(0, 0, 255, 0.04);  /* ほんのり青系でもグレーでも */
+  outline: none;
+}
+
+/* 青枠＋選択が両方付いているとき */
+.slot.focused.multiSelected {
+  /* 青枠は multiRangeOutline に任せるのでここは背景だけでもOK */
+}
+
+/* スロットの縦並びコンテナ */
+.slots {
+  position: relative; /* 青枠を中で絶対配置するため */
+}
+/* 連続選択全体を囲む外周青枠 */
+.multiRangeOutline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border: 2px solid #007bff;
+  border-radius: 4px;
+  pointer-events: none;   /* クリックを邪魔しない */
+  box-sizing: border-box;
+}
 
   </style>
   <style>
@@ -1933,21 +1958,41 @@ function resetSlotLayoutForDay(week, dayKey, opts = {}) {
     localStorage.setItem('dayoff_' + wk, JSON.stringify(snap.dayoff || {}));
     localStorage.setItem('emerg_'  + wk, JSON.stringify(snap.emerg  || {}));
   }
-  const __saveTimeOverrides = saveTimeOverrides;
-  saveTimeOverrides = function(week, obj){
-    // ★ バッチ中でなければ、ここで1ステップ履歴を積む
+const __saveTimeOverrides = saveTimeOverrides;
+saveTimeOverrides = function(week, obj){
+  try{
+    // ★ バッチ中はここで snapshot を積まない
     if (!inUndoBatch()){
-      try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){}
+      undoStack.push(snapshotState());
+      redoStack.length = 0;
     }
+  }catch(e){}
   __saveTimeOverrides(week, obj);
-  };
-  const __saveSlotOverrides = saveSlotOverrides;
-  saveSlotOverrides = function(week, obj){
+};
+
+const __saveSlotOverrides = saveSlotOverrides;
+saveSlotOverrides = function(week, obj){
+  try{
     if (!inUndoBatch()){
-      try{ undoStack.push(snapshotState()); redoStack.length = 0; }catch(e){}
+      undoStack.push(snapshotState());
+      redoStack.length = 0;
     }
+  }catch(e){}
   __saveSlotOverrides(week, obj);
-  };
+};
+// ⭐⭐⭐ ← ここに追加（saveWeek のラップ）
+//
+const __saveWeek = saveWeek;
+saveWeek = function(week, obj){
+  try{
+    if (!inUndoBatch()){        // ★ バッチ中は積まない
+      undoStack.push(snapshotState());
+      redoStack.length = 0;
+    }
+  }catch(e){}
+
+  __saveWeek(week, obj);        // 本来の saveWeek
+};
   function undo(){ if(undoStack.length === 0){ alert('戻せる操作がありません'); return; } const prev = undoStack.pop(); const cur  = snapshotState(); redoStack.push(cur); restoreState(prev); render(); }
   function redo(){ if(redoStack.length === 0){ alert('やり直し可能な操作がありません'); return; } const next = redoStack.pop(); const cur  = snapshotState(); undoStack.push(cur); restoreState(next); render(); }
   document.getElementById('undoBtn')?.addEventListener('click', undo);
@@ -3682,10 +3727,10 @@ function renderSlotColumns(leftEl, parts){
 /** 週データ（手術枠）ストア：schedule_<week> */
 function loadWeek(date){ try{ const k='schedule_'+weekKey(date); return JSON.parse(localStorage.getItem(k))||{}; }catch(_){ return {}; } }
 function saveWeek(date,data){
-  try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){}
-  const k='schedule_'+weekKey(date);
-  localStorage.setItem(k, JSON.stringify(data||{}));
+  const k = 'schedule_' + weekKey(date);
+  localStorage.setItem(k, JSON.stringify(data || {}));
 }
+
 
 /** Undo スナップショット＆復元に schedule を統合 */
 const __snapshotState = snapshotState;
@@ -4044,11 +4089,231 @@ function addMultiSelect(el){
 }
 function toggleMultiSelect(el){ const k=el?.dataset?.key; if(!k) return; if(multiSelected.has(k)){ multiSelected.delete(k); el.classList.remove('multiSelected'); } else addMultiSelect(el); }
 function findRangeSameDay(aEl,bEl){
-  const day=aEl.closest('.day'); if(!day || day!==bEl.closest('.day')) return [];
-  const list=Array.from(day.querySelectorAll('.slot'));
-  const i=list.indexOf(aEl), j=list.indexOf(bEl); if(i<0||j<0) return [];
-  const [s,e]=i<=j?[i,j]:[j,i]; return list.slice(s,e+1);
+  const day = aEl.closest('.day');
+  if (!day || day !== bEl.closest('.day')) return [];
+
+  // ★ 同じ .slots（同じセクション）内かチェック
+  const secA = aEl.closest('.slots');
+  const secB = bEl.closest('.slots');
+  if (!secA || secA !== secB) return [];  // セクションまたぎ禁止
+
+  const list = Array.from(secA.querySelectorAll('.slot'));
+  const i = list.indexOf(aEl), j = list.indexOf(bEl);
+  if (i < 0 || j < 0) return [];
+  const [s,e] = i <= j ? [i,j] : [j,i];
+  return list.slice(s, e + 1);
 }
+// ==== 複数選択 → 論理ブロック化（単枠 / 結合枠） ====
+function buildMultiClipboardFromSelection(store){
+  if (!multiSelected || multiSelected.size <= 1) return null;
+
+  // .slot.multiSelected を拾う（同一セクション前提）
+  const selectedEls = Array.from(document.querySelectorAll('.slot.multiSelected'));
+  if (selectedEls.length <= 1) return null;
+
+  const container = selectedEls[0].closest('.slots');
+  if (!container) return null;
+  // 念のため：同じ .slots 以外が混じっていたら中止
+  if (selectedEls.some(el => el.closest('.slots') !== container)) {
+    alert('複数セクションをまたぐ範囲コピーはできません。');
+    return null;
+  }
+
+  const list = Array.from(container.querySelectorAll('.slot'));
+  const selectedKeySet = new Set(selectedEls.map(el => el.dataset.key));
+
+  // 連続範囲の first / last index を決める
+  let firstIdx = -1, lastIdx = -1;
+  for (let i = 0; i < list.length; i++) {
+    const k = list[i].dataset.key;
+    if (selectedKeySet.has(k)) {
+      if (firstIdx === -1) firstIdx = i;
+      lastIdx = i;
+    }
+  }
+  if (firstIdx === -1) return null;
+
+  const blocks = [];
+  const usedKeys = new Set();
+
+  for (let i = firstIdx; i <= lastIdx;) {
+    const el = list[i];
+    const key = el.dataset.key;
+    const rec = store[key];
+
+    // 範囲内に「非選択スロット」が混じっていたら中止（穴あきはまだ非対応）
+    if (!selectedKeySet.has(key)) {
+      alert('途中に非選択スロットが含まれる複数コピーはまだ対応していません。連続した範囲だけを選択してください。');
+      return null;
+    }
+
+    if (!rec) {
+      alert('空の枠を含む複数コピーにはまだ対応していません。');
+      return null;
+    }
+
+    // tail だけから始まる → 結合枠の途中選択なので中止
+    if (rec.tail) {
+      if (!rec.head || !usedKeys.has(rec.head)) {
+        alert('結合枠の途中だけが選択されています。結合枠は全体を含めて選択してください。');
+        return null;
+      }
+      i++;
+      continue;
+    }
+
+    // head かつ span>1 → 結合枠ブロック
+    if (rec.head && Number(rec.span || 1) > 1) {
+      const span = Number(rec.span || 1);
+
+      // ★ span 分だけ下に tail が存在するか（セクション内に収まるか）だけを確認
+      if (i + span - 1 >= list.length) {
+        alert('結合枠の構造が不正です（範囲外に伸びています）。');
+        return null;
+      }
+
+      const keys = [];
+      for (let j = 0; j < span; j++) {
+        const el2 = list[i + j];
+        if (!el2) return null;
+        const k2 = el2.dataset.key;
+        const rec2 = store[k2];
+
+        if (!rec2) {
+          alert('結合枠の構造が不正です（途中に空枠があります）。');
+          return null;
+        }
+
+        if (j === 0) {
+          // 先頭行：選択されている & head であることをチェック
+          if (!selectedKeySet.has(k2) || !rec2.head) {
+            alert('結合枠の先頭が選択されていません。結合枠は先頭行から選択してください。');
+            return null;
+          }
+        } else {
+          // tail 行：tail であり、同じ head を指していることだけ確認
+          // （tail 自体が multiSelected である必要はない）
+          if (!rec2.tail || rec2.head !== key) {
+            alert('結合枠の途中だけが選択されています。');
+            return null;
+          }
+        }
+
+        keys.push(k2);
+        usedKeys.add(k2);
+      }
+
+      blocks.push({
+        kind: 'merge',
+        span,
+        data: deepClone(rec),
+        keys
+      });
+      i += span;
+      continue;
+    }
+
+
+    // 通常の単枠
+    blocks.push({
+      kind: 'single',
+      span: 1,
+      data: deepClone(rec),
+      keys: [key]
+    });
+    usedKeys.add(key);
+    i++;
+  }
+
+  if (blocks.length === 0) return null;
+
+  const { d, day, section } = parseKey(list[firstIdx].dataset.key);
+  return { day, section, blocks };
+}
+
+function updateMultiRangeOutline(){
+  // 既存の枠を全て削除
+  document.querySelectorAll('.multiRangeOutline').forEach(el => el.remove());
+
+  if (!multiSelected || multiSelected.size === 0) return;
+
+  // 現在 multiSelected が付いているスロットを取得
+  const all = Array.from(document.querySelectorAll('.slot.multiSelected'));
+  if (all.length === 0) return;
+
+  // ★ 基準にするセクション（.slots）を決める
+  const container = all[0].closest('.slots');
+  if (!container) return;
+
+  // ★ 同じセクション内 ＋ hiddenRow 以外だけを対象にする
+  const targets = all.filter(el =>
+    el.closest('.slots') === container &&
+    !el.classList.contains('hiddenRow')
+  );
+  if (targets.length === 0) return;
+
+  const crect = container.getBoundingClientRect();
+  let top = Infinity;
+  let bottom = -Infinity;
+
+  // 選択スロット群の最上部と最下部（head だけ）を計算
+  for (const s of targets){
+    const r = s.getBoundingClientRect();
+    const t = r.top    - crect.top;
+    const b = r.bottom - crect.top;
+    if (t < top)   top    = t;
+    if (b > bottom) bottom = b;
+  }
+
+  if (!Number.isFinite(top) || !Number.isFinite(bottom) || bottom <= top) return;
+
+  const outline = document.createElement('div');
+  outline.className = 'multiRangeOutline';
+  outline.style.top = `${top}px`;
+  outline.style.height = `${bottom - top}px`;
+
+  container.appendChild(outline);
+}
+
+
+// === スロット共通クリックハンドラ（単体／Shiftで連続範囲） ===
+document.addEventListener('click', (e) => {
+  // 入力中（エディタ内など）は無視
+  if (typeof isTypingContext === 'function' && isTypingContext(e)) return;
+
+  const slot = e.target.closest('.slot');
+  if (!slot) return;
+
+  // schedule 外の .slot は無視（念のため）
+  const sched = document.getElementById('schedule');
+  if (!sched || !sched.contains(slot)) return;
+
+  if (typeof isSlotLockedForEdit === 'function' && isSlotLockedForEdit(slot)) return;
+
+  const cur = (typeof getActiveSlot === 'function') ? getActiveSlot() : null;
+
+  if (e.shiftKey && cur) {
+    // Shift + クリック：同じ日の中で「前回青枠〜今回クリック」までを選択
+    clearMultiSelection();
+    findRangeSameDay(cur, slot).forEach(addMultiSelect);
+  } else {
+    // 通常クリック：この1枠だけ
+    clearMultiSelection();
+    addMultiSelect(slot);
+  }
+
+  // アクティブ枠（青枠）の更新
+  if (typeof setActiveSlot === 'function') {
+    setActiveSlot(slot);
+  }
+  // 連続選択の外周枠を更新
+  updateMultiRangeOutline(); 
+  // ブラウザのテキスト選択（(空) が青く反転するやつ）を消す
+  try {
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.removeAllRanges) sel.removeAllRanges();
+  } catch (_){}  
+}, true); // ← capture フェーズで動かす
 
 /* ---------- 結合表示（head/tail/span） ---------- */
 function applyMerges(container, store){
@@ -4125,20 +4390,6 @@ createSlot = function(meta, time){
   const el = __createSlot(meta, time);
   const key = el.dataset.key;
 
-  // クリックで選択（単体／Ctrl/Shiftで複数・範囲）
-  el.addEventListener('click',(e)=>{
-    if (isSlotLockedForEdit(el)) return;
-    const multi = e.ctrlKey || e.metaKey || e.shiftKey;
-    if(!multi){ clearMultiSelection(); }
-     const cur = getActiveSlot?.();
-     if(e.shiftKey && cur){
-       findRangeSameDay(cur, el).forEach(addMultiSelect);
-       setActiveSlot(el);
-       return;
-     }
-    if(multi){ toggleMultiSelect(el); setActiveSlot(el); return; }
-    addMultiSelect(el); setActiveSlot(el);
-  }, true);
 
   // ダブルクリックで編集（時間セルは既存 dblclick で占有済みなので除外）
   el.addEventListener('dblclick',(e)=>{
@@ -4595,6 +4846,48 @@ function applyDurationAnchorForHead(headKey, store){
     console.warn('applyDurationAnchorForHead skipped:', e);
   }
 }
+// === その日・そのセクションの duration アンカーを一括で組み直す ===
+function rebuildDurationAnchorsForDaySection(dayKey, section, storeOpt){
+  try{
+    const store = storeOpt || loadWeek(currentMonday);
+
+    // 1) まずこの day|section の time override を全部消す
+    const tovr = loadTimeOverrides(currentMonday);
+    const tKey = `${dayKey}|${section}`;
+    if (tovr[tKey]) {
+      delete tovr[tKey];
+      saveTimeOverrides(currentMonday, tovr);
+    }
+
+    // 2) head になるレコードを idx 昇順に集める
+    const heads = [];
+    for (const key of Object.keys(store)){
+      const rec = store[key];
+      if (!rec || rec.tail) continue;
+
+      const p = parseKey(key);  // { d, day, section, idx }
+      if (p.day !== dayKey || p.section !== section) continue;
+
+      const span = Math.max(1, Number(rec.span || 1));
+      const dur  = Number(rec.duration || 0);
+
+      // 「結合枠 or durationあり」だけを対象
+      if (span > 1 || (Number.isFinite(dur) && dur > 0)){
+        heads.push({ key, idx: p.idx });
+      }
+    }
+
+    heads.sort((a,b)=> a.idx - b.idx);
+
+    // 3) 先頭から順に applyDurationAnchorForHead でアンカー設定
+    for (const h of heads){
+      applyDurationAnchorForHead(h.key, store);
+    }
+  }catch(e){
+    console.warn('rebuildDurationAnchorsForDaySection skipped:', e);
+  }
+}
+
 
 
 function formatMinutesColon(min){
@@ -4618,10 +4911,30 @@ function isOccupiedRecord(rec){
 }
 
 function copySlotOrMerge(){
+  const st = loadWeek(currentMonday);
+
+  // 1) まず複数選択を試す
+  if (multiSelected && multiSelected.size > 1) {
+    const clipMulti = buildMultiClipboardFromSelection(st);
+    if (clipMulti) {
+      appClipboard.type = 'multi';
+      appClipboard.data = clipMulti;
+
+      // 視覚フィードバック：選択範囲をふわっとアニメーション
+      document.querySelectorAll('.slot.multiSelected').forEach(el => {
+        el.animate([{opacity:1},{opacity:0.4},{opacity:1}], {duration:160});
+      });
+      return;
+    }
+    // ここに来るのは「範囲がおかしくて alert 済み」のパターンなので、
+    // そのまま単枠コピーにフォールバックしてもよいし、return でもよい。
+    // ひとまずフォールバックしておく。
+  }
+
+  // 2) 通常の単枠／結合枠コピー（従来どおり）
   const el = getActiveSlot?.();
   if(!el){ alert('スロットを選択してください'); return; }
   const key = el.dataset.key;
-  const st  = loadWeek(currentMonday);
   const d   = st[key];
   if(!d){ alert('コピー対象がありません'); return; }
 
@@ -4636,6 +4949,7 @@ function copySlotOrMerge(){
   el.animate([{opacity:1},{opacity:.5},{opacity:1}], {duration:160});
 }
 
+
 function pasteToActive({flip=false}={}){
   const clip = appClipboard;
   if(!clip?.type){ alert('コピーされていません'); return; }
@@ -4643,84 +4957,320 @@ function pasteToActive({flip=false}={}){
   const tKey = tEl.dataset.key;
   const st = loadWeek(currentMonday);
 
-  if(clip.type==='single'){
-    if(isOccupiedRecord(st[tKey])){ alert('既にデータがあります'); return; }
-    const data = deepClone(clip.data.data);
-    if(flip && data.eye) data.eye = flipEye(data.eye);
-    delete data.linkWith;
-     // 単枠でも duration があれば span=1 としてアンカーを打てるようにする
-     st[tKey] = data;
-     if (st[tKey] && !st[tKey].tail) {
-       if (!('span' in st[tKey])) st[tKey].span = 1; // head扱いで押し出し計算用
-       applyDurationAnchorForHead(tKey, st);
-     }
-     saveWeek(currentMonday, st);
-  reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
+  // ====== ★ 複数枠貼り付け（multi） ======
+if (clip.type === 'multi') {
+  const blocks = clip.data?.blocks;
+  if (!blocks || !blocks.length) {
+    alert('複数コピー内容が不正です'); return;
+  }
+
+  const container = tEl.closest('.slots');
+  if (!container) { alert('貼り付け先が不正です'); return; }
+
+  const list = Array.from(container.querySelectorAll('.slot'));
+  let base = list.indexOf(tEl);
+  if (base < 0) { alert('貼り付け先が不正です'); return; }
+
+  // 1) 事前チェック：はみ出し・上書き確認
+  let probe = base;
+  for (const b of blocks) {
+    const span = Number(b.span || 1);
+    if (probe + span - 1 >= list.length) {
+      alert('貼り付け範囲がセクションの外にはみ出します'); return;
+    }
+    for (let j = 0; j < span; j++) {
+      const k = list[probe + j].dataset.key;
+      if (isOccupiedRecord(st[k])) {
+        alert('貼り付け先に既存データがあります'); return;
+      }
+    }
+    probe += span;
+  }
+
+  // 2) 実際の書き込み＋保存を1バッチにまとめる
+  beginUndoBatch();
+  try {
+    let idx = base;
+    for (const b of blocks) {
+      if (b.kind === 'single') {
+        const destKey = list[idx].dataset.key;
+        const data = deepClone(b.data);
+        if (flip && data.eye) data.eye = flipEye(data.eye);
+        delete data.linkWith;
+
+        st[destKey] = data;
+        if (st[destKey] && !st[destKey].tail && !('span' in st[destKey])) {
+          st[destKey].span = 1;   // duration 用の span=1 付与だけ
+        }
+        idx += 1;
+
+      } else if (b.kind === 'merge') {
+        const span = Number(b.span || 1);
+        const headData = deepClone(b.data);
+        delete headData.head;
+        delete headData.tail;
+        delete headData.span;
+        delete headData.linkWith;
+        if (flip && headData.eye) headData.eye = flipEye(headData.eye);
+
+        const destKeys = [];
+        for (let j = 0; j < span; j++) {
+          destKeys.push(list[idx + j].dataset.key);
+        }
+        const headKey = destKeys[0];
+        st[headKey] = { ...headData, head: true, span };
+        for (let j = 1; j < span; j++) {
+          st[destKeys[j]] = { tail: true, head: headKey };
+        }
+        idx += span;
+      }
+    }
+
+    // ★ 貼り付け後：このセクションの所要時間アンカーを一括で組み直す
+    const { day, section } = parseKey(tKey);
+    rebuildDurationAnchorsForDaySection(day, section, st);
+
+    saveWeek(currentMonday, st);
+  } finally {
+    endUndoBatch();
+  }
+
+  reRenderPreservingFocus(tKey); // 貼り付け先を基準に復帰
+  return;
+}
+
+
+  // ====== ここから下は従来どおり single / merge 貼り付け ======
+if (clip.type === 'single') {
+  if (isOccupiedRecord(st[tKey])) {
+    alert('既にデータがあります'); 
     return;
   }
 
-  if(clip.type==='merge'){
-    const span = Number(clip.data.span||1); if(span<=1){ alert('結合情報が不正です'); return; }
-    // 同じ .day で連続 span 枚が空いているかチェック
-    const day = tEl.closest('.day'); if(!day){ alert('貼り付け先が不正です'); return; }
-    const list = Array.from(day.querySelectorAll('.slot'));
-    const base = list.indexOf(tEl); if(base<0 || base+span-1>=list.length){ alert('貼り付け範囲が日はみ出します'); return; }
-    const destKeys = []; for(let i=0;i<span;i++) destKeys.push(list[base+i].dataset.key);
-    for(const k of destKeys){ if(isOccupiedRecord(st[k])){ alert('貼り付け先に既存データがあります'); return; } }
-    const headData = deepClone(clip.data.headData||{});
-    delete headData.head; delete headData.tail; delete headData.span; delete headData.linkWith;
-    if (flip && headData.eye) headData.eye = flipEye(headData.eye);  // ★ 結合でも左右反転
-    const headKey = destKeys[0];
-    st[headKey] = {...headData, head:true, span};
-    for(let i=1;i<span;i++) st[destKeys[i]] = { tail:true, head:headKey };
-     // 貼り付けた head の duration / span を元に次枠アンカーを打つ
-     applyDurationAnchorForHead(headKey, st);
-     saveWeek(currentMonday, st);
-  reRenderPreservingFocus(tKey); // ← 貼り付け先キーを優先選択して復帰
+  beginUndoBatch();            // ★ 1ステップにまとめる
+  try {
+    const data = deepClone(clip.data.data);
+    if (flip && data.eye) data.eye = flipEye(data.eye);
+    delete data.linkWith;
+
+    // 貼り付け先に書き込み
+    st[tKey] = data;
+
+    // duration 用に span=1 を付けておく（tail でないときだけ）
+    if (st[tKey] && !st[tKey].tail && !('span' in st[tKey])) {
+      st[tKey].span = 1;
+    }
+
+    // ★ このセクション全体のアンカーを組み直す
+    const { day, section } = parseKey(tKey);
+    rebuildDurationAnchorsForDaySection(day, section, st);
+
+    saveWeek(currentMonday, st);
+  } finally {
+    endUndoBatch();            // ★ バッチ終了
+  }
+
+  // 描画はバッチ外でOK
+  reRenderPreservingFocus(tKey);
+  return;
+}
+
+
+
+if (clip.type === 'merge') {
+  const span = Number(clip.data.span || 1);
+  if (span <= 1) {
+    alert('結合情報が不正です');
     return;
   }
+
+  const day = tEl.closest('.day');
+  if (!day) {
+    alert('貼り付け先が不正です');
+    return;
+  }
+
+  const list = Array.from(day.querySelectorAll('.slot'));
+  const base = list.indexOf(tEl);
+  if (base < 0 || base + span - 1 >= list.length) {
+    alert('貼り付け範囲が日はみ出します');
+    return;
+  }
+
+  // はみ出し・上書きチェック
+  const destKeys = [];
+  for (let i = 0; i < span; i++) {
+    const k = list[base + i].dataset.key;
+    destKeys.push(k);
+    if (isOccupiedRecord(st[k])) {
+      alert('貼り付け先に既存データがあります');
+      return;
+    }
+  }
+
+  // ★ ここからまとめて 1 つの undo にする
+  beginUndoBatch();
+  try {
+    // head データ
+    const headData = deepClone(clip.data.headData || {});
+    delete headData.head;
+    delete headData.tail;
+    delete headData.span;
+    delete headData.linkWith;
+    if (flip && headData.eye) headData.eye = flipEye(headData.eye);
+
+    const headKey = destKeys[0];
+    st[headKey] = { ...headData, head: true, span };
+
+    // tail を書き込み
+    for (let i = 1; i < span; i++) {
+      st[destKeys[i]] = { tail: true, head: headKey };
+    }
+
+    // ★ このセクション全体のアンカーを組み直す
+    const { day: dayKey, section } = parseKey(headKey);
+    rebuildDurationAnchorsForDaySection(dayKey, section, st);
+
+    // 保存してフォーカス復帰
+    saveWeek(currentMonday, st);
+  } finally {
+    endUndoBatch();  // ★ まとめて1アクションに確定
+  }
+
+  reRenderPreservingFocus(tKey);
+  return;
 }
+}
+
 
 function cutActive(){
-  const el = getActiveSlot?.(); if(!el) return;
-  copySlotOrMerge();
-  const st = loadWeek(currentMonday);
-  const key = el.dataset.key; const d=st[key]; if(!d) return;
+  const storeNow = loadWeek(currentMonday);
 
-   // ★ 削除前に：所要時間アンカーを片付ける
-   cleanupTimeOverrideOnDelete(key, st);
-  
-  if(d.head){ const {d:dd,day,section,idx}=parseKey(key); for(let i=0;i<(d.span||1);i++){ delete st[`${dd}|${day}|${section}|${idx+i}`]; } }
-  else { delete st[key]; }
-   // --- フォーカス維持ラッパー（保存時と同じパターン） ---
-   const wasFocus = document.body.classList.contains('dayFocus');
-   const focusedDayEl = document.querySelector('.day[data-focus="true"]');
-   const focusedDayKey =
-     focusedDayEl?.dataset?.day ??
-     focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ?? null;
-   const lastKeyBefore = window.lastSelectedKey || null;
- 
-   saveWeek(currentMonday, st);
-   if (wasFocus) exitDayFocus();
-   render();
-   if (wasFocus && focusedDayKey){
-     let dayEl =
-       document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
-       Array.from(document.querySelectorAll('.day'))
-         .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
-     if (dayEl) {
-       enterDayFocus(dayEl);
-       // 可能なら同じキーへ再選択、無ければ当日先頭
-       if (lastKeyBefore){
-         const same = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
-         if (same) setActiveSlot(same);
-         else ensureInitialSelectionForDay(dayEl);
-       } else {
-         ensureInitialSelectionForDay(dayEl);
-       }
-     }
-   }
+  // --- どの枠を削除するか、削除プランを作る ---
+  const deletePlan = [];
+  let clipboardData = null;
+
+  // 1) 複数選択あり → multi cut
+  if (multiSelected && multiSelected.size > 1) {
+    const clipMulti = buildMultiClipboardFromSelection(storeNow);
+    if (!clipMulti) return;  // 途中に穴・不正があれば中止（buildMulti内でalert済）
+
+    // クリップボードへ multi を格納
+    appClipboard.type = 'multi';
+    appClipboard.data = clipMulti;
+    clipboardData = clipMulti;
+
+    // blocks から削除プランを作成
+    for (const b of clipMulti.blocks) {
+      if (b.kind === 'merge') {
+        // 結合枠：先頭キーだけを head として扱う
+        const headKey = b.keys[0];
+        deletePlan.push({ type: 'merge', headKey });
+      } else if (b.kind === 'single') {
+        const key = b.keys[0];
+        deletePlan.push({ type: 'single', key });
+      }
+    }
+  } else {
+    // 2) 通常の単枠 / 結合枠 1つだけの cut
+    const el = getActiveSlot?.(); 
+    if (!el) return;
+
+    const key = el.dataset.key;
+    const rec = storeNow[key];
+    if (!rec) return;
+
+    // まず単枠/結合枠としてクリップボードにコピー
+    copySlotOrMerge();   // ここで appClipboard.type = 'single' or 'merge'
+
+    if (rec.head && Number(rec.span || 1) > 1) {
+      // 結合枠 head
+      deletePlan.push({ type: 'merge', headKey: key });
+    } else {
+      // 単枠
+      deletePlan.push({ type: 'single', key });
+    }
+  }
+
+  if (deletePlan.length === 0) return;
+
+  // --- ここから先を 1 アクションとして Undo できるようにまとめる ---
+  beginUndoBatch();
+  try {
+    const st = loadWeek(currentMonday);
+
+    // フォーカス維持用の情報を先に記録
+    const wasFocus = document.body.classList.contains('dayFocus');
+    const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+    const focusedDayKey =
+      focusedDayEl?.dataset?.day ??
+      focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ?? null;
+    const lastKeyBefore = window.lastSelectedKey || null;
+
+    // --- 実際の削除処理 ---
+    for (const item of deletePlan) {
+      if (item.type === 'merge') {
+        const headKey = item.headKey;
+        const rec = st[headKey];
+        if (!rec) continue;
+
+        // 所要時間アンカーを先に片付ける
+        cleanupTimeOverrideOnDelete(headKey, st);
+
+        const span = Math.max(1, Number(rec.span || 1));
+        const { d, day, section, idx } = parseKey(headKey);
+        for (let i = 0; i < span; i++) {
+          const k = `${d}|${day}|${section}|${idx + i}`;
+          delete st[k];
+        }
+      } else if (item.type === 'single') {
+        const key = item.key;
+        const rec = st[key];
+        if (!rec) continue;
+
+        cleanupTimeOverrideOnDelete(key, st);
+        delete st[key];
+      }
+    }
+    // ★ 削除後：このセクションのアンカーを一括で組み直す
+    if (deletePlan.length > 0) {
+      const firstKey =
+        deletePlan[0].type === 'merge'
+          ? deletePlan[0].headKey
+          : deletePlan[0].key;
+      const { day, section } = parseKey(firstKey);
+      rebuildDurationAnchorsForDaySection(day, section, st);
+    }
+    // 複数選択のハイライトをクリア
+    clearMultiSelection();
+
+    // 保存 → 再描画（フォーカス維持パターンは従来どおり）
+    saveWeek(currentMonday, st);
+    if (wasFocus) exitDayFocus();
+    render();
+    if (wasFocus && focusedDayKey){
+      let dayEl =
+        document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+        Array.from(document.querySelectorAll('.day'))
+          .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+      if (dayEl) {
+        enterDayFocus(dayEl);
+        // 可能なら同じキーへ再選択、無ければ当日先頭
+        if (lastKeyBefore){
+          const same = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+          if (same) setActiveSlot(same);
+          else ensureInitialSelectionForDay(dayEl);
+        } else {
+          ensureInitialSelectionForDay(dayEl);
+        }
+      }
+    }
+  } finally {
+    endUndoBatch();
+  }
 }
+
+
 
 /* ---------- ショートカット（Ctrl/Cmd + C/V/X, Delete, Enter） ---------- */
 document.addEventListener('keydown',(e)=>{
