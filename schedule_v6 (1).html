@@ -1904,6 +1904,9 @@ function resetSlotLayoutForDay(week, dayKey, opts = {}) {
   let undoStack = [];
   let redoStack = [];
 
+// === 結合→即編集用の Undo バッチが開いているかどうか ===
+let mergeEditBatchOpen = false;
+
   // === Undo履歴のバッチング用フラグ ===
   let undoBatchDepth = 0;
   let undoBatchSnapshot = null;
@@ -1998,17 +2001,24 @@ saveWeek = function(week, obj){
   document.getElementById('undoBtn')?.addEventListener('click', undo);
   document.getElementById('redoBtn')?.addEventListener('click', redo);
   function isTypingContext(e){ const el = e.target; const tag = (el?.tagName || '').toLowerCase(); return el?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'; }
-  document.addEventListener('keydown', (e)=>{
+document.addEventListener('keydown', (e)=>{
   if(isTypingContext(e)) return;
   const k = e.key.toLowerCase(); 
+
   if((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'z'){        // Undo
     e.preventDefault();
     applyUndoWithFocus();
+
   }else if((e.ctrlKey || e.metaKey) && (k === 'y' || (e.shiftKey && k === 'z'))){ // Redo
     e.preventDefault();
     applyRedoWithFocus();
+
+  }else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'm'){ // ★ 複数空枠 → 結合枠
+    e.preventDefault();
+    createMergeFromMultiSelection();
   }
-  }, true);
+}, true);
+
 
 
 // ===== 編集ロック判定（祝日/休止→編集不可。臨時/緊急は除外） =====
@@ -4103,6 +4113,142 @@ function findRangeSameDay(aEl,bEl){
   const [s,e] = i <= j ? [i,j] : [j,i];
   return list.slice(s, e + 1);
 }
+// === 複数空枠選択 → 結合枠生成（Ctrl+M 用） ===
+function createMergeFromMultiSelection(){
+  if (!multiSelected || multiSelected.size < 2){
+    alert('結合枠を作成するには、同じセクション内の空枠を2枠以上選択してください。');
+    return;
+  }
+
+  // 適当な1つのキーから container(.slots) を特定
+  const anyKey = Array.from(multiSelected)[0];
+  const anyEl  = document.querySelector(`.slot[data-key="${CSS.escape(anyKey)}"]`);
+  if (!anyEl){
+    alert('選択中の枠が見つかりません。');
+    return;
+  }
+  const container = anyEl.closest('.slots');
+  if (!container){
+    alert('結合枠の作成に失敗しました（セクションが特定できません）。');
+    return;
+  }
+
+  const list = Array.from(container.querySelectorAll('.slot'));
+  const selKeys = new Set(Array.from(multiSelected));
+
+  // firstIdx / lastIdx を求める
+  let firstIdx = -1;
+  let lastIdx  = -1;
+  for (let i = 0; i < list.length; i++){
+    const k = list[i].dataset.key;
+    if (selKeys.has(k)){
+      if (firstIdx === -1) firstIdx = i;
+      lastIdx = i;
+    }
+  }
+  if (firstIdx === -1 || lastIdx === -1){
+    alert('選択範囲を特定できませんでした。');
+    return;
+  }
+
+  // 途中に「選択されていない」枠が混じっていたらNG（連続のみ対応）
+  for (let i = firstIdx; i <= lastIdx; i++){
+    const k = list[i].dataset.key;
+    if (!selKeys.has(k)){
+      alert('途中に選択されていない枠が含まれています。連続した空枠だけを選択してください。');
+      return;
+    }
+  }
+
+  // スケジュールデータを確認して「空枠のみ」かチェック
+  const st = loadWeek(currentMonday);
+  for (let i = firstIdx; i <= lastIdx; i++){
+    const el = list[i];
+    const k  = el.dataset.key;
+    const rec = st[k];
+
+    // hiddenRow や既存データがあれば NG
+    if (el.classList.contains('hiddenRow') || (rec && Object.keys(rec).length > 0)){
+      alert('データが入っている枠、または結合枠の一部が含まれています。空の枠だけを選択してください。');
+      return;
+    }
+  }
+
+  const span = (lastIdx - firstIdx + 1);
+  if (span <= 1){
+    alert('結合枠を作成するには、2枠以上を選択してください。');
+    return;
+  }
+
+  const headEl  = list[firstIdx];
+  const headKey = headEl.dataset.key;
+  const { day, section } = parseKey(headKey);
+
+  // 所要時間は「20分×枠数」で自動設定
+  const durationMinutes = span * 20;
+
+  // === ここから Undo バッチ（結合＋最初の編集までまとめる） ===
+  let startedHere = false;
+  if (!inUndoBatch()){
+    beginUndoBatch();
+    startedHere = true;
+  }
+
+  try {
+    // 対象範囲の既存レコードはいったん全クリア（念のため）
+    for (let i = firstIdx; i <= lastIdx; i++){
+      const k = list[i].dataset.key;
+      delete st[k];
+    }
+
+    // head をセット
+    st[headKey] = {
+      head: true,
+      span: span,
+      duration: durationMinutes
+    };
+
+    // tail をセット
+    for (let i = firstIdx + 1; i <= lastIdx; i++){
+      const k = list[i].dataset.key;
+      st[k] = { tail: true, head: headKey };
+    }
+
+    // この day/section のアンカーを一括再構築
+    rebuildDurationAnchorsForDaySection(day, section, st);
+
+    // 保存
+    saveWeek(currentMonday, st);
+
+    // 描画・フォーカス復帰：head を基準に
+    reRenderPreservingFocus(headKey);
+
+    // 複数選択はクリアしておく
+    clearMultiSelection();
+
+    // head をアクティブ＆エディタ起動
+    const headElAfter = document.querySelector(`.slot[data-key="${CSS.escape(headKey)}"]`);
+    if (headElAfter) {
+      setActiveSlot(headElAfter);
+      if (typeof openEditor === 'function') {
+        openEditor([headKey]);
+      }
+    }
+
+    // ここで開いたバッチは「エディタの保存まで」まとめて閉じたいのでフラグを立てる
+    if (startedHere){
+      mergeEditBatchOpen = true;
+    }
+
+  } finally {
+    // 万一何かの理由でフラグが立たなかった場合の保険（通常はここは通らない想定）
+    if (startedHere && !mergeEditBatchOpen){
+      try { endUndoBatch(); } catch(_){}
+    }
+  }
+}
+
+
 // ==== 複数選択 → 論理ブロック化（単枠 / 結合枠） ====
 function buildMultiClipboardFromSelection(store){
   if (!multiSelected || multiSelected.size <= 1) return null;
@@ -4575,11 +4721,25 @@ function openEditor(keys){
   };
   editor.addEventListener('keydown', onEnterToSave, true);
 
-  editor.addEventListener('close', function handler(){
-    editor.removeEventListener('close', handler);
-    if(editor.returnValue==='save'){
-  // ★ 保存直後は render が複数回走ることがあるため、中央寄せを「2回分」抑止
-  window.__suppressCenterN = (window.__suppressCenterN || 0) + 2;	
+editor.addEventListener('close', function handler(){
+  editor.removeEventListener('close', handler);
+
+  // 結合→即編集のバッチが開いていたかどうか
+  const hadMergeBatch = !!mergeEditBatchOpen;
+
+  if (editor.returnValue === 'save') {
+
+    // 結合から続いているバッチがあればそれを再利用、なければ新規に開始
+    const reuseBatch = hadMergeBatch;
+    if (!reuseBatch) {
+      beginUndoBatch();
+    }
+
+    try {
+      // ★★★ ここから中身は「今までの save ロジック」をそのまま移植 ★★★
+
+      // ★ 保存直後は render が複数回走ることがあるため、中央寄せを「2回分」抑止
+      window.__suppressCenterN = (window.__suppressCenterN || 0) + 2;	
       let nd = {
         name: toHalfWidthKana(f.name.value.trim()),
         pid:  f.pid.value.trim(),
@@ -4593,25 +4753,25 @@ function openEditor(keys){
         proc3: f.proc3.value.trim(),
         surgeon: f.surgeon.value.trim(),
         note:  f.note.value.trim(),
-         ga: !!f.ga.checked,
-         // 所要時間（H/M）：全角OK → 半角数値化 → 分へ合算
-         duration: (() => {
-           const hRaw = (f.durationH?.value ?? '').trim();
-           const mRaw = (f.durationM?.value ?? '').trim();
-           const h = hRaw ? parseInt(toHalfWidthNum(hRaw), 10) : 0;
-           const m = mRaw ? parseInt(toHalfWidthNum(mRaw), 10) : 0;
-           const okH = Number.isFinite(h) && h >= 0;
-           const okM = Number.isFinite(m) && m >= 0;
-           const total = (okH ? h : 0) * 60 + (okM ? m : 0);
-           return total > 0 ? total : '';
-         })(),
-         infection: (() => {
-           const checked = f.querySelector('input[name="infection"]:checked');
-           return checked ? checked.value : '';
-         })()
+        ga: !!f.ga.checked,
+        // 所要時間（H/M）：全角OK → 半角数値化 → 分へ合算
+        duration: (() => {
+          const hRaw = (f.durationH?.value ?? '').trim();
+          const mRaw = (f.durationM?.value ?? '').trim();
+          const h = hRaw ? parseInt(toHalfWidthNum(hRaw), 10) : 0;
+          const m = mRaw ? parseInt(toHalfWidthNum(mRaw), 10) : 0;
+          const okH = Number.isFinite(h) && h >= 0;
+          const okM = Number.isFinite(m) && m >= 0;
+          const total = (okH ? h : 0) * 60 + (okM ? m : 0);
+          return total > 0 ? total : '';
+        })(),
+        infection: (() => {
+          const checked = f.querySelector('input[name="infection"]:checked');
+          return checked ? checked.value : '';
+        })()
       };
-       nd = normalizePatientFields(nd);
- 
+      nd = normalizePatientFields(nd);
+
       // ★ 所要時間が入っていればそれを優先して結合枠数を自動決定
       const durNum = Number(nd.duration || 0);
       let spanFromDuration = (Number.isFinite(durNum) && durNum > 0) ? Math.ceil(durNum / 20) : 0;
@@ -4620,32 +4780,25 @@ function openEditor(keys){
       let span = spanFromDuration > 0 ? spanFromDuration : Math.max(1, parseInt(f.mergeSpan?.value || '1', 10));
       const merge = span > 1;
 
-      // ▼ 単枠/2枠：備考の先頭に「（感染）」を自動付与/削除（※は付けない）
+      // ▼ 単枠/2枠：備考の先頭に「（感染）」を自動付与/削除
       if (span <= 2) {
         const note0 = (nd.note || '').trim();
-        // 旧ルールで入っていた「※感染」などを一旦除去
         let cleaned = note0
-          // 先頭の「※感染」「※ 感染」「(感染)」「（感染）」を削除
           .replace(/^(?:※\s*)?(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u, '')
-          // 本文中に残っている先頭寄りの「※感染」を1回だけ掃除（誤爆防止で1回）
           .replace(/(?:^|\s)(?:※\s*)?感染(?!\S)/u, (m) => m.startsWith(' ') ? ' ' : '');
-
         if (nd.infection === 'あり') {
-          // 付与：既に（感染）が先頭に無ければ先頭へ追加（本文があれば後ろにスペース）
           if (!/^（\s*感染\s*）/u.test(note0)) {
             nd.note = cleaned ? `（感染） ${cleaned}` : '（感染）';
           } else {
-            nd.note = note0; // 既にOK形式
+            nd.note = note0;
           }
         } else {
-          // 削除：感染フラグが外れたらトークンを除去しておく
           nd.note = cleaned;
         }
       }
-	  
-       const data = loadWeek(currentMonday);
 
-      // 先頭から n 枠キー列
+      const data = loadWeek(currentMonday);
+
       function seqKeys(headKey, n){
         const {d,day,section,idx} = parseKey(headKey);
         const keys=[headKey];
@@ -4661,7 +4814,6 @@ function openEditor(keys){
 
       if(merge && span>1){
         const keysToUse = keys.length>1 ? keys.slice().sort((a,b)=> a.localeCompare(b)) : seqKeys(firstKey, span);
-        // 上書き不可チェック（tail以外に何かあれば中止）
         for(let i=1;i<keysToUse.length;i++){
           const d = data[keysToUse[i]];
           if(d && !d.tail){ alert('結合先に既存データがあります。先にクリアしてください。'); return; }
@@ -4669,7 +4821,6 @@ function openEditor(keys){
         data[keysToUse[0]] = {...nd, head:true, span: keysToUse.length};
         for(let i=1;i<keysToUse.length;i++) data[keysToUse[i]] = { tail:true, head: keysToUse[0] };
       }else{
-        // 単枠／複数同一書き
         if(Object.values(nd).every(v=>!v)){ delete data[firstKey]; }
         else{ data[firstKey] = nd; }
         if(keys.length>1){
@@ -4683,62 +4834,49 @@ function openEditor(keys){
       // ====== ★ 後続枠の時刻再計算（押し出し） ======
       try {
         const { d, day, section, idx } = parseKey(firstKey);
-        // 先頭の実開始時刻（20分刻みのアンカー考慮）
         const baseStart = (CONFIG?.[day]?.[section]?.start) || '09:30';
-        // ★ dayKey には 'Mon'/'Tue'... の day を渡す（d ではない）
         const headHHMM  = getSlotTimeHHMMEx(baseStart, currentMonday, day, section, idx);
 
-
-        // 次の枠の理想的開始時刻
         const nextIdx = idx + Math.max(1, span);
-        // 所要時間（分）があればそれを優先、なければ span×20分
         const effMinutes =
           (Number.isFinite(durNum) && durNum > 0) ? durNum : (Math.max(1, span) * 20);
         const nextHHMM = addMinutes(headHHMM, effMinutes);
 
-        // 既存の後続アンカーをクリア（先頭は残す）
         clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
-        // 次の枠位置にアンカーを打つ
         setTimeOverride(currentMonday, day, section, nextIdx, nextHHMM);
       } catch (e) {
         console.warn('time override adjust skipped:', e);
       }
-     debugTimeOverrides('after SAVE duration');	  
-      // ====== ここまで ======
+      debugTimeOverrides('after SAVE duration');
 
-       // --- フォーカス維持のための退避 ---
-       const wasFocus = document.body.classList.contains('dayFocus');
-       const focusedDayEl = document.querySelector('.day[data-focus="true"]');
-       // フォーカス日を特定するためのキー（data-day があれば最優先、なければ見出しテキスト）
-       const focusedDayKey =
-         focusedDayEl?.dataset?.day ??
-         focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
-         null;
-       const lastKeyBefore = window.lastSelectedKey || null;
- 
-       saveWeek(currentMonday, data);
-       if (wasFocus) exitDayFocus();  // ← いったん解除してから
-       render();
-       // --- 再突入（同じ日へ） ---
-       if (wasFocus && focusedDayKey){
-         // data-day で探す → 無ければ見出しテキスト一致で探す
-         let dayEl =
-           document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
-           Array.from(document.querySelectorAll('.day'))
-             .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
-         if (dayEl) {
-           enterDayFocus(dayEl);
-           // 可能なら直前と同じスロットを再選択
-           if (lastKeyBefore){
-             const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
-             if (sameSlot) setActiveSlot(sameSlot);
-             else ensureInitialSelectionForDay(dayEl);
-           } else {
-             ensureInitialSelectionForDay(dayEl);
-           }
-         }
-       }
-      // --- ★ 再描画後のフォーカス再同期（念のため） ---
+      // --- フォーカス維持のための退避 ---
+      const wasFocus = document.body.classList.contains('dayFocus');
+      const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+      const focusedDayKey =
+        focusedDayEl?.dataset?.day ??
+        focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
+        null;
+      const lastKeyBefore = window.lastSelectedKey || null;
+
+      saveWeek(currentMonday, data);
+      if (wasFocus) exitDayFocus();
+      render();
+      if (wasFocus && focusedDayKey){
+        let dayEl =
+          document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+          Array.from(document.querySelectorAll('.day'))
+            .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+        if (dayEl) {
+          enterDayFocus(dayEl);
+          if (lastKeyBefore){
+            const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+            if (sameSlot) setActiveSlot(sameSlot);
+            else ensureInitialSelectionForDay(dayEl);
+          } else {
+            ensureInitialSelectionForDay(dayEl);
+          }
+        }
+      }
       const currentFocused = document.querySelector('.slot.focused');
       if (!currentFocused) {
         const fallbackDay = document.querySelector('.day[data-focus="true"]') || document.querySelector('.day');
@@ -4746,30 +4884,52 @@ function openEditor(keys){
           const firstSlot = findFirstSelectableInDay(fallbackDay);
           if (firstSlot) setActiveSlot(firstSlot);
         }
-      }	   
-    }else if(editor.returnValue==='clear'){
-     const data = loadWeek(currentMonday);
-     const dHead = data[firstKey];
- 
-     // ★削除前の情報を使って、所要時間アンカーを片付ける
-     cleanupTimeOverrideOnDelete(firstKey, data);
+      }
 
-   // ★ 結合枠削除時：残ったアンカーを除去（後続の時間を元に戻す）
-   try {
-     if (dHead && dHead.head) {
-       const { d, day, section, idx } = parseKey(firstKey);
-       const span = Number(dHead.span || 1);
-       // 結合枠の直後 idx+span から後ろのアンカーをクリア
-       clearTimeOverrideFrom(currentMonday, day, section, idx + span);
-     } else {
-       // 単枠でも duration などで後続にアンカーが付いた可能性がある
-       const { d, day, section, idx } = parseKey(firstKey);
-       clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
-     }
-   } catch(e) {
-     console.warn("clear-time-override-failed:", e);
-   }
-	  
+      // ★★★ ここまでが従来の save ロジック ★★★
+
+    } finally {
+      // バッチの閉じ方を分岐
+      try {
+        endUndoBatch();
+      } catch(_){}
+
+      if (reuseBatch) {
+        // 結合→即編集のバッチはここでクローズ完了
+        mergeEditBatchOpen = false;
+      }
+    }
+
+  } else {
+    // save 以外（キャンセル / clear 含む）で、結合由来のバッチが開いていたらここで閉じておく
+    if (hadMergeBatch) {
+      try { endUndoBatch(); } catch(_){}
+      mergeEditBatchOpen = false;
+    }
+
+    if (editor.returnValue === 'clear') {
+      // ここに「元の clear ブロック」の中身をそのまま残してください
+      // （今 already 入っている clear ロジックをこの中に置けばOK）
+      const data = loadWeek(currentMonday);
+      const dHead = data[firstKey];
+
+      // ★削除前の情報を使って、所要時間アンカーを片付ける
+      cleanupTimeOverrideOnDelete(firstKey, data);
+
+      // ★ 結合枠削除時：残ったアンカーを除去（後続の時間を元に戻す）
+      try {
+        if (dHead && dHead.head) {
+          const { d, day, section, idx } = parseKey(firstKey);
+          const span = Number(dHead.span || 1);
+          clearTimeOverrideFrom(currentMonday, day, section, idx + span);
+        } else {
+          const { d, day, section, idx } = parseKey(firstKey);
+          clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
+        }
+      } catch(e) {
+        console.warn("clear-time-override-failed:", e);
+      }
+
       if(dHead && dHead.head){
         const {d,day,section,idx} = parseKey(firstKey);
         for(let i=0;i<(dHead.span||1);i++){
@@ -4779,37 +4939,37 @@ function openEditor(keys){
       }else{
         delete data[firstKey];
       }
-     debugTimeOverrides('before CLEAR saveWeek');  // ← ここで現在のアンカーを観察	  
-       const wasFocus = document.body.classList.contains('dayFocus');
-       const focusedDayEl = document.querySelector('.day[data-focus="true"]');
-       const focusedDayKey =
-         focusedDayEl?.dataset?.day ??
-         focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
-         null;
-       const lastKeyBefore = window.lastSelectedKey || null;
- 
-       saveWeek(currentMonday, data);
-       if (wasFocus) exitDayFocus();
-       render();
-       if (wasFocus && focusedDayKey){
-         let dayEl =
-           document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
-           Array.from(document.querySelectorAll('.day'))
-             .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
-         if (dayEl) {
-           enterDayFocus(dayEl);
-           if (lastKeyBefore){
-             const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
-             if (sameSlot) setActiveSlot(sameSlot);
-             else ensureInitialSelectionForDay(dayEl);
-           } else {
-             ensureInitialSelectionForDay(dayEl);
-           }
-         }
-       }
-      // --- ★ 再描画後のフォーカス再同期（念のため） ---
-      const currentFocused = document.querySelector('.slot.focused');
-      if (!currentFocused) {
+      debugTimeOverrides('before CLEAR saveWeek');
+
+      const wasFocus = document.body.classList.contains('dayFocus');
+      const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+      const focusedDayKey =
+        focusedDayEl?.dataset?.day ??
+        focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
+        null;
+      const lastKeyBefore = window.lastSelectedKey || null;
+
+      saveWeek(currentMonday, data);
+      if (wasFocus) exitDayFocus();
+      render();
+      if (wasFocus && focusedDayKey){
+        let dayEl =
+          document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+          Array.from(document.querySelectorAll('.day'))
+            .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+        if (dayEl) {
+          enterDayFocus(dayEl);
+          if (lastKeyBefore){
+            const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+            if (sameSlot) setActiveSlot(sameSlot);
+            else ensureInitialSelectionForDay(dayEl);
+          } else {
+            ensureInitialSelectionForDay(dayEl);
+          }
+        }
+      }
+      const currentFocused2 = document.querySelector('.slot.focused');
+      if (!currentFocused2) {
         const fallbackDay = document.querySelector('.day[data-focus="true"]') || document.querySelector('.day');
         if (fallbackDay) {
           const firstSlot = findFirstSelectableInDay(fallbackDay);
@@ -4817,7 +4977,8 @@ function openEditor(keys){
         }
       }
     }
-  }, {once:true});
+  }
+}, {once:true});
 }
 
 // 所要時間（duration）を優先して、次スロットの開始時刻アンカーを打つ
