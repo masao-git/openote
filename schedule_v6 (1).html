@@ -681,48 +681,85 @@ label[for="mergeSlots"] {
 <dialog id="editor">
   <form id="editorForm" method="dialog" style="min-width:520px;max-width:720px">
     <h3 id="editorTitle" style="margin:0 0 8px;font-size:16px">枠の編集</h3>
-    <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center">
-      <label>氏名</label><input name="name" />
-      <label>患者ID</label><input name="pid" />
-      <label>年齢</label><input name="age" />
-      <label>眼</label>
-      <select name="eye">
-        <option value=""></option><option>R</option><option>L</option><option>B</option>
-      </select>
-      <label>入/外/当日入院</label>
-      <select name="io"><option></option><option>入</option><option>外</option><option>当</option></select>
-      <label>IOL種類</label><input name="iolType" list="iolTypes" />
-      <label>IOL度数</label><input name="iolPower" list="iolPowers" />
-      <label>術式1</label><input name="proc1" />
-      <label>術式2</label><input name="proc2" />
-      <label>術式3</label><input name="proc3" />
-      <label>術者</label><input name="surgeon" />
-      <label>備考</label><textarea name="note" rows="3" style="resize:vertical"></textarea>
-   <label>所要時間</label>
-   <div style="display:flex;gap:8px;align-items:center">
-     <input name="durationH" type="text" inputmode="numeric" style="width:5em" placeholder="0">
-     <span>時間</span>
-     <input name="durationM" type="text" inputmode="numeric" style="width:5em" placeholder="0">
-     <span>分</span>
-   </div>      <label>結合（枠数）</label>
-      <div>
-        <input type="checkbox" id="mergeSlots" name="mergeSlots">
-        <label for="mergeSlots">この枠から</label>
-        <input name="mergeSpan" type="number" min="1" value="1" style="width:5em"> 枠
-      </div>
-       <label>感染症</label>
-       <div style="display:flex;gap:12px;align-items:center">
-         <label><input type="radio" name="infection" value="あり"> あり</label>
-         <label><input type="radio" name="infection" value="なし"> なし</label>
-       </div>
-       <label for="ga">
-         全麻
-         <input type="checkbox" id="ga" name="ga" style="margin-right:6px;">
-       </label>
-     <div></div>
-    </div>
+<div style="display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center">
+  <!-- 基本情報 -->
+  <label>氏名</label><input name="name" />
+  <label>患者ID</label><input name="pid" />
+  <label>年齢</label><input name="age" />
+  
+    <!-- 入外当を先に固める -->
+  <label>入/外/当日入院</label>
+  <select name="io">
+    <option></option><option>入</option><option>外</option><option>当</option>
+  </select>
+  
+  <label>眼</label>
+  <select name="eye">
+    <option value=""></option><option>R</option><option>L</option><option>B</option>
+  </select>
+
+  <!-- 次に術者 -->
+  <label>術者</label>
+  <div style="display:flex;gap:4px;align-items:center;">
+    <select name="surgeon" style="min-width:7em;"></select>
+    <input name="surgeonFree" placeholder="その他（自由入力）" style="flex:1;">
+  </div>
+
+  <!-- 術式1・2 -->
+  <label>術式1</label><input name="proc1" />
+  <label>術式2</label><input name="proc2" />
+
+  <!-- 術式3は非表示のまま維持（必要ならそのまま残す） -->
+  <label style="display:none">術式3</label>
+  <input name="proc3" style="display:none" />
+
+  <!-- 備考 -->
+  <label>備考</label><textarea name="note" rows="3" style="resize:vertical"></textarea>
+
+  <!-- IOL を最後の方へ -->
+  <label>IOL種類</label><input name="iolType" list="iolTypes" />
+  <label>IOL度数</label><input name="iolPower" list="iolPowers" />
+
+  <!-- 入退室時間 -->
+<label>入退室時間</label>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <input name="durationH" type="text" inputmode="numeric" style="width:2.5em" placeholder="0">
+  <span>時間</span>
+  <input name="durationM" type="text" inputmode="numeric" style="width:2.5em" placeholder="0">
+  <span>分</span>
+
+  <!-- 右端の注釈 -->
+  <span style="font-size:12px;color:#666;white-space:nowrap; margin-left:8px;">
+    （未入力＝20分）
+  </span>
+</div>
+
+  <!-- 結合（枠数）は非表示のまま維持 -->
+  <label style="display:none">結合（枠数）</label>
+  <div style="display:none">
+    <input type="checkbox" id="mergeSlots" name="mergeSlots">
+    <label for="mergeSlots">この枠から</label>
+    <input name="mergeSpan" type="number" min="1" value="1" style="width:5em"> 枠
+  </div>
+
+  <!-- 感染症 -->
+<label>感染症</label>
+<div style="display:flex;gap:12px;align-items:center">
+  <label><input type="radio" name="infection" value="なし"> なし</label>
+  <label><input type="radio" name="infection" value="あり"> あり</label>
+  <label><input type="radio" name="infection" value=""> 未選択</label>
+</div>
+
+  <!-- 全麻 -->
+  <label for="ga">
+    全麻
+    <input type="checkbox" id="ga" name="ga" style="margin-right:6px;">
+  </label>
+  <div></div>
+</div>
+
     <menu style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-      <button value="clear" style="color:#b91c1c">クリア</button>
+      <button type="button" value="clear" style="color:#b91c1c">クリア</button>
       <button value="cancel">キャンセル</button>
       <button value="save" class="primary">保存</button>
     </menu>
@@ -770,10 +807,10 @@ label[for="mergeSlots"] {
       <textarea id="optProc2" rows="4" style="flex:1;"></textarea>
     </label>
 
-    <label style="display:flex; gap:8px;">
-      <span style="width:120px; padding-top:6px;">術式３</span>
-      <textarea id="optProc3" rows="4" style="flex:1;"></textarea>
-    </label>
+<label style="display:none; gap:8px;">
+  <span style="width:120px; padding-top:6px;">術式３</span>
+  <textarea id="optProc3" rows="4" style="flex:1;"></textarea>
+</label>
 
     <label style="display:flex; gap:8px;">
       <span style="width:120px; padding-top:6px;">術者</span>
@@ -1362,7 +1399,17 @@ function defaultLists(){
     proc1: ["白内障","VIT+IOL","IOL強膜内固定","眼瞼内反手術"],
     proc2: ["眼内レンズ縫着","前房洗浄","瞳孔形成"],
     proc3: ["複合処置A","複合処置B"],
-    surgeons: ["木村","岡部","後藤田","宮部","飯田","森山","秦","内匠"]
+     // 術者：ショートカット:氏名 の形式（設定画面から自由に編集可）
+     surgeons: [
+       "k:木村",
+       "o:岡部",
+       "g:後藤田",
+       "mi:宮部",
+       "i:飯田",
+       "mo:森山",
+       "h:秦",
+       "t:内匠"
+     ]
   };
 }
 
@@ -1391,13 +1438,71 @@ function setOptions(dl, arr){
     dl.appendChild(opt);
   });
 }
+// グローバルにショートカットマップを持つ
+window.__surgeonShortcutMap = window.__surgeonShortcutMap || {};
+
 function applyDatalists(lists){
-  setOptions(document.getElementById('iolTypes'),     lists.iolTypes);
-  setOptions(document.getElementById('procList'),     lists.proc1);
-  setOptions(document.getElementById('procList2'),    lists.proc2);
-  setOptions(document.getElementById('procList3'),    lists.proc3);
-  setOptions(document.getElementById('surgeonsList'), lists.surgeons);
+  setOptions(document.getElementById('iolTypes'),  lists.iolTypes);
+  setOptions(document.getElementById('procList'),  lists.proc1);
+  setOptions(document.getElementById('procList2'), lists.proc2);
+  setOptions(document.getElementById('procList3'), lists.proc3);
+
+  // ── 術者：設定の配列（"code:名前" or "名前"）から
+  //     1) 名前配列
+  //     2) ショートカットマップ
+  //     を生成する
+  const raw = lists.surgeons || [];
+  const names = [];
+  const map = {};
+
+  raw.forEach(line => {
+    const text = String(line || '').trim();
+    if (!text) return;
+
+    let code = '';
+    let name = '';
+
+    const idx = text.indexOf(':');
+    if (idx > 0) {
+      code = text.slice(0, idx).trim();
+      name = text.slice(idx + 1).trim();
+    } else {
+      // 「木村」だけの行も一応許容（ショートカットなし）
+      name = text;
+    }
+
+    if (!name) return;
+    names.push(name);
+    if (code) {
+      map[code.toLowerCase()] = name;
+    }
+  });
+
+  // datalist（もし今後も使うなら）を名前だけで更新
+  setOptions(document.getElementById('surgeonsList'), names);
+
+  // 編集ダイアログ内の <select name="surgeon"> を更新
+  const sSelect = document.querySelector('#editorForm select[name="surgeon"]');
+  if (sSelect) {
+    sSelect.innerHTML = '';
+
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = '';
+    sSelect.appendChild(empty);
+
+    names.forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = String(n);
+      opt.textContent = String(n);
+      sSelect.appendChild(opt);
+    });
+  }
+
+  // グローバルショートカットマップに反映
+  window.__surgeonShortcutMap = map;
 }
+
 
 // グローバル設定オブジェクト
 let appLists = loadSettings();
@@ -4595,6 +4700,11 @@ function openEditor(keys){
   const editor = document.getElementById('editor');
   const f = document.getElementById('editorForm');
   const st = loadWeek(currentMonday);
+
+  const clearBtn   = f.querySelector('button[value="clear"]');
+  const cancelBtn  = f.querySelector('button[value="cancel"]');
+  const saveBtn    = f.querySelector('button[value="save"]');
+  
  try {
     f.iolType?.setAttribute('list', 'iolTypes');
     f.proc1?.setAttribute('list', 'procList');
@@ -4624,8 +4734,35 @@ function openEditor(keys){
   f.iolPower.value = first.iolPower || '';
   f.proc1.value = first.proc1 || '';
   f.proc2.value = first.proc2 || '';
-  f.proc3.value = first.proc3 || '';
-   f.surgeon.value = first.surgeon || '';
+   f.proc3.value = first.proc3 || '';
+   // 術者：候補にあれば select、なければフリー欄へ
+   (function(){
+     const surgeonName = first.surgeon || '';
+     const sel  = f.surgeon;
+     const free = f.surgeonFree;
+     if (!sel && !free) return;
+     if (!surgeonName) {
+       if (sel)  sel.value  = '';
+       if (free) free.value = '';
+       return;
+     }
+     let matched = false;
+     if (sel) {
+       for (let i = 0; i < sel.options.length; i++) {
+         if (sel.options[i].value === surgeonName) {
+           sel.value = surgeonName;
+           matched = true;
+           break;
+         }
+       }
+     }
+     if (matched) {
+       if (free) free.value = '';
+     } else {
+       if (sel)  sel.value  = '';
+       if (free) free.value = surgeonName;
+     }
+   })();
    f.note.value  = first.note || '';
    // 所要時間（保存値: 分）→ 時間/分の2入力に分配（全角数字はJS保存側で吸収）
    if (f.durationH && f.durationM) {
@@ -4649,15 +4786,19 @@ function openEditor(keys){
  
    f.ga.checked = !!first.ga;
    
-   // 感染症フラグ（あり・なし・未選択）
-   if (first.infection) {
-     const inf = first.infection;
-     const radios = f.querySelectorAll('input[name="infection"]');
-     radios.forEach(r => { r.checked = (r.value === inf); });
-   } else {
-     const radios = f.querySelectorAll('input[name="infection"]');
-     radios.forEach(r => r.checked = false);
-   }
+// 感染症フラグ（なし・あり・未選択）
+// → first.infection が 'なし' か 'あり' ならその値
+// → それ以外（空/undefined/null）は "未選択"（value=""）にする
+(function(){
+  const radios = f.querySelectorAll('input[name="infection"]');
+  const inf = (first.infection === 'あり' || first.infection === 'なし')
+                ? first.infection
+                : '';   // ← 未選択扱い
+
+  radios.forEach(r => {
+    r.checked = (r.value === inf);
+  });
+})();
 // ▼ 氏名入力欄にIMEカタカナモードを指示
 (function(){
   const nameInput = f.name;
@@ -4702,24 +4843,303 @@ function openEditor(keys){
   });
 })();
 
-  editor.showModal();
+  // クリアボタン：確認ダイアログ付きで clear 実行
+  (function(){
+    const clearBtn = f.querySelector('button[value="clear"]');
+    if (clearBtn) {
+      clearBtn.onclick = (e) => {
+        e.preventDefault();  // フォームの既定動作は止める
 
-  const onEnterToSave = (e) => {
-    if (e.key !== 'Enter') return;
-    if (e.isComposing) return; // IME変換中は無視
+        // ★ 確認ダイアログ
+        const ok = window.confirm('この枠の内容をすべてクリアします。よろしいですか？');
+        if (!ok) return;
 
-    const tag = (e.target.tagName || '').toLowerCase();
-    if (tag === 'textarea' && e.shiftKey) return; // メモ等で Shift+Enter は改行
+        editor.returnValue = 'clear';
+        editor.close();      // close ハンドラ側で clear ロジックが動く
+      };
+    }
+  })();
 
-    e.preventDefault();
+   editor.showModal();
+ 
+ 
+   // ===== Enterナビ & 1文字ショートカット =====
+   // フォーカス移動の順序（あとで調整しやすいように決め打ち）
+   const focusOrder = [
+    // 基本情報
+    f.name,
+    f.pid,
+    f.age,
+	
+	// 入/外/当日入院
+    f.io,
+	
+    f.eye,
 
-    // datalist/IME確定を反映
-    try { document.activeElement?.blur(); } catch(_) {}
+    // 術者（セレクト → フリー）
+    f.surgeon,
+   /* f.surgeonFree,*/
 
-    editor.returnValue = 'save';
-    editor.close();  // ↓の close ハンドラで保存処理が走る
+    // 術式1・2
+    f.proc1,
+    f.proc2,
+    // f.proc3 はナビから除外
+
+    // 備考
+    f.note,
+
+    // IOL
+    f.iolType,
+    f.iolPower,
+
+    // 所要時間
+    f.durationH,
+    f.durationM
+    // f.mergeSpan は Enterナビから除外
+   ].filter(Boolean);
+ 
+   function moveFocusNext(fromEl){
+     const idx = focusOrder.indexOf(fromEl);
+     if (idx < 0) return;
+     const next = focusOrder[idx + 1];
+     if (!next) return;
+     next.focus();
+     // テキスト系は全選択しておくと上書きしやすい
+     if (next.select && next.tagName === 'INPUT') {
+       try { next.select(); } catch(_) {}
+     }
+   }
+ 
+  // ===== 結合先の衝突 事前チェック =====
+  function precheckMergeConflict(){
+    // 所要時間（H/M）→ 分に変換（save ロジックと同じ仕様）
+    const hRaw = (f.durationH?.value ?? '').trim();
+    const mRaw = (f.durationM?.value ?? '').trim();
+    const h = hRaw ? parseInt(toHalfWidthNum(hRaw), 10) : 0;
+    const m = mRaw ? parseInt(toHalfWidthNum(mRaw), 10) : 0;
+    const okH = Number.isFinite(h) && h >= 0;
+    const okM = Number.isFinite(m) && m >= 0;
+    const total = (okH ? h : 0) * 60 + (okM ? m : 0);
+    const durationMin = total > 0 ? total : '';
+
+    const durNum = Number(durationMin || 0);
+    const spanFromDuration =
+      (Number.isFinite(durNum) && durNum > 0)
+        ? Math.ceil(durNum / 20)
+        : 0;
+
+    let span = spanFromDuration > 0
+      ? spanFromDuration
+      : Math.max(1, parseInt(f.mergeSpan?.value || '1', 10));
+
+    const merge = span > 1;
+    if (!merge) return false; // 1枠なら衝突チェック不要
+
+    // この firstKey / keys は openEditor の外側で既に定義済み
+    const data = loadWeek(currentMonday);
+
+    // save ロジック内と同じ seqKeys をここにも定義
+    function seqKeysLocal(headKey, n){
+      const {d,day,section,idx} = parseKey(headKey);
+      const keysArr = [headKey];
+      for(let i=1;i<n;i++){
+        keysArr.push(`${d}|${day}|${section}|${idx+i}`);
+      }
+      return keysArr;
+    }
+
+    const keysToUse =
+      keys.length>1
+        ? keys.slice().sort((a,b)=> a.localeCompare(b))
+        : seqKeysLocal(firstKey, span);
+
+    for(let i=1;i<keysToUse.length;i++){
+      const d = data[keysToUse[i]];
+      if (d && !d.tail) {
+        alert('結合先に既存データがあります。\n時間を短くするか、結合先の枠をクリアしてから保存してください。');
+        return true;  // 衝突あり
+      }
+    }
+    return false; // 衝突なし
+  }
+ 
+   function saveFromKeyboard(){
+     // ★ まず衝突チェック
+     if (precheckMergeConflict()) {
+       // 衝突あり → ダイアログは閉じない
+       return;
+     }
+
+     try { document.activeElement?.blur(); } catch(_) {}
+     editor.returnValue = 'save';
+     editor.close(); // close ハンドラ側で save ロジック実行
+   }
+
+  // 保存ボタンのクリックも saveFromKeyboard() に統一
+  (function(){
+    if (saveBtn) {
+      saveBtn.onclick = (e) => {
+        e.preventDefault();   // 既定の「即 close」を止める
+        saveFromKeyboard();  // 事前チェック付き保存
+      };
+    }
+  })();
+
+ 
+  // 既存ハンドラ多重登録防止
+  if (editor.__editorKeyHandler) {
+    editor.removeEventListener('keydown', editor.__editorKeyHandler, true);
+  }
+
+  editor.__editorKeyHandler = function(e){
+    if (e.isComposing) return;
+
+    const target = e.target;
+    const tag = (target.tagName || '').toLowerCase();
+
+    // --- Tab / Shift+Tab：フォーカスを editor 内に閉じ込める ---
+    if (e.key === 'Tab') {
+      const focusables = Array.from(
+        editor.querySelectorAll(
+          'button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(el => !el.disabled && el.offsetParent !== null);
+
+      if (!focusables.length) return;
+
+      const idx = focusables.indexOf(target);
+      let nextIdx = idx;
+
+      if (e.shiftKey) {
+        // Shift+Tab：先頭なら末尾へ
+        nextIdx = idx <= 0 ? focusables.length - 1 : idx - 1;
+      } else {
+        // Tab：末尾なら先頭へ
+        nextIdx = idx === focusables.length - 1 ? 0 : idx + 1;
+      }
+
+      e.preventDefault();
+      focusables[nextIdx].focus();
+      return;
+    }
+
+    // --- 眼：R/L/B 1文字ショートカット ---
+    if (target === f.eye &&
+        !e.ctrlKey && !e.metaKey && !e.altKey &&
+        e.key.length === 1) {
+      const ch = e.key.toLowerCase();
+      const map = { r: 'R', l: 'L', b: 'B' };
+      const v = map[ch];
+      if (v) {
+        e.preventDefault();
+        f.eye.value = v;
+        moveFocusNext(f.eye);
+        return;
+      }
+    }
+
+    // --- 入/外/当：io セレクト 1文字ショートカット ---
+    if (target === f.io &&
+        !e.ctrlKey && !e.metaKey && !e.altKey &&
+        e.key.length === 1) {
+      const ch = e.key.toLowerCase();
+      const map = { n: '入', g: '外', t: '当' };
+      const v = map[ch];
+      if (v) {
+        e.preventDefault();
+        f.io.value = v;
+        moveFocusNext(f.io);
+        return;
+      }
+    }
+
+    // --- 術者セレクト：ショートカット（設定から変更可能） ---
+    if (target === f.surgeon &&
+        !e.ctrlKey && !e.metaKey && !e.altKey &&
+        e.key.length === 1) {
+
+      const ch = e.key.toLowerCase();
+      if (!/[a-z]/.test(ch)) {
+        // a〜z以外は無視
+        return;
+      }
+
+      // 1〜2文字バッファでコード判定
+      window.__surKeyBuf = (window.__surKeyBuf || '') + ch;
+      if (window.__surKeyBuf.length > 2) {
+        window.__surKeyBuf = window.__surKeyBuf.slice(-2);
+      }
+
+      const map = window.__surgeonShortcutMap || {};
+      let matchedName = null;
+
+      // まず 2文字コード（mi / mo / など）を優先
+      const buf = window.__surKeyBuf;
+      if (buf.length >= 2 && map[buf.slice(-2)]) {
+        matchedName = map[buf.slice(-2)];
+      } else if (map[buf.slice(-1)]) {
+        // 次に1文字コード（k / o / s など）
+        matchedName = map[buf.slice(-1)];
+      }
+
+      if (matchedName) {
+        e.preventDefault();
+        f.surgeon.value = matchedName;
+        window.__surKeyBuf = ''; // 使い切ったのでクリア
+        moveFocusNext(f.surgeon);
+      } else {
+        // どのコードにも当たらなければ、最後の1文字だけ残して様子を見る
+        if (window.__surKeyBuf.length > 1) {
+          window.__surKeyBuf = window.__surKeyBuf.slice(-1);
+        }
+      }
+      return;
+    }
+
+    // --- Enterキーの挙動（ボタン対応版） ---
+    if (e.key === 'Enter') {
+
+      // ① メニューボタン上の Enter はボタン動作にする
+      if (clearBtn && target === clearBtn) {
+        e.preventDefault();
+        // 既に上の IIFE で onclick 定義済みなので click() で同じ動き
+        clearBtn.click();
+        return;
+      }
+      if (cancelBtn && target === cancelBtn) {
+        e.preventDefault();
+        editor.returnValue = 'cancel';
+        editor.close();
+        return;
+      }
+      if (saveBtn && target === saveBtn) {
+        e.preventDefault();
+        // クリックと同じ経路で処理
+        saveFromKeyboard();
+        return;
+      }
+
+      // ② Ctrl+Enter / Cmd+Enter → 保存
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof saveFromKeyboard === 'function') {
+          saveFromKeyboard();
+        }
+        return;
+      }
+
+      // ③ textarea + Shift+Enter → 改行（メモなど）
+      if (tag === 'textarea' && e.shiftKey) return;
+
+      // ④ それ以外の Enter は「次の項目へ移動」、フォーム送信はさせない
+      e.preventDefault();
+      moveFocusNext(target);
+      return;
+    }
+
   };
-  editor.addEventListener('keydown', onEnterToSave, true);
+
+  editor.addEventListener('keydown', editor.__editorKeyHandler, true);
 
 editor.addEventListener('close', function handler(){
   editor.removeEventListener('close', handler);
@@ -4751,7 +5171,14 @@ editor.addEventListener('close', function handler(){
         proc1: f.proc1.value.trim(),
         proc2: f.proc2.value.trim(),
         proc3: f.proc3.value.trim(),
-        surgeon: f.surgeon.value.trim(),
+         surgeon: (() => {
+           const sel  = f.surgeon;
+           const free = f.surgeonFree;
+           const freeVal = free ? free.value.trim() : '';
+           if (freeVal) return freeVal;   // フリー入力があればそれを優先
+           const selVal  = sel ? sel.value.trim() : '';
+           return selVal;                 // なければセレクトの値
+         })(),
         note:  f.note.value.trim(),
         ga: !!f.ga.checked,
         // 所要時間（H/M）：全角OK → 半角数値化 → 分へ合算
@@ -5445,7 +5872,12 @@ document.addEventListener('keydown',(e)=>{
   if(k==='delete' || k==='backspace'){
     e.preventDefault();
      const el = getActiveSlot?.(); if(!el) return;
- 
+
+    // ★ ここで確認ダイアログをはさむ
+    if (!window.confirm('この枠の内容をクリアします。よろしいですか？')) {
+      return; // キャンセルなら何もしない
+    }
+	
     // ★ この削除操作全体を「Undo 1ステップ」にまとめる
     beginUndoBatch();
     try { 
