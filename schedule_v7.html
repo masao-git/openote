@@ -646,7 +646,17 @@ label[for="mergeSlots"] {
   margin-right: 0;
 }
 
-	
+	.proc2-badge {
+  background: #e0f2fe;   /* 薄い青 */
+  color: #0369a1;        /* 濃い青 */
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  display: inline-block;
+  line-height: 1.2;
+}
+
 	
   </style>
   </head>
@@ -707,7 +717,12 @@ label[for="mergeSlots"] {
 
   <!-- 術式1・2 -->
   <label>術式1</label><input name="proc1" />
-  <label>術式2</label><input name="proc2" />
+   <label>
+     術式2
+     <span style="font-size:11px;color:#777;margin-left:4px;">（デバイス系）</span>
+   </label>
+   <input name="proc2"
+          placeholder="例）iStent / アーメド / Preserflo / 涙点プラグ など" />
 
   <!-- 術式3は非表示のまま維持（必要ならそのまま残す） -->
   <label style="display:none">術式3</label>
@@ -3365,7 +3380,7 @@ const SLOT_FIELD_DEFS = [
   // ★ 最重要
   { key: 'io',    priority: 1 }, // 入 / 外 / 当
   { key: 'name',  priority: 1 }, // 氏名
-  { key: 'pid',   priority: 2 }, // ID（#なし10桁）
+  { key: 'pid',   priority: 3 }, // ID（#なし10桁）
   { key: 'age',   priority: 3 }, // 年齢（半角数字3桁）  
   { key: 'eye',   priority: 1 }, // 眼（R/L/B）
   { key: 'iol',   priority: 1 }, // IOL種類・度数
@@ -3373,11 +3388,11 @@ const SLOT_FIELD_DEFS = [
 
   // ★ 余裕があれば足す
 
-  { key: 'proc2', priority: 3 }, // 術式2
+  { key: 'proc2', priority: 1 }, // 術式2
   { key: 'proc3', priority: 3 }, // 術式3
 
   // ★ かなり余裕があるときだけ
-  { key: 'note',  priority: 3 }, // 備考
+  { key: 'note',  priority: 1 }, // 備考
   // 必要なら age もここに追加可能
   // { key: 'age',   priority: 3 },
 ];
@@ -3411,6 +3426,7 @@ function getSlotMaxPriority(width){
  * 返り値: 「入｜氏名｜ID｜眼｜IOL｜術式1｜…」のような「｜」区切りテキスト
  *   （術者はここには含めない：右端バッジで表示）
  */
+ // UNUSED: v7 では未使用（削除候補）
 function buildSlotMainText(data, width){
   if (!data) return '';
 
@@ -3822,15 +3838,24 @@ function renderSlotColumns(leftEl, parts){
     const col = document.createElement('span');
     col.className = 'slot-col slot-col-' + key;  // ★ ここがポイント：「項目名ベース」
 
-    // 眼だけ eye-mark で強調
-    if (key === 'eye' && (label === 'R' || label === 'L' || label === 'B')){
-      const eye = document.createElement('span');
-      eye.className = 'eye-mark';
-      eye.textContent = label;
-      col.appendChild(eye);
-    } else {
-      col.textContent = label;
-    }
+     // 眼だけ eye-mark で強調
+     if (key === 'eye' && (label === 'R' || label === 'L' || label === 'B')){
+       const eye = document.createElement('span');
+       eye.className = 'eye-mark';
+       eye.textContent = label;
+       col.appendChild(eye);
+     }
+     // 術式2（デバイス系）はバッジ表示
+     else if (key === 'proc2') {
+       const badge = document.createElement('span');
+       badge.className = 'proc2-badge';
+       badge.textContent = label;
+       col.appendChild(badge);
+     }
+     // それ以外は通常テキスト
+     else {
+       col.textContent = label;
+     }
 
     leftEl.appendChild(col);
   });
@@ -4138,12 +4163,7 @@ function fmtContent(d){
 
 // === ここから：週表示スロット用「優先表示」テキスト生成機能 ===
 
-
-/**
- * 1つの .slot 要素に対して、優先表示テキストと術者バッジを反映する
- *  - el   : .slot 要素
- *  - data : loadWeek() で得られる1件分データ（tail は除外したいときは null を渡す）
- */
+// UNUSED: v7 では未使用（削除候補） 
 function applySlotMainTextToSlot(el, data){
   if (!el) return;
   const leftEl = el.querySelector('.content-left');
