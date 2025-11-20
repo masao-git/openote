@@ -550,12 +550,6 @@ label[for="mergeSlots"] {
   background-color: rgba(0, 0, 255, 0.04);  /* ほんのり青系でもグレーでも */
   outline: none;
 }
-
-/* 青枠＋選択が両方付いているとき */
-.slot.focused.multiSelected {
-  /* 青枠は multiRangeOutline に任せるのでここは背景だけでもOK */
-}
-
 /* スロットの縦並びコンテナ */
 .slots {
   position: relative; /* 青枠を中で絶対配置するため */
@@ -565,11 +559,13 @@ label[for="mergeSlots"] {
   position: absolute;
   left: 0;
   right: 0;
-  border: 2px solid #007bff;
-  border-radius: 4px;
-  pointer-events: none;   /* クリックを邪魔しない */
+  top: 0;              /* ← 重要：外周を枠位置に合わせるため */
+  border: 2px solid #2563eb;      /* ← 単枠と同じ色へ統一 */
+  border-radius: 0px;              /* ← 角なし（単枠に合わせる） */
+  pointer-events: none;
   box-sizing: border-box;
 }
+
 
   </style>
   <style>
@@ -1523,6 +1519,17 @@ let appLists = loadSettings();
 function enterDayFocus(dayEl) {
   if (!dayEl) return;
 
+  // ★ focus時：複数選択と外枠を完全クリア（ダミー青枠対策）
+  document.querySelectorAll('.multiRangeOutline').forEach(el => el.remove());
+  document.querySelectorAll('.slot.multiSelected, .slot.is-selected')
+    .forEach(el => {
+      el.classList.remove('multiSelected');
+      el.classList.remove('is-selected');
+    });
+  if (window.multiSelected) {
+    try { window.multiSelected.clear(); } catch(_){}
+  }
+
   // --- 状態を保存 ---
   window.focusDate = dayEl?.dataset?.date || window.focusDate; // ← ★これ
   window.__weekStartBeforeFocus = document.getElementById('weekPicker')?.value;
@@ -1577,6 +1584,18 @@ function enterDayFocus(dayEl) {
 }
 
 function exitDayFocus() {
+
+  // ★ 週表示へ戻るときも残骸を確実に削除
+  document.querySelectorAll('.multiRangeOutline').forEach(el => el.remove());
+  document.querySelectorAll('.slot.multiSelected, .slot.is-selected')
+    .forEach(el => {
+      el.classList.remove('multiSelected');
+      el.classList.remove('is-selected');
+    });
+  if (window.multiSelected) {
+    try { window.multiSelected.clear(); } catch(_){}
+  }
+
   // ---- フラグ（呼び元で制御）----
   const skipRestore = !!window.__skipRestoreOnExit;         // Ctrl+, など「復元せずに外部で合わせる」用
   window.__skipRestoreOnExit = false;
@@ -2277,19 +2296,17 @@ function toISODate(d){
 
   // ===== 描画 =====
   function render(){
-    // ★ 初回描画（F5直後）は“最上部スナップ”を予約（中央寄せは抑止）
-    if (!window.__firstRenderSnapped) {
-      window.__suppressCenterN = (window.__suppressCenterN|0) + 2;
-      window.__snapTopOnNextRender = true;
-      // currentMonday は常に週の月曜想定。未設定でも startOfWeek で月曜に寄せる
-      const baseMon = (typeof startOfWeek==='function')
-        ? startOfWeek(window.currentMonday || new Date())
-        : new Date(new Date().setDate(new Date().getDate() - ((new Date().getDay()+6)%7)));
-      window.__snapTopTargetISO = (typeof dateISO==='function')
-        ? dateISO(baseMon)
-        : baseMon.toISOString().slice(0,10);
-      window.__firstRenderSnapped = true;
-    }  
+
+if (!window.__initialRenderDone) {
+  window.__initialRenderDone = true;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {          // ← ２回遅延が必須
+      const box = document.scrollingElement;
+      if (box) box.scrollTop = 0;
+    });
+  });
+}
 　　applyDatalists(appLists);
    window.__setWeekdayFromISO?.(document.getElementById('weekPicker')?.value);
   if (document.body.classList.contains('dayFocus') && window.focusDate) {
@@ -4501,7 +4518,8 @@ function updateMultiRangeOutline(){
     el.closest('.slots') === container &&
     !el.classList.contains('hiddenRow')
   );
-  if (targets.length === 0) return;
+ // 単枠 or 0枠なら外周枠は不要（青枠は .slot.focused に任せる）
+ if (targets.length <= 1) return;
 
   const crect = container.getBoundingClientRect();
   let top = Infinity;
@@ -4548,9 +4566,9 @@ document.addEventListener('click', (e) => {
     clearMultiSelection();
     findRangeSameDay(cur, slot).forEach(addMultiSelect);
   } else {
-    // 通常クリック：この1枠だけ
+    // 通常クリック：マルチ選択はリセットのみ（単枠は .focused に任せる）
     clearMultiSelection();
-    addMultiSelect(slot);
+    // ★ ここでは addMultiSelect は呼ばない
   }
 
   // アクティブ枠（青枠）の更新
