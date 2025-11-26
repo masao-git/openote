@@ -23,7 +23,14 @@
     .day-note-input{width:100%;min-width:0;height:auto;line-height:1.4;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;white-space:pre-wrap;word-break:break-word;overflow:auto;resize:none;min-height:2.8em;max-height:2.8em}
     .day-note-input:focus{border-color:#2563eb;box-shadow:0 0 0 1px rgba(37,99,235,.2)}
     .section-title{margin:0;padding:2px 6px;font-size:12px;font-weight:600;border-top:1px solid #999;border-bottom:1px solid #999;background:#f8f8f8;display:flex;align-items:center}
-    .slots{display:grid;grid-auto-rows:var(--slot-h);row-gap:var(--gap);padding:0;position:relative}
+.slots{
+  display:grid;
+  /* ★ 最低高さは --slot-h、必要なら中身に合わせて伸びる */
+  grid-auto-rows:minmax(var(--slot-h), auto);
+  row-gap:var(--gap);
+  padding:0;
+  position:relative;
+}
     .slot{border-top:1px solid #d0d5dd;padding:3px 5px;background:#fff;display:grid;grid-template-columns:40px 1fr;gap:6px;align-items:start;cursor:grab;position:relative}
     .slot.empty{opacity:.8;background:#fbfbfb}
     .time{font-weight:700;text-align:left;padding:0 4px 0 2px;user-select:none;cursor:pointer}
@@ -312,6 +319,29 @@
   margin-top: auto; /* 結合バッジの下側に寄せる用途（必要なら残す） */
 }
 
+/* 局麻バッジ（全麻と同じ形・大きさで色だけ緑） */
+.local-badge{
+  display: inline-block;        /* 1文字ずつ縦崩れ防止 */
+  writing-mode: horizontal-tb;  /* ★強制的に横書きにする */
+  white-space: nowrap;          /* 改行なし */
+
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 6px;
+  border-radius: 9999px;
+
+  border: 1px solid #22c55e;    /* 緑系の枠線 */
+  background: #dcfce7;          /* 薄い緑 */
+  color: #166534;               /* 濃い緑 */
+
+  pointer-events: none;
+  user-select: none;
+
+  margin-top: auto;             /* 所要時間バッジの下側に寄せる（ga-badge と同じ） */
+}
+
+
+
 /* 感染症バッジ：全麻バッジと同じような横長ピル */
 .infection-badge{
   display: inline-block;
@@ -320,32 +350,32 @@
 
   font-size: 11px;
   line-height: 1;
-  padding: 1px 6px;
+  padding: 0px 6px;              /* コメント行の高さをあまり増やさないように縦方向を少し薄く */
   border-radius: 9999px;
-  border: 1px solid #a855f7;   /* 紫系の枠線 */
-  background: #f5f3ff;         /* 薄い紫の背景 */
-  color: #6b21a8;              /* 濃いめの紫文字 */
+  border: 1px solid #a855f7;     /* 紫系の枠線 */
+  background: #f5f3ff;           /* 薄い紫の背景 */
+  color: #6b21a8;                /* 濃いめの紫文字 */
 
   pointer-events: none;
   user-select: none;
 
-   margin-left: 0;
-   margin-top: 4px;             /* GAバッジの下に少し空けて表示 */
+  margin-left: 0;
+  margin-top: 0;                 /* コメントと同じ行内に入るので、上マージンは不要 */
+  vertical-align: baseline;      /* 行のベースラインに揃える */
 }
 
-/* 備考内に入れる小さな紫ピル（インライン） */
-.infection-badge-note{
-  display:inline-block;
-  font-size:11px;
-  line-height:1;
-  padding:1px 6px;
-  border-radius:9999px;
-  border:1px solid #a855f7;
-  background:#f5f3ff;
-  color:#6b21a8;
-  white-space:nowrap;
-  vertical-align:baseline;
-  margin:0 6px 0 0; /* この後に本文が来るので右だけ空ける */
+
+
+/* 通常画面では感染バッジを非表示 */
+.infection-badge {
+  display: none !important;
+}
+
+/* 印刷時だけ感染バッジを表示 */
+@media print {
+  .infection-badge {
+    display: inline-block !important;
+  }
 }
 
 /* 祝日/休止を優先したいなら何もしない（←このまま） */
@@ -566,12 +596,12 @@ label[for="mergeSlots"] {
   box-sizing: border-box;
 }
 .proc2-badge {
-  background: #e0f2fe;   /* 薄い青 */
-  color: #0369a1;        /* 濃い青 */
-  padding: 1px 4px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  font-weight: 600;
+  background: #bfdbfe;   /* ★ 少し濃い青：視認性UP */
+  color: #1e3a8a;        /* ★ 濃紺：可読性UP */
+  padding: 2px 6px;      /* ★ バッジ感UP（厚みUP） */
+  border-radius: 0;      /* ★ 角を直角に */
+  font-size: 0.95em;     /* ★ 文字サイズUP（明確に見える） */
+  font-weight: 700;      /* ★ 太字UP */
   display: inline-block;
   line-height: 1.2;
 }
@@ -753,20 +783,32 @@ label[for="mergeSlots"] {
   </div>
 
   <!-- 感染症 -->
-<label>感染症</label>
-<div style="display:flex;gap:12px;align-items:center">
-  <label><input type="radio" name="infection" value="なし"> なし</label>
-  <label><input type="radio" name="infection" value="あり"> あり</label>
-  <label><input type="radio" name="infection" value=""> 未選択</label>
-</div>
+  <label>感染症</label>
+  <div style="display:flex;gap:12px;align-items:center">
+    <label><input type="radio" name="infection" value="なし"> なし</label>
+    <label><input type="radio" name="infection" value="あり"> あり</label>
+    <label><input type="radio" name="infection" value=""> 未選択</label>
+  </div>
 
   <!-- 全麻 -->
-  <label for="ga">
-    全麻
-    <input type="checkbox" id="ga" name="ga" style="margin-right:6px;">
+  <label>全麻</label>
+  <div>
+    <input type="checkbox" id="ga" name="ga">
+  </div>
+
+  <!-- 局麻（斜視等のみ） -->
+  <label>
+    局麻
+    <span style="font-size:11px;color:#555;margin-left:4px;">（斜視等のみ）</span>
   </label>
-  <div></div>
+  <div>
+    <input type="checkbox" id="local" name="local">
+  </div>
+
 </div>
+
+
+
 
     <menu style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button type="button" value="clear" style="color:#b91c1c">クリア</button>
@@ -3784,10 +3826,14 @@ function paintSlotsFromStore(){
 
         renderSlotColumns(left, parts);
 
-        // --- 単枠/2枠：左カラム全体を走査し「※（感染）/※(感染)/※感染」をバッジ化 ---
+        // --- 備考側の感染バッジ化は廃止（感染バッジは時刻下に統一） ---
         (function badgeifyInfectionInNote() {
+          // 仕様変更：感染バッジはすべて時刻側の .infection-badge に集約するため、
+          // 備考欄でのバッジ化ロジックは実行しない。
+          return;
+
           const spanN = Number((data && data.span) || 1);
-          if (spanN > 2) return;                         // 3枠以上は時刻下バッジで扱う
+          if (spanN > 2) return;
           if (!(data && data.infection === 'あり')) return;
 
           const leftRoot =
@@ -3899,43 +3945,47 @@ function paintSlotsFromStore(){
   })();
   // ▲▲ ここまで ▼▼
  
-    // ▼▼ 感染症バッジ（3枠以上の結合headのみ） ：描画完了後にGA直下へ ▼▼
-    // 既存の感染症バッジを一旦削除
-    el.querySelectorAll('.infection-badge')?.forEach(n => n.remove());
+      // ▼▼ 感染症バッジ（すべての「感染あり」スロット） ：備考列の先頭に表示 ▼▼
+      // 既存の感染症バッジを一旦削除
+      el.querySelectorAll('.infection-badge')?.forEach(n => n.remove());
 
-    const span = Number(data.span || 1);
-    const isMergedHead3Plus = !!data.head && span >= 3;
-    const isInf = data.infection === 'あり';
+      const isInf = data.infection === 'あり';
 
-    if (isMergedHead3Plus && isInf) {
-      // rAFで他バッジ（枠数・GA）の描画完了を待ってから差し込む
-      requestAnimationFrame(() => {
-        // まだ存在していれば（再描画で消えていないか）だけ実行
-        if (!document.body.contains(el)) return;
+      if (isInf) {
+        // rAFで他要素（本文・備考）の描画完了を待ってから差し込む
+        requestAnimationFrame(() => {
+          if (!document.body.contains(el)) return;
 
-        const badge = document.createElement('span');
-        badge.className = 'infection-badge';
-        badge.textContent = '感染'; // 2文字
+          const badge = document.createElement('span');
+          badge.className = 'infection-badge';
+          badge.textContent = '感染'; // 2文字
 
-        // 1) GAバッジがあれば → その直後（=「枠数」「GA」の次に「感染」）
-        const gaBadge = el.querySelector('.ga-badge');
-        if (gaBadge && gaBadge.parentElement) {
-          gaBadge.insertAdjacentElement('afterend', badge);
-          return;
-        }
-        // 2) GAが無ければ、枠数バッジ列の最後に追加（=「枠数」の次）
-        //   ※ よく使われるクラス名の候補を順に探し、最後の要素の後ろに付ける
-        const spanBadge =
-          el.querySelector('.merge-badge, .span-badge, .mergeSpan-badge, .badge-merge');
-        if (spanBadge && spanBadge.parentElement) {
-          spanBadge.insertAdjacentElement('afterend', badge);
-          return;
-        }
-        // 3) それも無ければ、時刻セルの末尾にフォールバック
-        (el.querySelector('.time') || el).appendChild(badge);
-      });
-    }
-    // ▲▲ ここまで感染症バッジ ▲▲
+          // 1) 備考列（slot-col-note）があれば、その先頭にバッジを入れる
+          const noteCol = el.querySelector('.slot-col-note');
+          if (noteCol) {
+            // コメントと同じ行の一番左に出したいので先頭に差し込む
+            noteCol.insertAdjacentElement('afterbegin', badge);
+            // バッジとテキストがくっつき過ぎないように半角スペースを1つ
+            noteCol.insertAdjacentText('afterbegin', ' ');
+            return;
+          }
+
+          // 2) 備考列がない場合：content-left の末尾に簡易 note 列を作ってそこに入れる
+          const left = el.querySelector('.content-left');
+          if (left) {
+            const wrapper = document.createElement('span');
+            wrapper.className = 'slot-col-note';
+            wrapper.appendChild(badge);
+            left.appendChild(wrapper);
+            return;
+          }
+
+          // 3) それも無ければ最後の保険として time の末尾に付ける
+          (el.querySelector('.time') || el).appendChild(badge);
+        });
+      }
+      // ▲▲ ここまで感染症バッジ ▲▲
+
     } else if (data && data.tail) {
       // tail 行はあとでまとめて非表示にする
       left.textContent = '（空）';
@@ -4789,13 +4839,31 @@ if (timeEl){
         b.title = label;
         timeEl.appendChild(b);
 
-   // ② 全麻バッジ（ga が true かつ span>=4 の時だけ）
-        if (data.ga && span >= 3){
-          const g = document.createElement('span');
-          g.className = 'ga-badge';
-          g.textContent = '全麻';
-          timeEl.appendChild(g);  // margin-top:auto で最下段に来る
-        }
+// ② 全麻 / 局麻バッジ（span>=3 の head スロットに 1 個だけ）
+(() => {
+  // 既存のバッジを一旦クリア（再描画時の重複防止）
+  el.querySelectorAll('.ga-badge, .local-badge').forEach(b => b.remove());
+
+  const spanNum = Number(data.span || 1);
+  // head が付いている結合枠（3枠以上）の先頭だけを対象にする
+  const isHead = data.head !== false && data.head != null; // head が true のもの
+  const isMergedHead3Plus = spanNum >= 3 && isHead;
+
+  if (!isMergedHead3Plus) return;
+
+  if (data.ga) {
+    const g = document.createElement('span');
+    g.className = 'ga-badge';
+    g.textContent = '全麻';
+    timeEl.appendChild(g);  // margin-top:auto で最下段に来る
+  } else if (data.local) {
+    const l = document.createElement('span');
+    l.className = 'local-badge';
+    l.textContent = '局麻';
+    timeEl.appendChild(l);  // 全麻と同じ位置
+  }
+})();
+	
       }
 
       // 後続の “見た目” 行は隠す
@@ -4964,9 +5032,12 @@ function openEditor(keys){
    if (f.mergeSlots) {
      f.mergeSlots.checked = initSpan > 1;
    }
- 
+
    f.ga.checked = !!first.ga;
-   
+   if (f.local) {
+     f.local.checked = !!first.local;   // ★ 局麻の初期値反映
+   }
+
 // 感染症フラグ（なし・あり・未選択）
 // → first.infection が 'なし' か 'あり' ならその値
 // → それ以外（空/undefined/null）は "未選択"（value=""）にする
@@ -5352,16 +5423,17 @@ editor.addEventListener('close', function handler(){
         proc1: f.proc1.value.trim(),
         proc2: f.proc2.value.trim(),
         proc3: f.proc3.value.trim(),
-         surgeon: (() => {
-           const sel  = f.surgeon;
-           const free = f.surgeonFree;
-           const freeVal = free ? free.value.trim() : '';
-           if (freeVal) return freeVal;   // フリー入力があればそれを優先
-           const selVal  = sel ? sel.value.trim() : '';
-           return selVal;                 // なければセレクトの値
-         })(),
+        surgeon: (() => {
+          const sel  = f.surgeon;
+          const free = f.surgeonFree;
+          const freeVal = free ? free.value.trim() : '';
+          if (freeVal) return freeVal;   // フリー入力があればそれを優先
+          const selVal  = sel ? sel.value.trim() : '';
+          return selVal;                 // なければセレクトの値
+        })(),
         note:  f.note.value.trim(),
         ga: !!f.ga.checked,
+        local: !!(f.local && f.local.checked),  // ★ 局麻フラグを保存
         // 所要時間（H/M）：全角OK → 半角数値化 → 分へ合算
         duration: (() => {
           const hRaw = (f.durationH?.value ?? '').trim();
@@ -5388,21 +5460,20 @@ editor.addEventListener('close', function handler(){
       let span = spanFromDuration > 0 ? spanFromDuration : Math.max(1, parseInt(f.mergeSpan?.value || '1', 10));
       const merge = span > 1;
 
-      // ▼ 単枠/2枠：備考の先頭に「（感染）」を自動付与/削除
+      // ▼ 単枠/2枠：備考内の「※（感染）/※感染/（感染）/感染」を完全削除
+      //   → 感染情報は時刻下バッジに一本化するため、note には残さない
       if (span <= 2) {
         const note0 = (nd.note || '').trim();
-        let cleaned = note0
+        const cleaned = note0
+          // 先頭の「※（感染）」「※感染」「（感染）」「感染」＋後ろの空白を削除
           .replace(/^(?:※\s*)?(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u, '')
-          .replace(/(?:^|\s)(?:※\s*)?感染(?!\S)/u, (m) => m.startsWith(' ') ? ' ' : '');
-        if (nd.infection === 'あり') {
-          if (!/^（\s*感染\s*）/u.test(note0)) {
-            nd.note = cleaned ? `（感染） ${cleaned}` : '（感染）';
-          } else {
-            nd.note = note0;
-          }
-        } else {
-          nd.note = cleaned;
-        }
+          // 行末や単独で付いている「※感染」「感染」を削除
+          .replace(/(?:^|\s)(?:※\s*)?感染(?!\S)/u, (m) => (m.startsWith(' ') ? ' ' : ''))
+          // 余分な空白を整理
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        nd.note = cleaned;
       }
 
       const data = loadWeek(currentMonday);
@@ -5441,21 +5512,17 @@ editor.addEventListener('close', function handler(){
 
       // ====== ★ 後続枠の時刻再計算（押し出し） ======
       try {
-        const { d, day, section, idx } = parseKey(firstKey);
-        const baseStart = (CONFIG?.[day]?.[section]?.start) || '09:30';
-        const headHHMM  = getSlotTimeHHMMEx(baseStart, currentMonday, day, section, idx);
-
-        const nextIdx = idx + Math.max(1, span);
-        const effMinutes =
-          (Number.isFinite(durNum) && durNum > 0) ? durNum : (Math.max(1, span) * 20);
-        const nextHHMM = addMinutes(headHHMM, effMinutes);
-
-        clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
-        setTimeOverride(currentMonday, day, section, nextIdx, nextHHMM);
+        const { day, section } = parseKey(firstKey);
+        if (day && section != null) {
+          // その日・そのセクションの duration / 結合枠アンカーを丸ごと組み直す
+          rebuildDurationAnchorsForDaySection(day, section, data);
+        }
       } catch (e) {
         console.warn('time override adjust skipped:', e);
       }
-      debugTimeOverrides('after SAVE duration');
+      if (typeof debugTimeOverrides === 'function') {
+        debugTimeOverrides('after SAVE duration');
+      }
 
       // --- フォーカス維持のための退避 ---
       const wasFocus = document.body.classList.contains('dayFocus');
@@ -5516,78 +5583,100 @@ editor.addEventListener('close', function handler(){
     }
 
     if (editor.returnValue === 'clear') {
-      // ここに「元の clear ブロック」の中身をそのまま残してください
-      // （今 already 入っている clear ロジックをこの中に置けばOK）
-      const data = loadWeek(currentMonday);
-      const dHead = data[firstKey];
-
-      // ★削除前の情報を使って、所要時間アンカーを片付ける
-      cleanupTimeOverrideOnDelete(firstKey, data);
-
-      // ★ 結合枠削除時：残ったアンカーを除去（後続の時間を元に戻す）
+      // ★ CLEAR も 1 アクションとしてまとめて Undo できるようにバッチ化
+      beginUndoBatch();
       try {
+        const data   = loadWeek(currentMonday);
+        const dHead  = data[firstKey];
+        const parsed = parseKey(firstKey); // { d, day, section, idx }
+        const { d, day, section, idx } = parsed || {};
+
+        // ★ 削除前の情報を使って、所要時間アンカーを片付ける
+        cleanupTimeOverrideOnDelete(firstKey, data);
+
+        // --- 実データの削除（head なら span 分まとめて、単枠なら 1 つ） ---
         if (dHead && dHead.head) {
-          const { d, day, section, idx } = parseKey(firstKey);
           const span = Number(dHead.span || 1);
-          clearTimeOverrideFrom(currentMonday, day, section, idx + span);
+          for (let i = 0; i < span; i++) {
+            const k = `${d}|${day}|${section}|${idx + i}`;
+            delete data[k];
+          }
         } else {
-          const { d, day, section, idx } = parseKey(firstKey);
-          clearTimeOverrideFrom(currentMonday, day, section, idx + 1);
+          delete data[firstKey];
         }
-      } catch(e) {
-        console.warn("clear-time-override-failed:", e);
-      }
 
-      if(dHead && dHead.head){
-        const {d,day,section,idx} = parseKey(firstKey);
-        for(let i=0;i<(dHead.span||1);i++){
-          const k = `${d}|${day}|${section}|${idx+i}`;
-          delete data[k];
+        // ★ 結合枠クリア後：この day/section のアンカーをまとめて再構築
+        try {
+          if (day != null && section != null) {
+            rebuildDurationAnchorsForDaySection(day, section, data);
+          }
+        } catch (e) {
+          console.warn('rebuild-after-clear failed:', e);
         }
-      }else{
-        delete data[firstKey];
-      }
-      debugTimeOverrides('before CLEAR saveWeek');
 
-      const wasFocus = document.body.classList.contains('dayFocus');
-      const focusedDayEl = document.querySelector('.day[data-focus="true"]');
-      const focusedDayKey =
-        focusedDayEl?.dataset?.day ??
-        focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
-        null;
-      const lastKeyBefore = window.lastSelectedKey || null;
+        debugTimeOverrides('before CLEAR saveWeek');
 
-      saveWeek(currentMonday, data);
-      if (wasFocus) exitDayFocus();
-      render();
-      if (wasFocus && focusedDayKey){
-        let dayEl =
-          document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
-          Array.from(document.querySelectorAll('.day'))
-            .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
-        if (dayEl) {
-          enterDayFocus(dayEl);
-          if (lastKeyBefore){
-            const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
-            if (sameSlot) setActiveSlot(sameSlot);
-            else ensureInitialSelectionForDay(dayEl);
-          } else {
-            ensureInitialSelectionForDay(dayEl);
+        // --- ここから先はフォーカス維持ロジック（元のまま） ---
+        const wasFocus = document.body.classList.contains('dayFocus');
+        const focusedDayEl = document.querySelector('.day[data-focus="true"]');
+        const focusedDayKey =
+          focusedDayEl?.dataset?.day ??
+          focusedDayEl?.querySelector('.day-header-date')?.textContent?.trim() ??
+          null;
+        const lastKeyBefore = window.lastSelectedKey || null;
+
+        saveWeek(currentMonday, data);
+        if (wasFocus) exitDayFocus();
+        render();
+
+        if (wasFocus && focusedDayKey) {
+          let dayEl =
+            document.querySelector(`.day[data-day="${CSS.escape(focusedDayKey)}"]`) ||
+            Array.from(document.querySelectorAll('.day'))
+              .find(d => d.querySelector('.day-header-date')?.textContent?.trim() === focusedDayKey);
+          if (dayEl) {
+            enterDayFocus(dayEl);
+            if (lastKeyBefore) {
+              const sameSlot = dayEl.querySelector(`.slot[data-key="${CSS.escape(lastKeyBefore)}"]`);
+              if (sameSlot) setActiveSlot(sameSlot);
+              else ensureInitialSelectionForDay(dayEl);
+            } else {
+              ensureInitialSelectionForDay(dayEl);
+            }
           }
         }
-      }
-      const currentFocused2 = document.querySelector('.slot.focused');
-      if (!currentFocused2) {
-        const fallbackDay = document.querySelector('.day[data-focus="true"]') || document.querySelector('.day');
-        if (fallbackDay) {
-          const firstSlot = findFirstSelectableInDay(fallbackDay);
-          if (firstSlot) setActiveSlot(firstSlot);
+
+        const currentFocused2 = document.querySelector('.slot.focused');
+        if (!currentFocused2) {
+          const fallbackDay =
+            document.querySelector('.day[data-focus="true"]') ||
+            document.querySelector('.day');
+          if (fallbackDay) {
+            const firstSlot = findFirstSelectableInDay(fallbackDay);
+            if (firstSlot) setActiveSlot(firstSlot);
+          }
         }
+      } finally {
+        // ★ CLEAR ルート全体を 1 ステップの Undo に確定
+        endUndoBatch();
       }
     }
   }
 }, {once:true});
 }
+
+// 全麻と局麻は相反させる
+document.getElementById("ga").addEventListener("change", () => {
+  if (ga.checked) {
+    local.checked = false;
+  }
+});
+
+document.getElementById("local").addEventListener("change", () => {
+  if (local.checked) {
+    ga.checked = false;
+  }
+});
 
 // 所要時間（duration）を優先して、次スロットの開始時刻アンカーを打つ
 function applyDurationAnchorForHead(headKey, store){
