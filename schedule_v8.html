@@ -33,6 +33,32 @@
 }
     .slot{border-top:1px solid #d0d5dd;padding:3px 5px;background:#fff;display:grid;grid-template-columns:40px 1fr;gap:6px;align-items:start;cursor:grab;position:relative}
     .slot.empty{opacity:.8;background:#fbfbfb}
+	    /* ★ RLセット用：左端の細い縦バー */
+    .slot.rl-set-slot::before{
+      content:"";
+      position:absolute;
+      left:1px;              /* 枠の一番左に寄せる */
+      top:0;                 /* デフォルトは上下いっぱいに伸ばす */
+      bottom:0;
+      width:3px;             /* 細いバー */
+      border-radius:0;       /* ← 角の丸みをなくす */
+      background:#94a3b8;    /* ほんのりグレー寄りの色（他とケンカしにくい） */
+      opacity:0.9;
+      pointer-events:none;   /* クリック判定には干渉しない */
+    }
+    /* セットの一番上だけ、上側に少し隙間を空ける */
+    .slot.rl-set-top::before{
+      border-top-left-radius:999px;
+      border-top-right-radius:999px;
+      top:4px;               /* 上に 4px の余白 → 上の枠とは切れる */
+    }
+    /* セットの一番下だけ、下側に少し隙間を空ける */
+    .slot.rl-set-bottom::before{
+      border-bottom-left-radius:999px;
+      border-bottom-right-radius:999px;
+      bottom:4px;            /* 下に 4px の余白 → 下の枠とは切れる */
+    }
+
     .time{font-weight:700;text-align:left;padding:0 4px 0 2px;user-select:none;cursor:pointer}
     .content{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:13px}
     .content-left{flex:1 1 auto;min-width:0;padding-right:52px}
@@ -729,9 +755,19 @@ label[for="mergeSlots"] {
   </select>
   
   <label>眼</label>
-  <select name="eye">
-    <option value=""></option><option>R</option><option>L</option><option>B</option>
-  </select>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <select name="eye" style="width:5em;">
+      <option value=""></option>
+      <option>R</option>
+      <option>L</option>
+      <option>B</option>
+    </select>
+
+    <label for="rlSet" style="white-space:nowrap; font-size:13px;">
+      <input type="checkbox" id="rlSet" name="rlSet">
+      対眼も連続作成（RLセット）
+    </label>
+  </div>
 
   <!-- 次に術者 -->
   <label>術者</label>
@@ -980,6 +1016,29 @@ label[for="mergeSlots"] {
       // ★ 週表示の初回ジャンプも、即時に中央へスナップ
       target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
       return;
+    }
+
+    // ★ RLセット外周選択中は、⇅の基準を「セットの先頭/末尾」に寄せて
+    //    セット単位でジャンプする
+    if (window.currentRLSetId) {
+      const selEls = Array.from(document.querySelectorAll('.slot.multiSelected'));
+      if (selEls.length >= 1) {
+        // DOM順にソート（上から順）
+        const sorted = selEls.slice().sort((a, b) => {
+          if (a === b) return 0;
+          const pos = a.compareDocumentPosition(b);
+          if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+          if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+          return 0;
+        });
+        if (e.key === 'ArrowDown') {
+          // ↓ の場合：セット末尾を現在地として扱う → 次の停車駅は「セットのすぐ下」
+          cur = sorted[sorted.length - 1];
+        } else if (e.key === 'ArrowUp') {
+          // ↑ の場合：セット先頭を現在地として扱う → 次の停車駅は「セットのすぐ上」
+          cur = sorted[0];
+        }
+      }
     }
 
   // 画面全体の「停車駅」＝“選択可能スロット”のみ（祝日/休止/section-off/off/hiddenRow等を一括除外）
@@ -3010,7 +3069,62 @@ el.addEventListener('click', (e)=>{
         addItem('この枠「より前」を休止', ()=>{ const off = loadDayOff(currentMonday); const cutBefore = Object.assign({}, off[dayKey]?.cutBefore || {}); cutBefore[section] = String(slotHHMM); setDayOff(currentMonday, dayKey, { cutBefore }, { snapshot:true }); render(); });
         addItem('このセクションの「時刻休止」をクリア', ()=>{ const off = loadDayOff(currentMonday); const cutAfter  = Object.assign({}, off[dayKey]?.cutAfter  || {}); const cutBefore = Object.assign({}, off[dayKey]?.cutBefore || {}); delete cutAfter[section]; delete cutBefore[section]; setDayOff(currentMonday, dayKey, { cutAfter, cutBefore }, { snapshot:true }); render(); });
       }
+  // ==== RLセット解除 ====
+  (()=>{
+    try {
+      const data = loadWeek(currentMonday);
+      if (!data || typeof findRLSetRangeForSlot !== 'function') return;
 
+      // このスロットが RLセットに属しているかどうか判定
+      const info = findRLSetRangeForSlot(el, data);
+      const baseRec = info && data[info.baseKey];
+      const rlId = baseRec?.meta?.rlSetId;
+      if (!info || !rlId) return;  // RLセットでなければメニューを出さない
+
+      addItem('RLセットを解除（リンクのみ）', ()=>{
+        if (!confirm('このRLセットのリンクを解除します（枠自体は残ります）。よろしいですか？')) {
+          return;
+        }
+
+        const data2 = loadWeek(currentMonday);
+        const info2 = findRLSetRangeForSlot(el, data2);
+        const base2 = info2 && data2[info2.baseKey];
+        const rlId2 = base2?.meta?.rlSetId;
+        if (!info2 || !rlId2) return;
+
+        // R/L 両ヘッドから rlSetId を外す
+        for (const headKey of info2.keys) {
+          const rec = data2[headKey];
+          if (!rec || !rec.meta) continue;
+          if (rec.meta.rlSetId !== rlId2) continue;
+          delete rec.meta.rlSetId;
+          // metaが空になったらプロパティごと削除してクリーンに
+          if (!Object.keys(rec.meta).length) {
+            delete rec.meta;
+          }
+        }
+
+        saveWeek(currentMonday, data2);
+        render();
+
+        // セット選択状態をクリア
+        if (typeof clearMultiSelection === 'function') {
+          clearMultiSelection();
+        }
+        window.currentRLSetId = null;
+
+        // 操作した枠にフォーカスを戻す
+        const k = el.dataset.key;
+        if (k && typeof setActiveSlot === 'function') {
+          const el2 = document.querySelector(`.slot[data-key="${CSS.escape(k)}"]`);
+          if (el2) setActiveSlot(el2);
+        }
+      });
+    } catch (e) {
+      console.warn('RLセット解除メニューの生成に失敗しました:', e);
+    }
+  })();
+  
       function closeMenu(ev){ if (!menu.contains(ev.target)) { document.removeEventListener('mousedown', closeMenu, true); if (menu.parentNode) menu.parentNode.removeChild(menu); } }
       document.addEventListener('mousedown', closeMenu, true); document.body.appendChild(menu);
     }, {passive:false});
@@ -3513,6 +3627,14 @@ window.addEventListener('resize', () => {
 
 // 「編集」ボタン：選択中（複数対応）→ なければアクティブ → それも無ければ先頭
 editBtn?.addEventListener('click', () => {
+  // ★ RLセット外周選択中は「セット操作モード」とみなし、編集をブロック
+  //   → どちらかの枠をクリックして単枠青枠にしてから編集してもらう
+  if (window.currentRLSetId && document.querySelector('.slot.multiSelected')) {
+    // 必要なら案内を出してもよい（今は静かに無視）
+    // alert('RLセット選択中です。どちらかの枠をクリックしてから編集してください。');
+    return;
+  }
+
   // まず DOM 要素で候補を集める
   const candEls = [];
 
@@ -3763,6 +3885,19 @@ function paintSlotsFromStore(){
   const st = (typeof loadWeek === 'function') ? loadWeek(currentMonday) : {};
   const em = loadEmerg(currentMonday) || {}; // ← 今週の緊急マップを読む
 
+  // ★ RLセット情報を事前に集計（rlSetId → headキー配列）
+  const rlSets = {};
+  Object.keys(st).forEach(k => {
+    const rec = st[k];
+    if (!rec || rec.tail) return;                // tail は対象外（headだけ目印にする）
+    const id = rec.meta && rec.meta.rlSetId;
+    if (!id) return;
+    if (!rlSets[id]) rlSets[id] = [];
+    rlSets[id].push(k);
+  });
+  // DOM順に近い並びになるよう、キー文字列でソートしておく
+  Object.values(rlSets).forEach(arr => arr.sort());
+
   // フォールバック用の親フラグを一度リセット
   document.querySelectorAll('.day, .slots').forEach(n => n.classList.remove('has-emergency'));
 
@@ -3774,7 +3909,8 @@ function paintSlotsFromStore(){
     const surg = el.querySelector('.surgeon-tag');
 
     // いったん初期化
-    el.classList.remove('empty','mergeHead','hiddenRow');
+    el.classList.remove('empty','mergeHead','hiddenRow',
+                        'rl-set-slot','rl-set-top','rl-set-bottom');
     el.style.gridRowEnd = '';
 
     // ★ 緊急フラグをDOMに反映（ここが唯一の反映ポイントでOK）
@@ -3795,6 +3931,22 @@ function paintSlotsFromStore(){
        el.classList.add('infection-slot');
      } else if (infValue === 'なし') {
        el.classList.add('noninfection-slot');
+     }
+
+     // ★ RLセット用の左バークラスを付与
+     if (data && data.meta && data.meta.rlSetId) {
+       const id = data.meta.rlSetId;
+       const arr = rlSets[id];
+       if (arr && arr.length > 1) {
+         el.classList.add('rl-set-slot');
+         const pos = arr.indexOf(key);
+         if (pos === 0) {
+           el.classList.add('rl-set-top');
+         }
+         if (pos === arr.length - 1) {
+           el.classList.add('rl-set-bottom');
+         }
+       }
      }
 
     if (data && !data.tail) {
@@ -4769,10 +4921,67 @@ document.addEventListener('click', (e) => {
     clearMultiSelection();
     findRangeSameDay(cur, slot).forEach(addMultiSelect);
   } else {
-    // 通常クリック：マルチ選択はリセットのみ（単枠は .focused に任せる）
-    clearMultiSelection();
-    // ★ ここでは addMultiSelect は呼ばない
+    // 通常クリック：RLセットがあれば
+    //   1回目クリック → セット外周ハイライト
+    //   2回目クリック → 単枠モードに移行（このRLセットをロック）
+    let handledRL = false;
+
+    // Ctrl+クリック時は既存のマルチ選択ロジックに譲る
+    const st = (typeof loadWeek === 'function') ? loadWeek(currentMonday) : null;
+
+    // ★ クリックしたスロットが属する RLセットID を先に特定
+    let clickedRlId = null;
+    if (st && typeof findRLSetRangeForSlot === 'function') {
+      const info0 = findRLSetRangeForSlot(slot, st);
+      if (info0 && info0.keys && info0.keys.length > 1) {
+        const base0 = st[info0.baseKey];
+        clickedRlId = base0?.meta?.rlSetId || null;
+      }
+    }
+
+    // ★ 別の場所（別RLセット or 非RL枠）をクリックしたらロック解除
+    if (window.rlSetSingleLocked && clickedRlId !== window.rlSetSingleLocked) {
+      window.rlSetSingleLocked = null;
+    }
+
+    if (!e.ctrlKey && st && typeof findRLSetRangeForSlot === 'function') {
+      const info = findRLSetRangeForSlot(slot, st);
+      if (info && info.keys && info.keys.length > 1) {
+        const baseRec = st[info.baseKey];
+        const rlId = baseRec?.meta?.rlSetId;
+        if (rlId) {
+          if (window.rlSetSingleLocked === rlId) {
+            // ★ このRLセットは単枠ロック中 → 外周には戻さない（通常クリック扱い）
+            // handledRL = false のまま fallback へ
+          } else if (window.currentRLSetId === rlId) {
+            // ★ 2回目クリック：単枠モードに移行し、このRLセットをロック
+            clearMultiSelection();
+            window.currentRLSetId = null;
+            window.rlSetSingleLocked = rlId;
+            handledRL = true;
+          } else {
+            // ★ 1回目クリック：RLセット全体を multiSelected にして外周枠表示
+            clearMultiSelection();
+            info.keys.forEach(k => {
+              const el2 = document.querySelector(`.slot[data-key="${CSS.escape(k)}"]`);
+              if (el2) addMultiSelect(el2);
+            });
+            window.currentRLSetId = rlId;
+            window.rlSetSingleLocked = null; // セットモード中はロックOFF
+            handledRL = true;
+          }
+        }
+      }
+    }
+
+    if (!handledRL) {
+      // RLセット扱いにならない場合は従来通り：マルチ選択はリセットのみ
+      clearMultiSelection();
+      window.currentRLSetId = null;
+      // rlSetSingleLocked は、clickedRlId 判定で必要に応じて解除済み
+    }
   }
+
 
   // アクティブ枠（青枠）の更新
   if (typeof setActiveSlot === 'function') {
@@ -4953,7 +5162,70 @@ function openEditor(keys){
   const clearBtn   = f.querySelector('button[value="clear"]');
   const cancelBtn  = f.querySelector('button[value="cancel"]');
   const saveBtn    = f.querySelector('button[value="save"]');
-  
+ // ▼ RLセットチェックボックス制御（眼が R のときだけ有効）
+ const rlSetCheckbox = f.querySelector('input[name="rlSet"]');
+ const eyeSelect     = f.eye;
+
+  // ▼ 既存RLセット編集時：RLセットチェックを強制OFF＆無効化
+  (()=>{
+    try {
+      const firstKey = keys && keys[0];
+      if (!firstKey || !rlSetCheckbox) return;
+
+      // この週のデータから RLセット範囲をキーで検索
+      const info =
+        (typeof findRLSetRangeForKey === 'function')
+          ? findRLSetRangeForKey(firstKey, st)
+          : null;
+
+      const isExistingRL =
+        info &&
+        info.keys &&
+        info.keys.length === 2 &&
+        (st[info.baseKey]?.meta?.rlSetId);
+
+      if (isExistingRL) {
+        // 既存のRLペアの片割れを編集中 → 新規RL作成はさせない
+        rlSetCheckbox.checked  = false;
+        rlSetCheckbox.disabled = true;
+      } else {
+        // 既存RLでなければ、（元々のロジックどおり）後続で eye に応じて有効化
+        // ここでは disable=false にせず、何もしないか、必要なら初期状態だけ整える
+        rlSetCheckbox.disabled = false;
+      }
+    } catch(e){
+      console.warn('RL checkbox guard failed:', e);
+    }
+  })();
+
+ function guardRLSetCheckbox(showAlert){
+   if (!rlSetCheckbox || !eyeSelect) return;
+   const eyeVal = (eyeSelect.value || '').trim();
+
+   // 眼が R 以外なのにチェックされていたら強制OFF
+   if (rlSetCheckbox.checked && eyeVal !== 'R') {
+     if (showAlert) {
+       alert('対眼の連続作成は「眼：R」のときにのみ利用できます。\n先に「眼」を R にしてからチェックしてください。');
+     }
+     rlSetCheckbox.checked = false;
+   }
+ }
+
+ if (rlSetCheckbox && eyeSelect) {
+   // チェックボックスを操作したとき：R 以外ならアラートを出してOFFに戻す
+   rlSetCheckbox.addEventListener('change', () => {
+     guardRLSetCheckbox(true);
+   });
+
+   // 眼の選択を変えたとき：R 以外になったら静かにOFFにする（アラートなし）
+   eyeSelect.addEventListener('change', () => {
+     guardRLSetCheckbox(false);
+   });
+
+   // エディタ初期表示時にも一度判定（前回状態が残っている場合に備えて）
+   guardRLSetCheckbox(false);
+ }  
+ 
  try {
     f.iolType?.setAttribute('list', 'iolTypes');
     f.proc1?.setAttribute('list', 'procList');
@@ -5408,10 +5680,12 @@ editor.addEventListener('close', function handler(){
     }
 
     try {
-      // ★★★ ここから中身は「今までの save ロジック」をそのまま移植 ★★★
+      // ★★★ save ロジック（RLセット連続作成対応版）★★★
 
-      // ★ 保存直後は render が複数回走ることがあるため、中央寄せを「2回分」抑止
+      // 保存直後は render が複数回走ることがあるため、中央寄せを「2回分」抑止
       window.__suppressCenterN = (window.__suppressCenterN || 0) + 2;	
+
+      // フォーム内容 → レコード nd
       let nd = {
         name: toHalfWidthKana(f.name.value.trim()),
         pid:  f.pid.value.trim(),
@@ -5433,7 +5707,7 @@ editor.addEventListener('close', function handler(){
         })(),
         note:  f.note.value.trim(),
         ga: !!f.ga.checked,
-        local: !!(f.local && f.local.checked),  // ★ 局麻フラグを保存
+        local: !!(f.local && f.local.checked),  // 局麻フラグ
         // 所要時間（H/M）：全角OK → 半角数値化 → 分へ合算
         duration: (() => {
           const hRaw = (f.durationH?.value ?? '').trim();
@@ -5452,37 +5726,91 @@ editor.addEventListener('close', function handler(){
       };
       nd = normalizePatientFields(nd);
 
-      // ★ 所要時間が入っていればそれを優先して結合枠数を自動決定
+      // 所要時間 → span 自動決定
       const durNum = Number(nd.duration || 0);
-      let spanFromDuration = (Number.isFinite(durNum) && durNum > 0) ? Math.ceil(durNum / 20) : 0;
+      let spanFromDuration = (Number.isFinite(durNum) && durNum > 0)
+        ? Math.ceil(durNum / 20)
+        : 0;
 
       // 「入力された所要時間が優先」。なければ mergeSpan を使う
-      let span = spanFromDuration > 0 ? spanFromDuration : Math.max(1, parseInt(f.mergeSpan?.value || '1', 10));
+      let span = spanFromDuration > 0
+        ? spanFromDuration
+        : Math.max(1, parseInt(f.mergeSpan?.value || '1', 10));
       const merge = span > 1;
 
-      // ▼ 単枠/2枠：備考内の「※（感染）/※感染/（感染）/感染」を完全削除
-      //   → 感染情報は時刻下バッジに一本化するため、note には残さない
+      // ▼ 単枠/2枠：備考内の「感染」メモを削除（バッジに一本化）
       if (span <= 2) {
         const note0 = (nd.note || '').trim();
         const cleaned = note0
-          // 先頭の「※（感染）」「※感染」「（感染）」「感染」＋後ろの空白を削除
           .replace(/^(?:※\s*)?(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u, '')
-          // 行末や単独で付いている「※感染」「感染」を削除
           .replace(/(?:^|\s)(?:※\s*)?感染(?!\S)/u, (m) => (m.startsWith(' ') ? ' ' : ''))
-          // 余分な空白を整理
           .replace(/\s+/g, ' ')
           .trim();
-
         nd.note = cleaned;
       }
 
       const data = loadWeek(currentMonday);
 
+      // ★ 既存レコードの meta を退避（RLセットの rlSetId などを保持したい）
+      const prevRec  = data[firstKey];
+      const prevMeta = (prevRec && prevRec.meta)
+        ? JSON.parse(JSON.stringify(prevRec.meta))
+        : null;
+		
+      // ==== RLセット：事前判定（R かつ チェックON か）=================
+      const makeRL = !!(f.rlSet && f.rlSet.checked);
+      const eyeVal = (f.eye.value || '').trim();
+      let rlEnabled = makeRL && eyeVal === 'R';
+      let rlSetId = null;
+      let rlLKeys = [];
+
+      if (rlEnabled) {
+        // 複数枠編集はサポート外にしておく
+        if (keys.length > 1) {
+          alert('複数枠編集中は RLセットの連続作成はできません。1枠のみ選択してからお試しください。');
+          rlEnabled = false;
+        } else {
+          const parsed = parseKey(firstKey);
+          if (!parsed) {
+            rlEnabled = false;
+          } else {
+            const { d, day, section, idx } = parsed;
+            const spanInt = Math.max(1, Number(span || 1));
+
+            // L 側に使う枠（Rの結合枠の直後 span 個）
+            for (let i = 0; i < spanInt; i++) {
+              rlLKeys.push(`${d}|${day}|${section}|${idx + spanInt + i}`);
+            }
+
+            // その枠が埋まっていないかチェック
+            let conflictKey = null;
+            if (typeof isOccupiedRecord === 'function') {
+              for (const k of rlLKeys) {
+                const rec = data[k];
+                if (rec && isOccupiedRecord(rec)) {
+                  conflictKey = k;
+                  break;
+                }
+              }
+            }
+
+            if (conflictKey) {
+              alert('RLセットの対眼（L）を配置する枠に既存のデータがあります。\n先にその枠をクリアしてからやり直してください。');
+              rlEnabled = false;
+              rlLKeys = [];
+            } else {
+              rlSetId = 'rl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+            }
+          }
+        }
+      }
+
+      // headKey から span 個ぶんのキー列を作るヘルパ
       function seqKeys(headKey, n){
         const {d,day,section,idx} = parseKey(headKey);
-        const keys=[headKey];
-        for(let i=1;i<n;i++){ keys.push(`${d}|${day}|${section}|${idx+i}`); }
-        return keys;
+        const keys2=[headKey];
+        for(let i=1;i<n;i++){ keys2.push(`${d}|${day}|${section}|${idx+i}`); }
+        return keys2;
       }
 
       // 既存 head 編集は一旦解除
@@ -5494,27 +5822,153 @@ editor.addEventListener('close', function handler(){
       if(merge && span>1){
         const keysToUse = keys.length>1 ? keys.slice().sort((a,b)=> a.localeCompare(b)) : seqKeys(firstKey, span);
         for(let i=1;i<keysToUse.length;i++){
-          const d = data[keysToUse[i]];
-          if(d && !d.tail){ alert('結合先に既存データがあります。先にクリアしてください。'); return; }
+          const d2 = data[keysToUse[i]];
+          if(d2 && !d2.tail){
+            alert('結合先に既存データがあります。先にクリアしてください。');
+            return;
+          }
         }
-        data[keysToUse[0]] = {...nd, head:true, span: keysToUse.length};
-        for(let i=1;i<keysToUse.length;i++) data[keysToUse[i]] = { tail:true, head: keysToUse[0] };
+
+        const headKey = keysToUse[0];
+        const base = { ...nd, head:true, span: keysToUse.length };
+
+        // ★ 既存 meta があれば引き継ぐ（rlSetId を含む）
+        if (prevMeta && (!base.meta || !base.meta.rlSetId)) {
+          base.meta = { ...prevMeta };
+        }
+
+        data[headKey] = base;
+
+        for (let i=1; i<keysToUse.length; i++){
+          data[keysToUse[i]] = { tail:true, head: headKey };
+        }
       }else{
-        if(Object.values(nd).every(v=>!v)){ delete data[firstKey]; }
-        else{ data[firstKey] = nd; }
-        if(keys.length>1){
-          for(let i=1;i<keys.length;i++){
-            if(Object.values(nd).every(v=>!v)) delete data[keys[i]];
+        if (Object.values(nd).every(v => !v)) {
+          delete data[firstKey];
+        } else {
+          const base = { ...nd };
+
+          // ★ 既存 meta があれば引き継ぐ
+          if (prevMeta && (!base.meta || !base.meta.rlSetId)) {
+            base.meta = { ...prevMeta };
+          }
+
+          data[firstKey] = base;
+        }
+
+        if (keys.length > 1) {
+          for (let i = 1; i < keys.length; i++) {
+            if (Object.values(nd).every(v => !v)) delete data[keys[i]];
             else data[keys[i]] = nd;
           }
         }
       }
 
-      // ====== ★ 後続枠の時刻再計算（押し出し） ======
+
+      // ==== RLセット：R結合枠の直後に L 結合枠を作成 =================
+      if (rlEnabled && rlLKeys.length > 0) {
+        const rHead = data[firstKey];   // Rヘッド（今書き込んだもの）
+        if (rHead) {
+          const spanInt = Math.max(1, Number(span || 1));
+
+          // Rヘッドに rlSetId 付与
+          if (!rHead.meta) rHead.meta = {};
+          rHead.meta.rlSetId = rlSetId;
+          data[firstKey] = rHead;
+
+          // Lヘッドキー＆レコード
+          const lHeadKey = rlLKeys[0];
+          const lHead = JSON.parse(JSON.stringify(rHead));
+          lHead.eye = 'L';
+          lHead.head = true;
+          lHead.span = spanInt;
+          if (!lHead.meta) lHead.meta = {};
+          lHead.meta.rlSetId = rlSetId;
+          data[lHeadKey] = lHead;
+
+          // Lの tail を作る
+          for (let i = 1; i < spanInt; i++) {
+            const k = rlLKeys[i];
+            data[k] = { tail: true, head: lHeadKey };
+          }
+        }
+      }
+	  
+      // ==== RLセット：相方フィールド連動（双方向：編集側 → 相方） ====
+      try {
+        const store = data;
+
+        // 今回編集した枠のキー（tail なら head に寄せる）
+        let key0 = firstKey;
+        const rec0 = store[key0];
+        if (!rec0) {
+          // 対象レコードがなければ何もしない
+        } else {
+          if (rec0.tail && rec0.head && typeof rec0.head === 'string' && store[rec0.head]) {
+            key0 = rec0.head;   // 結合枠の tail から開いていたら head に正規化
+          }
+
+          // キー＋store から RLセット範囲を判定
+          const info =
+            (typeof findRLSetRangeForKey === 'function')
+              ? findRLSetRangeForKey(key0, store)
+              : null;
+
+          if (info && info.keys && info.keys.length === 2) {
+            const rKey = info.keys.find(k => ((store[k]?.eye || '').trim() === 'R'));
+            const lKey = info.keys.find(k => ((store[k]?.eye || '').trim() === 'L'));
+            const rRec = rKey ? store[rKey] : null;
+            const lRec = lKey ? store[lKey] : null;
+
+            if (rRec && lRec) {
+              // R/L それぞれの“ヘッド”キー（結合枠を考慮）
+              let rHeadKey = rKey;
+              if (rRec.tail && typeof rRec.head === 'string' && store[rRec.head]) {
+                rHeadKey = rRec.head;
+              }
+              let lHeadKey = lKey;
+              if (lRec.tail && typeof lRec.head === 'string' && store[lRec.head]) {
+                lHeadKey = lRec.head;
+              }
+
+              // 編集側がどちらか判定
+              let srcKey = null;
+              let dstKey = null;
+              if (key0 === rHeadKey) {
+                // R側を編集 → Rの値をLへ
+                srcKey = rHeadKey;
+                dstKey = lHeadKey;
+              } else if (key0 === lHeadKey) {
+                // L側を編集 → Lの値をRへ
+                srcKey = lHeadKey;
+                dstKey = rHeadKey;
+              }
+
+              if (srcKey && dstKey) {
+                const srcRec = store[srcKey];
+                const dstRec = store[dstKey];
+                if (srcRec && dstRec) {
+                  // ★ 両目で常に同じであるべきフィールド
+                  const linkedFields = ['io', 'name', 'pid', 'age', 'infection', 'ga', 'local'];
+                  for (const fName of linkedFields) {
+                    dstRec[fName] = srcRec[fName];
+                  }
+                  store[dstKey] = dstRec;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('RL pair sync (both ways) failed:', e);
+      }
+
+
+
+      // ====== 後続枠の時刻再計算（押し出し） ======
       try {
         const { day, section } = parseKey(firstKey);
         if (day && section != null) {
-          // その日・そのセクションの duration / 結合枠アンカーを丸ごと組み直す
           rebuildDurationAnchorsForDaySection(day, section, data);
         }
       } catch (e) {
@@ -5561,7 +6015,7 @@ editor.addEventListener('close', function handler(){
         }
       }
 
-      // ★★★ ここまでが従来の save ロジック ★★★
+      // ★★★ save ロジック（RLセット対応）ここまで ★★★
 
     } finally {
       // バッチの閉じ方を分岐
@@ -5746,6 +6200,94 @@ function rebuildDurationAnchorsForDaySection(dayKey, section, storeOpt){
   }
 }
 
+  // ==== RLセット検出ヘルパ ====
+  // slotEl から「この枠が RL セットに属しているか」を調べ、
+  // 見つかった場合は { keys:[...], baseKey:"..." } を返す。
+  // まだ rlSetId を付けていない既存データにも対応できるよう、
+  // 1) rlSetId があればそれでグループ化
+  // 2) なければ「同じ日・同じセクション・同じ患者（name/pid）で R/L ペア」を近傍から推定
+  function findRLSetRangeForSlot(slotEl, storeOpt){
+    if (!slotEl) return null;
+    const key = slotEl.dataset?.key;
+    if (!key) return null;
+
+    const store = storeOpt || loadWeek(currentMonday);
+    let rec = store[key];
+    if (!rec) return null;
+
+    // tail 行（結合枠の2マス目以降）だった場合は head 側に寄せて判定
+    if (rec.tail && rec.head && typeof rec.head === 'string' && store[rec.head]) {
+      return findRLSetRangeForKey(rec.head, store);
+    }
+    return findRLSetRangeForKey(key, store);
+  }
+
+  // 内部用：キーとストアから RL セット範囲を判定
+  function findRLSetRangeForKey(key, store){
+    const base = store[key];
+    if (!base) return null;
+
+    const eye = (base.eye || '').trim();
+    if (eye !== 'R' && eye !== 'L') return null;
+
+    // --- 1) rlSetId があれば、それでグルーピング ---
+    const setId = base.meta && base.meta.rlSetId;
+    if (setId) {
+      const keys = Object.keys(store)
+        .filter(k => {
+          const r = store[k];
+          if (!r || r.tail) return false;
+          return r.meta && r.meta.rlSetId === setId;
+        })
+        .sort();
+
+      if (keys.length >= 2) {
+        return { keys, baseKey: key };
+      }
+    }
+
+    // --- 2) Fallback：同じ日・セクションで name/pid が同じ R/L ペアを近傍から探す ---
+    const p = parseKey(key); // { d, day, section, idx }
+    if (!p || p.day == null || p.section == null) return null;
+
+    const baseName = (base.name || '').trim();
+    const basePid  = (base.pid  || '').trim();
+    if (!baseName && !basePid) return null; // 患者情報が無ければ判定不能
+
+    const partnerEye = (eye === 'R') ? 'L' : 'R';
+    const candidates = [];
+    const maxOffset = 3; // 同じセクション内で ±3 枠ぶんだけを見る
+
+    for (let off = -maxOffset; off <= maxOffset; off++) {
+      if (off === 0) continue;
+      const k = `${p.d}|${p.day}|${p.section}|${p.idx + off}`;
+      const r = store[k];
+      if (!r || r.tail) continue;
+
+      const eye2 = (r.eye || '').trim();
+      if (eye2 !== partnerEye) continue;
+
+      const name2 = (r.name || '').trim();
+      const pid2  = (r.pid  || '').trim();
+
+      // PID が入っていれば PID 優先、無い場合は氏名で判定
+      if (basePid) {
+        if (pid2 === basePid) candidates.push(k);
+      } else if (baseName) {
+        if (name2 === baseName) candidates.push(k);
+      }
+    }
+
+    if (!candidates.length) return null;
+
+    // 一応ソートして、代表的な 2 件を RL セットとみなす
+    candidates.sort();
+    const all = [key, ...candidates].sort();
+    const keys2 = all.slice(0, 2);
+
+    if (keys2.length < 2) return null;
+    return { keys: keys2, baseKey: key };
+  }
 
 
 function formatMinutesColon(min){
@@ -5770,6 +6312,50 @@ function isOccupiedRecord(rec){
 
 function copySlotOrMerge(){
   const st = loadWeek(currentMonday);
+
+  // 0) RLセット選択中なら、RLセット単位でコピー
+  const activeEl = getActiveSlot?.();
+  if (window.currentRLSetId && activeEl && typeof findRLSetRangeForSlot === 'function') {
+    const info    = findRLSetRangeForSlot(activeEl, st);
+    const baseRec = info && st[info.baseKey];
+    const rlId    = baseRec?.meta?.rlSetId;
+
+    if (info && rlId && rlId === window.currentRLSetId && info.keys && info.keys.length > 1) {
+      const blocks = [];
+      for (const headKey of info.keys) {
+        const rec = st[headKey];
+        if (!rec) continue;
+
+        const span = rec.head ? Math.max(1, Number(rec.span || 1)) : 1;
+        const kind = (rec.head && span > 1) ? 'merge' : 'single';
+
+        blocks.push({
+          kind,
+          span,
+          data: deepClone(rec),
+          keys: [headKey]
+        });
+      }
+
+      if (blocks.length) {
+        const p = parseKey(info.keys[0]);
+        const clipMulti = {
+          day:     p.day,
+          section: p.section,
+          blocks
+        };
+
+        appClipboard.type = 'multi';
+        appClipboard.data = clipMulti;
+
+        // 視覚フィードバック：外周選択中の枠を軽くアニメーション
+        document.querySelectorAll('.slot.multiSelected').forEach(el => {
+          el.animate([{opacity:1},{opacity:0.4},{opacity:1}], {duration:160});
+        });
+        return;
+      }
+    }
+  }
 
   // 1) まず複数選択を試す
   if (multiSelected && multiSelected.size > 1) {
@@ -5849,11 +6435,27 @@ if (clip.type === 'multi') {
   beginUndoBatch();
   try {
     let idx = base;
+
+    // ★ RLセットIDの振り直し用マップ
+    const rlIdMap = {};
+    function remapRLId(obj){
+      if (!obj) return;
+      const meta = obj.meta;
+      const oldId = meta && meta.rlSetId;
+      if (!oldId) return;
+      if (!rlIdMap[oldId]) {
+        rlIdMap[oldId] = `rl_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      }
+      meta.rlSetId = rlIdMap[oldId];
+    }
+
     for (const b of blocks) {
       if (b.kind === 'single') {
         const destKey = list[idx].dataset.key;
         const data = deepClone(b.data);
         if (flip && data.eye) data.eye = flipEye(data.eye);
+        // ★ RLセットIDを貼り付け用に振り直し
+        remapRLId(data);
         delete data.linkWith;
 
         st[destKey] = data;
@@ -5870,6 +6472,8 @@ if (clip.type === 'multi') {
         delete headData.span;
         delete headData.linkWith;
         if (flip && headData.eye) headData.eye = flipEye(headData.eye);
+        // ★ 結合枠ヘッドにも新しい rlSetId を付与
+        remapRLId(headData);
 
         const destKeys = [];
         for (let j = 0; j < span; j++) {
@@ -6008,8 +6612,54 @@ function cutActive(){
   const deletePlan = [];
   let clipboardData = null;
 
-  // 1) 複数選択あり → multi cut
-  if (multiSelected && multiSelected.size > 1) {
+  // 1) RLセット選択中なら、RLセット単位で cut
+  let handledRL = false;
+  const activeEl = getActiveSlot?.();
+  if (window.currentRLSetId && activeEl && typeof findRLSetRangeForSlot === 'function') {
+    const info    = findRLSetRangeForSlot(activeEl, storeNow);
+    const baseRec = info && storeNow[info.baseKey];
+    const rlId    = baseRec?.meta?.rlSetId;
+
+    if (info && rlId && rlId === window.currentRLSetId && info.keys && info.keys.length > 1) {
+      const blocks = [];
+
+      for (const headKey of info.keys) {
+        const rec = storeNow[headKey];
+        if (!rec) continue;
+
+        const span = rec.head ? Math.max(1, Number(rec.span || 1)) : 1;
+        const kind = (rec.head && span > 1) ? 'merge' : 'single';
+
+        blocks.push({
+          kind,
+          span,
+          data: deepClone(rec),
+          keys: [headKey]
+        });
+
+        if (kind === 'merge') {
+          deletePlan.push({ type:'merge', headKey });
+        } else {
+          deletePlan.push({ type:'single', key: headKey });
+        }
+      }
+
+      if (blocks.length) {
+        const p = parseKey(info.keys[0]);
+        clipboardData = {
+          day:     p.day,
+          section: p.section,
+          blocks
+        };
+        appClipboard.type = 'multi';
+        appClipboard.data = clipboardData;
+        handledRL = true;
+      }
+    }
+  }
+
+  // 2) 複数選択あり → multi cut
+  if (!handledRL && multiSelected && multiSelected.size > 1) {
     const clipMulti = buildMultiClipboardFromSelection(storeNow);
     if (!clipMulti) return;  // 途中に穴・不正があれば中止（buildMulti内でalert済）
 
@@ -6153,7 +6803,63 @@ document.addEventListener('keydown',(e)=>{
 
   if(k==='delete' || k==='backspace'){
     e.preventDefault();
-     const el = getActiveSlot?.(); if(!el) return;
+    const el = getActiveSlot?.(); if(!el) return;
+
+    // ============================
+    // 🔵 RLセット選択中ならセット削除
+    // ============================
+    const storeForDel = loadWeek(currentMonday);
+    if (window.currentRLSetId && typeof findRLSetRangeForSlot === 'function') {
+      const info    = findRLSetRangeForSlot(el, storeForDel);
+      const baseRec = info && storeForDel[info.baseKey];
+      const rlId    = baseRec?.meta?.rlSetId;
+
+      // 現在の RL セレクションと一致していて、R/L 2ヘッド以上あるときだけ発動
+      if (info && rlId && rlId === window.currentRLSetId && info.keys && info.keys.length > 1) {
+        if (!window.confirm('このRLセットをまとめて削除します。よろしいですか？')) {
+          return;
+        }
+
+        beginUndoBatch();
+        try {
+          for (const headKey of info.keys) {
+            const rec = storeForDel[headKey];
+            if (!rec) continue;
+
+            const span = rec.head ? Math.max(1, Number(rec.span || 1)) : 1;
+
+            // 所要時間アンカーの片付け
+            if (typeof cleanupTimeOverrideOnDelete === 'function') {
+              cleanupTimeOverrideOnDelete(headKey, storeForDel);
+            }
+
+            const { d, day, section, idx } = parseKey(headKey);
+            for (let i = 0; i < span; i++) {
+              const k2 = `${d}|${day}|${section}|${idx + i}`;
+              delete storeForDel[k2];
+            }
+          }
+
+          // time override の再構築
+          if (typeof autoRebuildTimeOverridesForSectionAfterDelete === 'function') {
+            autoRebuildTimeOverridesForSectionAfterDelete(info.keys[0], storeForDel);
+          }
+
+          saveWeek(currentMonday, storeForDel);
+          preserveScrollWhile(() => render());
+
+          // RLセット選択状態をクリア
+          if (typeof clearMultiSelection === 'function') {
+            clearMultiSelection();
+          }
+          window.currentRLSetId = null;
+
+        } finally {
+          endUndoBatch();
+        }
+        return; // RLセット削除はここで終了
+      }
+    }
 
     // ★ ここで確認ダイアログをはさむ
     if (!window.confirm('この枠の内容をクリアします。よろしいですか？')) {
@@ -6222,6 +6928,12 @@ document.addEventListener('keydown',(e)=>{
 
 if(k==='enter'){
   e.preventDefault();
+  // ★ RLセット外周選択中は Enter 編集を無効化
+  //   → どちらかの枠をクリックして単枠青枠にしてから Enter してもらう
+  if (window.currentRLSetId && document.querySelector('.slot.multiSelected')) {
+    return;
+  }
+
   const el = getActiveSlot?.() || document.querySelector('.slot');
   if(!el) return;
 
