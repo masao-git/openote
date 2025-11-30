@@ -152,11 +152,13 @@
   outline: none !important;
 }
 
-/* クリックで選択された枠の見た目 */
-.slot.focused{
-  outline: 2px solid #2563eb;
-  outline-offset: -2px;
-  background: rgba(37,99,235,0.06);
+/* クリックで選択された枠の見た目（画面表示専用） */
+@media screen {
+  .slot.focused{
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+    background: rgba(37,99,235,0.06);
+  }
 }
 
 /* スロット境界から下への“にじみ”を止める */
@@ -360,17 +362,14 @@
   margin-top: auto;             /* 所要時間バッジの下側に寄せる（ga-badge と同じ） */
 }
 
-
-
-/* 感染症バッジ：全麻バッジと同じような横長ピル */
+/* 感染症バッジ：共通デザイン（全麻バッジと同系色のピル） */
 .infection-badge{
-  display: inline-block;
   writing-mode: horizontal-tb;
   white-space: nowrap;
 
   font-size: 11px;
   line-height: 1;
-  padding: 0px 6px;              /* コメント行の高さをあまり増やさないように縦方向を少し薄く */
+  padding: 0px 6px;              /* コメント行の高さをあまり増やさないように縦方向を薄く */
   border-radius: 9999px;
   border: 1px solid #a855f7;     /* 紫系の枠線 */
   background: #f5f3ff;           /* 薄い紫の背景 */
@@ -380,21 +379,44 @@
   user-select: none;
 
   margin-left: 0;
-  margin-top: 0;                 /* コメントと同じ行内に入るので、上マージンは不要 */
-  vertical-align: baseline;      /* 行のベースラインに揃える */
+  margin-top: 0;
+  vertical-align: baseline;
 }
 
-
-
-/* 通常画面では感染バッジを非表示 */
-.infection-badge {
-  display: none !important;
-}
-
-/* 印刷時だけ感染バッジを表示 */
-@media print {
+/* 画面（screen）では感染バッジを非表示にする */
+@media screen {
   .infection-badge {
-    display: inline-block !important;
+    display: none !important;
+  }
+}
+
+/* 印刷時だけ感染バッジ風ピルを描画する */
+@media print {
+  /* JS で生成した span.infection-badge 自体は印刷では使わない */
+  .infection-badge {
+    display: none !important;
+  }
+
+  /* ① コメント（note）があるスロット：備考の末尾に付ける */
+  .slot.infection-slot .slot-col-note::after,
+
+  /* ② コメントが無いスロット：左側テキスト(content-left)の末尾に付ける */
+  .slot.infection-slot:not(:has(.slot-col-note)) .content-left::after {
+    content: ' 感染';
+    display: inline-block;
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+
+    font-size: 11px;
+    line-height: 1;
+    padding: 0px 6px;
+    border-radius: 9999px;
+    border: 1px solid #a855f7;   /* 紫系の枠線 */
+    background: #f5f3ff;         /* 薄い紫の背景 */
+    color: #6b21a8;              /* 濃いめの紫文字 */
+
+    vertical-align: baseline;
+    margin-left: 4px;            /* 手前の文字と少し間隔を空ける */
   }
 }
 
@@ -465,8 +487,6 @@ body.dayFocus .slot.mergeHead .content-left {
   box-shadow: 0 2px 10px rgba(0,0,0,.08);
 }
 
-
-
 /* --- フォーカス時に隠すもの --- */
 body.dayFocus #mode2col,
 body.dayFocus #mode4col,
@@ -502,12 +522,15 @@ body.dayFocus #weekPicker {
   display: inline-flex !important;
 }
 
-/* ===== 統一版：印刷レイアウト ===== */
+/* ===== 統一版：印刷レイアウト（整理済み） ===== */
 @media print {
   @page { size: A4 portrait; margin: 10mm; }
 
-  /* 画面UIは隠す（トップバーのみ） */
-  .topbar { display: none !important; }
+  /* 画面UIは隠す */
+  .topbar,
+  .ctx-menu {
+    display: none !important;
+  }
 
   /* 週間でもフォーカスでも：A4いっぱい・1列化 */
   #schedule {
@@ -519,19 +542,120 @@ body.dayFocus #weekPicker {
   }
   #schedule .column { display: contents !important; }
 
-  /* 行高（必要なら mm を調整） */
+  /* 行高デフォルト（通常印刷側） */
   :root { --print-slot-h: 8mm; }
   .slots { grid-auto-rows: var(--print-slot-h) !important; }
 
-  /* 改ページの分割を最小化 */
-  .day, .slots, .slot { break-inside: avoid; page-break-inside: avoid; }
+  /* 基本は途中で切らない（2ページ印刷側であとから上書き） */
+  .day,
+  .slots,
+  .slot {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 
   /* 右クリック選択印刷で使うフラグ */
   .hide-on-print { display: none !important; }
+
+  /* === 週表示の通常印刷：月〜金だけを1日1ページずつ === */
+
+  /* 土日を完全に印刷対象から除外 */
+  body:not(.printWeek2p):not(.dayFocus) #schedule .day[data-day-key="Sat"],
+  body:not(.printWeek2p):not(.dayFocus) #schedule .day[data-day-key="Sun"] {
+    display: none !important;
+  }
+
+  /* 月〜金は必ず1日1ページ */
+  body:not(.printWeek2p):not(.dayFocus) #schedule .day {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  /* 臨時/緊急枠の数に応じた自動圧縮（通常印刷のみ） */
+  /* 1〜2枠追加 → ちょっとだけ圧縮 */
+  body:not(.printWeek2p):not(.dayFocus) #schedule .day.print-tight {
+    --print-slot-h: 7.6mm;   /* 8mm → 7.6mm */
+  }
+
+  /* 3枠以上追加 → もう一段圧縮 */
+  body:not(.printWeek2p):not(.dayFocus) #schedule .day.print-tighter {
+    --print-slot-h: 7.2mm;   /* 8mm → 7.2mm */
+  }
+
+  /* === 平日2ページ印刷モード専用の調整 === */
+
+  /* 1行の高さをかなり詰める（通常8mm → 4.8mm） */
+  body.printWeek2p {
+    --print-slot-h: 4.8mm;
+  }
+
+  /* スケジュール全体の縦の隙間をほぼゼロに */
+  body.printWeek2p #schedule {
+    row-gap: 0 !important;
+  }
+  body.printWeek2p .column {
+    row-gap: 0 !important;
+  }
+  body.printWeek2p .dayStack {
+    gap: 0 !important;
+  }
+
+  /* 各曜日の上下余白も詰める */
+  body.printWeek2p .day {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* 2ページモードでは枠は途中で切れてOK（ページ優先） */
+  body.printWeek2p .day,
+  body.printWeek2p .slots,
+  body.printWeek2p .slot {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  /* 2ページ印刷用のフォント・見た目調整 */
+  body.printWeek2p .time {
+    font-size: 11px !important;
+  }
+  body.printWeek2p .content {
+    font-size: 11px !important;
+  }
+  /* 2ページ印刷時の術者バッジ：少し小さめ＆縦中央寄せ */
+  body.printWeek2p .surgeon-tag {
+    font-size: 9px !important;      /* ちょい小さくして下が切れないように */
+    padding: 0 4px !important;
+    line-height: 1.2 !important;    /* バッジ内の文字も中央寄せ気味に */
+    top: 50% !important;            /* スロットの縦中央に配置 */
+    transform: translateY(-50%) !important;
+  }
+  /* 結合枠(head)の術者バッジだけは「全体の中央」ではなく head の上辺に揃える */
+body.printWeek2p .slot.mergeHead .surgeon-tag {
+  top: 2px !important;              /* 通常枠と同じくらいの位置に */
+  transform: none !important;       /* 中央寄せを解除 */
 }
-@media print {
-  .ctx-menu { display: none !important; }
+
+  /* 午前／午後帯を薄く低く */
+  body.printWeek2p .section-title {
+    font-size: 9px !important;
+    line-height: 1.0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    height: 10px !important;
+    min-height: 10px !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* スロット全体を縦方向センター揃え（結合headだけ上寄せ） */
+  body.printWeek2p .slot {
+    align-items: center !important;
+  }
+  body.printWeek2p .slot.mergeHead {
+    align-items: flex-start !important;
+  }
 }
+
 /* 週ピッカー右の曜日バッジ */
 #weekPickerWeekday {
   margin-left: .5rem;
@@ -559,11 +683,13 @@ body.dayFocus #weekPickerWeekday { display: inline; }
   filter: none !important;
   pointer-events: auto !important;
 }
-/* 緊急/臨時に .focused が付いたら必ず青枠を表示（最後尾に置く） */
-.slot.emergency-slot.focused,
-.slot.temp-slot.focused {
-  outline: 2px solid #2563eb !important;
-  outline-offset: -2px !important;
+/* 緊急/臨時に .focused が付いたら必ず青枠を表示（※画面表示専用） */
+@media screen {
+  .slot.emergency-slot.focused,
+  .slot.temp-slot.focused {
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+  }
 }
 
 /* ★ スナップ統一：ブラウザの滑らかスクロールを無効化 */
@@ -688,7 +814,11 @@ label[for="mergeSlots"] {
   margin-right: 0;
 }
 
-	
+	/* フォーカス表示では 2P印刷ボタンを非表示 */
+body.dayFocus #printWeek2pBtn {
+  display: none !important;
+}
+
 	
   </style>
   </head>
@@ -699,13 +829,14 @@ label[for="mergeSlots"] {
       <input type="date" id="weekPicker" />
       <button id="nextWeek">次週 »</button>
       <button id="todayBtn">今週</button>
-　　　<button id="settingsBtn">設定</button>
+　　　 <button id="settingsBtn">設定</button>
+      <button id="printBtn">印刷</button>
+	  <button id="printWeek2pBtn">2P印刷</button>
     </div>
     <div class="group">
       <button id="editBtn" class="primary">編集</button>
       <button id="undoBtn">元に戻す</button>
       <button id="redoBtn">やり直し</button>
-      <button id="printBtn">印刷</button>
     </div>
     <div class="group" aria-label="レイアウト切替">
       <span>レイアウト:</span>
@@ -911,8 +1042,9 @@ label[for="mergeSlots"] {
   const weekPicker = document.getElementById('weekPicker');
   const prevWeekBtn = document.getElementById('prevWeek');
   const nextWeekBtn = document.getElementById('nextWeek');
-  const todayBtn    = document.getElementById('todayBtn');
-  const printBtn    = document.getElementById('printBtn');
+  const todayBtn        = document.getElementById('todayBtn');
+  const printBtn        = document.getElementById('printBtn');
+  const printWeek2pBtn  = document.getElementById('printWeek2pBtn');
   const slotTpl     = document.getElementById('slotTemplate');
   const mode2 = document.getElementById('mode2col');
   const mode4 = document.getElementById('mode4col');
@@ -2591,7 +2723,8 @@ function enforceFocusView(){
     const dayDate = addDays(currentMonday, offsetIdx);
     const wrap = document.createElement('section'); wrap.className = 'day';
     const iso = dateISO(dayDate);
-    wrap.dataset.date = iso;             // ← ★これを追加（YYYY-MM-DD）	
+    wrap.dataset.date = iso;             // ← ★これを追加（YYYY-MM-DD）
+    wrap.dataset.dayKey = dayKey;        // ← ★曜日も持たせる（Mon/Tue/...）	
     const isHol = isHolidayISO(iso);
     if (isHol){ wrap.classList.add('is-holiday', 'is-off'); }
 
@@ -3162,23 +3295,83 @@ todayBtn.addEventListener('click', (e)=>{
     window.__postWeekMoveCenter?.();	
   });
 
-printBtn.addEventListener('click', ()=>{
-  // 現在フォーカス中の .day があればそれ、なければ
-  // アクティブスロットのある .day、無ければ先頭の .day
-   const cur = getActiveSlot?.();
-   const day = document.querySelector('.day.is-focused')
-            || (cur && cur.closest('.day'))
-            || document.querySelector('.day');
-  if(!day){ window.print(); return; }
+// ★ 週表示の通常印刷：月〜金だけ印刷 ＋ 背が高い曜日だけ自動で少し縮小
+printBtn.addEventListener('click', () => {
+  const days = Array.from(document.querySelectorAll('#schedule .day'));
+  if (!days.length) {
+    window.print();
+    return;
+  }
 
-  // 1列化して印刷
-  document.body.classList.add('printDay');
+  // フォーカス表示中は、従来通りその日だけ印刷
+  if (document.body.classList.contains('dayFocus')) {
+    window.print();
+    return;
+  }
+
+  const weekendDays = [];
+  const weekdayDays = [];
+
+  // ヘッダーの「(土)/(日)」を見て、平日と土日に分ける
+  for (const d of days) {
+    const header = d.querySelector('.day-header-date');
+    const txt = header?.textContent || '';
+    if (txt.includes('土') || txt.includes('日')) {
+      weekendDays.push(d);
+    } else {
+      weekdayDays.push(d);
+    }
+  }
+
+  // ① 土日は hide-on-print で隠す
+  const hiddenDays = [];
+  weekendDays.forEach(d => {
+    d.classList.add('hide-on-print');
+    hiddenDays.push(d);
+  });
+
+  // ② 緊急枠/臨時枠の「数」に応じて圧縮レベルを変える
+  const tightDays = [];
+  const tighterDays = [];
+  weekdayDays.forEach(d => {
+    const cnt = d.querySelectorAll('.slot.emergency-slot, .slot.temp-slot').length;
+    if (cnt >= 1 && cnt <= 2) {
+      d.classList.add('print-tight');
+      tightDays.push(d);
+    } else if (cnt >= 3) {
+      d.classList.add('print-tighter');
+      tighterDays.push(d);
+    }
+  });
+
   try {
     window.print();
   } finally {
-    document.body.classList.remove('printDay');
+    hiddenDays.forEach(d => d.classList.remove('hide-on-print'));
+    tightDays.forEach(d => d.classList.remove('print-tight'));
+    tighterDays.forEach(d => d.classList.remove('print-tighter'));
   }
 });
+
+// === 2ページ印刷モード（今は月〜金＋土日も含めて2枚に収める） ===
+printWeek2pBtn?.addEventListener('click', ()=>{
+  const days = Array.from(document.querySelectorAll('#schedule .day'));
+  if (!days.length) {
+    window.print();
+    return;
+  }
+
+  // ★ 2ページ印刷モード ON（行高やセクションタイトル圧縮などのCSSが効く）
+  document.body.classList.add('printWeek2p');
+
+  try {
+    window.print();
+  } finally {
+    document.body.classList.remove('printWeek2p');
+  }
+});
+
+
 const printSelectionBtn = document.getElementById('printSelectionBtn');
 printSelectionBtn?.addEventListener('click', ()=>{
   // ルール：アクティブスロットの属する「直近の .slots」を印刷
@@ -3657,10 +3850,15 @@ function formatSlotId(raw){
 function getSlotMaxPriority(width){
   if (!width || width <= 0) return 1;
 
-  // ★ かなり厳しめにする
+  // ★ 印刷モード中は、幅に関係なく「全部出す」
+  if (document.body && document.body.classList.contains('printMode')){
+    return 3;
+  }
+
+  // 通常画面時のしきい値
   // 〜300px：最小限（priority 1 のみ）
-  // 〜480px：priority 1 & 2（術式2/3を足す）
-  // 480px〜 ：priority 1〜3（備考も足す）
+  // 〜520px：priority 1 & 2（IDまで）
+  // 520px〜 ：priority 1〜3（年齢・備考まで）
   if (width < 400) return 1;
   if (width < 520) return 2;
   return 3;
@@ -3909,79 +4107,6 @@ function paintSlotsFromStore(){
 
         renderSlotColumns(left, parts);
 
-        // --- 備考側の感染バッジ化は廃止（感染バッジは時刻下に統一） ---
-        (function badgeifyInfectionInNote() {
-          // 仕様変更：感染バッジはすべて時刻側の .infection-badge に集約するため、
-          // 備考欄でのバッジ化ロジックは実行しない。
-          return;
-
-          const spanN = Number((data && data.span) || 1);
-          if (spanN > 2) return;
-          if (!(data && data.infection === 'あり')) return;
-
-          const leftRoot =
-            el.querySelector('.content-left') ||
-            el.querySelector('.content') ||
-            el;
-          if (!leftRoot) return;
-
-          // 既存の備考側感染バッジを掃除（重複防止）
-          leftRoot.querySelectorAll('.infection-badge-note').forEach(n => n.remove());
-
-          // 1) テキストノード内に「※（感染）」等が含まれる場合を処理
-          const reToken = /※\s*(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u;
-          const tw = document.createTreeWalker(leftRoot, NodeFilter.SHOW_TEXT);
-          let found = false, node;
-          while ((node = tw.nextNode())) {
-            const txt = node.textContent || '';
-            const m = txt.match(reToken);
-            if (!m) continue;
-            // プレフィクス「※ 」は残す → バッジ → 残り本文
-            const idx = txt.indexOf(m[0]);
-            const prefix = txt.slice(0, idx).replace(/※\s*$/u, '※ ');
-            const suffix = txt.slice(idx + m[0].length);
-
-            const before = document.createTextNode(prefix);
-            const badge  = document.createElement('span');
-            badge.className = 'infection-badge-note';
-            badge.textContent = '感染';
-            const after  = document.createTextNode(suffix.startsWith(' ') ? suffix : (suffix ? ' ' + suffix : ''));
-
-            const p = node.parentNode;
-            p.insertBefore(before, node);
-            p.insertBefore(badge, node);
-            p.insertBefore(after, node);
-            p.removeChild(node);
-            found = true;
-            break;
-          }
-          if (found) return;
-
-          // 2) 「※」が別ノード、次ノード先頭が「（感染）」等のケースも拾う
-          const childNodes = Array.from(leftRoot.childNodes);
-          for (let i = 0; i < childNodes.length - 1; i++) {
-            const a = childNodes[i], b = childNodes[i + 1];
-            const aTxt = (a.nodeType === 3 ? a.textContent : a.textContent) || '';
-            const bTxt = (b.nodeType === 3 ? b.textContent : b.textContent) || '';
-            const aHasMark = /※\s*$/u.test(aTxt.trimEnd());
-            const bStartsInf = /^(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u.test(bTxt);
-            if (!(aHasMark && bStartsInf)) continue;
-
-            // a の末尾を「※ 」で整形、b の先頭からトークンを剥がす
-            const aNew = aTxt.replace(/※\s*$/u, '※ ');
-            if (a.nodeType === 3) a.textContent = aNew; else a.innerText = aNew;
-            const bNew = bTxt.replace(/^(?:（\s*感染\s*）|\(\s*感染\s*\)|感染)\s*/u, '');
-            if (b.nodeType === 3) b.textContent = (bNew.startsWith(' ') ? bNew : (bNew ? ' ' + bNew : '')); else b.innerText = (bNew.startsWith(' ') ? bNew : (bNew ? ' ' + bNew : ''));
-
-            const badge = document.createElement('span');
-            badge.className = 'infection-badge-note';
-            badge.textContent = '感染';
-            a.parentNode.insertBefore(badge, b);
-            break;
-          }
-        })();
-
-
       } else if (typeof fmtContent === 'function') {
         left.innerHTML = fmtContent(data);
       } else {
@@ -4045,10 +4170,10 @@ function paintSlotsFromStore(){
           // 1) 備考列（slot-col-note）があれば、その先頭にバッジを入れる
           const noteCol = el.querySelector('.slot-col-note');
           if (noteCol) {
-            // コメントと同じ行の一番左に出したいので先頭に差し込む
-            noteCol.insertAdjacentElement('afterbegin', badge);
-            // バッジとテキストがくっつき過ぎないように半角スペースを1つ
-            noteCol.insertAdjacentText('afterbegin', ' ');
+            // コメントの「末尾」にバッジを付ける
+            // 先にスペース → そのあとバッジを追加
+            noteCol.insertAdjacentText('beforeend', ' ');
+            noteCol.insertAdjacentElement('beforeend', badge);
             return;
           }
 
@@ -4233,6 +4358,59 @@ function clearPrintSandbox(){
   const box = document.getElementById('printSandbox');
   if(box) box.innerHTML = '';
 }
+
+// 印刷用：感染症バッジを備考（note）の末尾に差し込む
+function addInfectionBadgesForPrint(slotsRoot){
+  try {
+    const store = loadWeek(currentMonday);
+    if (!store) return;
+
+    // 対象スロットを走査
+    const slots = slotsRoot.querySelectorAll('.slot[data-key]');
+    slots.forEach(slot => {
+      // 既存の感染バッジは一旦削除（重複防止）
+      slot.querySelectorAll('.infection-badge').forEach(n => n.remove());
+
+      const key  = slot.dataset.key;
+      const rec  = store[key];
+      if (!rec) return;
+      if (rec.tail) return;                     // tail 行はスキップ
+      if (rec.infection !== 'あり') return;     // 感染フラグなし
+
+      // バッジ生成
+      const badge = document.createElement('span');
+      badge.className = 'infection-badge';
+      badge.textContent = '感染';
+
+      // 1) 備考列があれば、その「末尾」に入れる
+      let noteCol = slot.querySelector('.slot-col-note');
+      if (noteCol) {
+        noteCol.insertAdjacentText('beforeend', ' ');
+        noteCol.insertAdjacentElement('beforeend', badge);
+        return;
+      }
+
+      // 2) 備考列がない場合：content-left の末尾に簡易 note 列を作成してそこに入れる
+      const left = slot.querySelector('.content-left');
+      if (left) {
+        noteCol = document.createElement('span');
+        noteCol.className = 'slot-col slot-col-note';
+        // 「※」を付けておくと他の備考と並びが自然
+        noteCol.textContent = '※';
+        noteCol.insertAdjacentText('beforeend', ' ');
+        noteCol.insertAdjacentElement('beforeend', badge);
+        left.appendChild(noteCol);
+        return;
+      }
+
+      // 3) 最後の保険：time 行の末尾に付ける
+      (slot.querySelector('.time') || slot).appendChild(badge);
+    });
+  } catch (e) {
+    console.warn('addInfectionBadgesForPrint failed:', e);
+  }
+}
+
 function printSection(slotsEl){
   if(!slotsEl) return;
 
@@ -4244,8 +4422,12 @@ function printSection(slotsEl){
   const sectionTitle = slotsEl.previousElementSibling?.classList?.contains('section-title')
     ? slotsEl.previousElementSibling.cloneNode(true) : null;
 
+  // 印刷用に感染バッジを注入（備考欄の末尾）
+  addInfectionBadgesForPrint(slotsEl);
+
   // 複製（見た目を保つため slots を丸ごと clone）
   const clone = slotsEl.cloneNode(true);
+
 
   // ラッパー
   const wrap = document.createElement('section');
@@ -4268,16 +4450,28 @@ function printSection(slotsEl){
   }
 }
 
-// どこに：既存の印刷ユーティリティ（printSection 等）がある付近
 function printDayElement(dayEl){
   if (!dayEl) return;
   const days = document.querySelectorAll('#schedule .day');
-  // この日以外を印刷時だけ隠す（CSSの .hide-on-print が効く）
   days.forEach(d => { if (d !== dayEl) d.classList.add('hide-on-print'); });
+
+  // この日の緊急/臨時枠の数に応じて圧縮レベルを決める
+  const cnt = dayEl.querySelectorAll('.slot.emergency-slot, .slot.temp-slot').length;
+  let level = 0;
+  if (cnt >= 1 && cnt <= 2) {
+    dayEl.classList.add('print-tight');
+    level = 1;
+  } else if (cnt >= 3) {
+    dayEl.classList.add('print-tighter');
+    level = 2;
+  }
+
   try {
     window.print();
   } finally {
     days.forEach(d => d.classList.remove('hide-on-print'));
+    if (level === 1) dayEl.classList.remove('print-tight');
+    if (level === 2) dayEl.classList.remove('print-tighter');
   }
 }
 
@@ -7583,6 +7777,75 @@ function importScheduleFromJson(file) {
     }
   }, {capture:true});
 })();
+
+// --- 印刷時：4列/5列レイアウトを一時解除して2列相当で印刷する ---
+(function(){
+  let prevColsClass = null;
+
+  function beforePrintCols(){
+    const body = document.body;
+    if (!body) return;
+    // すでに処理済みなら何もしない
+    if (prevColsClass !== null) return;
+
+    if (body.classList.contains('fiveCols')) {
+      prevColsClass = 'fiveCols';
+    } else if (body.classList.contains('fourCols')) {
+      prevColsClass = 'fourCols';
+    } else {
+      // 2列表示など、特に切り替え不要なとき
+      prevColsClass = null;
+      return;
+    }
+    // 印刷用に 4/5列クラスを一時的に外す → 2列相当レイアウトに戻る
+    body.classList.remove('fourCols', 'fiveCols');
+  }
+
+  function afterPrintCols(){
+    const body = document.body;
+    if (!body) return;
+    // 元のレイアウトに戻す
+    if (prevColsClass) {
+      body.classList.add(prevColsClass);
+    }
+    prevColsClass = null;
+  }
+
+  window.addEventListener('beforeprint', beforePrintCols);
+  window.addEventListener('afterprint',  afterPrintCols);
+})();
+// --- 印刷時：ID・年齢などを含めた「フル表示モード」にして再描画 ---
+(function(){
+  function addPrintMode(){
+    const body = document.body;
+    if (!body) return;
+    if (body.classList.contains('printMode')) return;
+
+    body.classList.add('printMode');
+
+    // ★ 印刷用レイアウト（2列 & printMode）で幅を計測し直して再描画
+    if (typeof paintSlotsFromStore === 'function'){
+      paintSlotsFromStore();
+    }
+  }
+
+  function removePrintMode(){
+    const body = document.body;
+    if (!body) return;
+    if (!body.classList.contains('printMode')) return;
+
+    body.classList.remove('printMode');
+
+    // ★ 通常表示用に戻した状態でもう一度再描画
+    if (typeof paintSlotsFromStore === 'function'){
+      paintSlotsFromStore();
+    }
+  }
+
+  window.addEventListener('beforeprint', addPrintMode);
+  window.addEventListener('afterprint',  removePrintMode);
+})();
+
 </script>  
  
  </body>
