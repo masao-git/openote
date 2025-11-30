@@ -3027,11 +3027,82 @@ addItem('このセクションを印刷（A4想定）', ()=>{
   function createSlot(meta, time){
     const el = slotTpl.content.firstElementChild.cloneNode(true);
     const timeEl = el.querySelector('.time'); timeEl.textContent = time ? String(time).replace(/^0/, '') : '';
-    timeEl.addEventListener('dblclick', (e)=>{ if(e.shiftKey || e.altKey) return; e.preventDefault(); e.stopPropagation(); const sec = Number(meta.section); const ii  = Number(meta.idx); const dayKey = meta.day; // この枠の現在時刻をロジックから再計算して初期値にする
-const base = (sec === 0 ? CONFIG[(dayKey==='Wed'?'Wed':dayKey)][0].start : CONFIG[dayKey][sec].start);
-const cur  = getSlotTimeHHMMEx(base, currentMonday, dayKey, sec, ii);
+    // ★ 時刻セルダブルクリック：開始時刻の手動変更
+    timeEl.addEventListener('dblclick', (e)=>{
+      // Shift / Alt 付きは下のハンドラに任せる
+      if (e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      e.stopPropagation();
 
-const input = prompt('この枠の時刻（例 10:00 / 1000 / 950）', cur); if(input == null) return; const hhmm = normalizeTimeInput(input); if(!hhmm){ alert('形式が不正です。例：10:00 / 1000 / 0950 / 950'); return; } if(ii > 0){ const base = (sec===0 ? CONFIG[(dayKey==='Wed'?'Wed':dayKey)][0].start : CONFIG[dayKey][sec].start); const prevHHMM = getSlotTimeHHMMEx(base, currentMonday, dayKey, sec, ii-1); if(hhmmToMinutes(hhmm) <= hhmmToMinutes(prevHHMM)){ alert(`この枠は直前の枠（${prevHHMM}）より遅い時刻にしてください。`); return; } } setTimeOverride(currentMonday, dayKey, sec, ii, hhmm); render(); });
+      const dayKey = meta.day;
+      const sec    = meta.section;
+      const ii     = meta.idx;
+
+      const base = (sec===0
+        ? CONFIG[(dayKey==='Wed' ? 'Wed' : dayKey)][0].start
+        : CONFIG[dayKey][sec].start
+      );
+      const cur  = getSlotTimeHHMMEx(base, currentMonday, dayKey, sec, ii);
+
+      const input = prompt('この枠の時刻（例 10:00 / 1000 / 950）', cur);
+      if (input == null) return;
+
+      const hhmm = normalizeTimeInput(input);
+      if (!hhmm){
+        alert('形式が不正です。例：10:00 / 1000 / 0950 / 950');
+        return;
+      }
+
+      // 直前の枠よりも後ろの時刻であることをチェック
+      if (ii > 0){
+        const prevBase = (sec===0
+          ? CONFIG[(dayKey==='Wed' ? 'Wed' : dayKey)][0].start
+          : CONFIG[dayKey][sec].start
+        );
+        const prevHHMM = getSlotTimeHHMMEx(prevBase, currentMonday, dayKey, sec, ii-1);
+        if (hhmmToMinutes(hhmm) <= hhmmToMinutes(prevHHMM)){
+          alert(`この枠は直前の枠（${prevHHMM}）より遅い時刻にしてください。`);
+          return;
+        }
+      }
+
+      // ★ 手動変更後、この枠をアンカーとして day/section 全体を再構成
+      beginUndoBatch();
+      try {
+        // 1) この枠の開始時刻をアンカーとして記録
+        setTimeOverride(currentMonday, dayKey, sec, ii, hhmm);
+
+        // 2) 所要時間・結合枠に基づく後続アンカーを再計算
+        const store = loadWeek(currentMonday);
+        rebuildDurationAnchorsForDaySection(dayKey, sec, store, {
+          keepAnchor: { idx: ii, hhmm }
+        });
+      } finally {
+        endUndoBatch();
+      }
+
+      render();
+    });
+
+    // Shift＋ダブルクリック：この枠以降の override をデフォルトに戻す
+    timeEl.addEventListener('dblclick', (e)=>{
+      if (!e.shiftKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const { day, section, idx } = meta;
+      clearTimeOverrideFrom(currentMonday, day, Number(section), Number(idx));
+      render();
+    });
+
+    // Alt＋ダブルクリック：この day/section 全体の override をデフォルトに戻す
+    timeEl.addEventListener('dblclick', (e)=>{
+      if (!e.altKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const { day, section } = meta;
+      clearTimeOverrideAll(currentMonday, day, Number(section));
+      render();
+    }, { capture:true });
     timeEl.addEventListener('dblclick', (e)=>{ if(!e.shiftKey) return; e.preventDefault(); e.stopPropagation(); const { day, section, idx } = meta; clearTimeOverrideFrom(currentMonday, day, Number(section), Number(idx)); render(); });
     timeEl.addEventListener('dblclick', (e)=>{ if(!e.altKey) return; e.preventDefault(); e.stopPropagation(); const { day, section } = meta; clearTimeOverrideAll(currentMonday, day, Number(section)); render(); }, { capture:true });
 
@@ -6159,17 +6230,26 @@ function applyDurationAnchorForHead(headKey, store){
   }
 }
 // === その日・そのセクションの duration アンカーを一括で組み直す ===
-function rebuildDurationAnchorsForDaySection(dayKey, section, storeOpt){
+function rebuildDurationAnchorsForDaySection(dayKey, section, storeOpt, opts){
   try{
-    const store = storeOpt || loadWeek(currentMonday);
+    const store   = storeOpt || loadWeek(currentMonday);
+    const options = opts || {};
+    const keep    = options.keepAnchor || null;   // { idx, hhmm } など
 
-    // 1) まずこの day|section の time override を全部消す
+    // 1) この day|section の time override をリセット
     const tovr = loadTimeOverrides(currentMonday);
     const tKey = `${dayKey}|${section}`;
-    if (tovr[tKey]) {
-      delete tovr[tKey];
-      saveTimeOverrides(currentMonday, tovr);
+
+    if (keep && typeof keep.idx === 'number' && keep.hhmm){
+      // 指定されたアンカーだけを残す形でリセット
+      tovr[tKey] = { [keep.idx]: keep.hhmm };
+    } else {
+      // 従来どおり：全部消す
+      if (tovr[tKey]) {
+        delete tovr[tKey];
+      }
     }
+    saveTimeOverrides(currentMonday, tovr);
 
     // 2) head になるレコードを idx 昇順に集める
     const heads = [];
@@ -6199,6 +6279,7 @@ function rebuildDurationAnchorsForDaySection(dayKey, section, storeOpt){
     console.warn('rebuildDurationAnchorsForDaySection skipped:', e);
   }
 }
+
 
   // ==== RLセット検出ヘルパ ====
   // slotEl から「この枠が RL セットに属しているか」を調べ、
