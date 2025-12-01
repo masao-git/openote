@@ -165,27 +165,24 @@
 .slot { overflow: hidden; }
 
 .content { overflow: hidden; }
-.content-left{
+ .content-left{
   line-height: 1.2;
-  overflow: hidden;                 /* はみ出し非表示 */
+  overflow: hidden;                 /* はみ出し非表示（共通） */
   display: block;                   /* 高さ計算が安定 */
   max-height: calc(var(--slot-h) - 6px); /* 枠高(28px) - 上下padding(3+3) */
-  /* font-size は JS で 13px or 10px を自動切替 */
+  word-break: break-word;
+  white-space: normal;
 }
 
 /* 週表示・スロット左側テキスト */
 .slot .content-left{
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;   /* 2行でカット（これはこのままでもOK） */
-  overflow: hidden;
-  max-height: calc(2 * 1.2em);
-  line-height: 1.2;
-  font-size: 13px;         /* ★ ここを 10px → 13px に戻す */
-  word-break: break-word;
-  white-space: normal;
+  -webkit-line-clamp: 2;       /* 2行でカット */
+  max-height: calc(2 * 1.2em + 2px); /* 2行分 + α（誤差吸収用の余裕） */
+  font-size: 13px;             /* 週表示では 13px 固定 */
 }
-/* 列用の基本スタイル（すでにあればそのままでOK） */
+/* 共通：列・セパレーター */
 .slot .content-left .slot-col{
   display: inline-block;
   vertical-align: top;
@@ -193,19 +190,8 @@
 
 .slot .content-left .slot-sep{
   display: inline-block;
-  padding: 0 2px;   /* 「｜」前後の余白（必要なら微調整） */
+  padding: 0 px;   /* 「｜」前後の余白 */
 }
-
-  /* 共通：列・セパレーター */
-  .slot .content-left .slot-col{
-    display: inline-block;
-    vertical-align: top;
-  }
- 
-  .slot .content-left .slot-sep{
-    display: inline-block;
-    padding: 0 2px;   /* 「｜」前後の余白 */
-  }
  
   /* 入・外・当日（1文字幅＋中央寄せ） */
   .slot .content-left .slot-col-io{
@@ -227,7 +213,7 @@
  
   /* 眼 R/L/B（1文字＋中央寄せ） */
   .slot .content-left .slot-col-eye{
-    min-width: 1ch;
+    min-width: 1.5ch;
     text-align: center;
   }
  
@@ -239,11 +225,11 @@
  
   /* IOL種類・度数（ぎりぎり入る＋中央寄せ） */
   .slot .content-left .slot-col-iol{
-    min-width: 7.5ch;   /* 足りなければここを少し増やす */
+    min-width: 7.6ch;   /* 足りなければここを少し増やす */
     text-align: center;
   }
  
-  /* 術式1〜3（左寄せ） */
+  /* 術式1〜2（左寄せ） */
  .slot .content-left .slot-col-proc1,
  .slot .content-left .slot-col-proc2{
     min-width: 6ch;
@@ -261,7 +247,16 @@
   font-weight: bold;
 }
 
-
+.proc2-badge {
+  background: #bfdbfe;   /* 色は現状維持 */
+  color: #1e3a8a;
+  padding: 0 4px;        /* 上下0で高さを抑え、横も少しだけ細く */
+  border-radius: 0;      /* 角はそのまま直角 */
+  font-size: 0.9em;      /* 少しだけ小さく（13pxベースなら約11.7px） */
+  font-weight: 700;
+  display: inline-block;
+  line-height: 1.0;      /* 行の高さを詰めて“背を低く” */
+}
 
 /* ② 結合枠（head）は行数制限を解除して自由に表示 */
 .slot.mergeHead .content-left{
@@ -407,7 +402,7 @@
     writing-mode: horizontal-tb;
     white-space: nowrap;
 
-    font-size: 11px;
+    font-size: 9px;
     line-height: 1;
     padding: 0px 6px;
     border-radius: 9999px;
@@ -614,13 +609,24 @@ body.dayFocus #weekPicker {
     page-break-inside: auto !important;
   }
 
-  /* 2ページ印刷用のフォント・見た目調整 */
-  body.printWeek2p .time {
-    font-size: 11px !important;
-  }
-  body.printWeek2p .content {
-    font-size: 11px !important;
-  }
+/* 2ページ印刷用のフォント・見た目調整 */
+body.printWeek2p .content-left {
+  font-size: 13px !important;
+  display: flex;
+  align-items: center;   /* 左側のテキスト・バッジ全体を縦中央寄せ */
+  line-height: 1.1;
+}
+
+/* time は縦方向に中央寄せ＋バッジは下にぶら下げる */
+body.printWeek2p .time {
+  font-size: 11px !important;
+  display: flex;
+  flex-direction: column;        /* 上:時刻 / 下:バッジ に縦積み */
+  justify-content: center;       /* スロット高さの中央に寄せる */
+  align-items: flex-start;       /* 左揃えのまま */
+  line-height: 1.1;
+}
+
   /* 2ページ印刷時の術者バッジ：少し小さめ＆縦中央寄せ */
   body.printWeek2p .surgeon-tag {
     font-size: 9px !important;      /* ちょい小さくして下が切れないように */
@@ -634,7 +640,7 @@ body.printWeek2p .slot.mergeHead .surgeon-tag {
   top: 2px !important;              /* 通常枠と同じくらいの位置に */
   transform: none !important;       /* 中央寄せを解除 */
 }
-
+  
   /* 午前／午後帯を薄く低く */
   body.printWeek2p .section-title {
     font-size: 9px !important;
@@ -728,17 +734,6 @@ label[for="mergeSlots"] {
   pointer-events: none;
   box-sizing: border-box;
 }
-.proc2-badge {
-  background: #bfdbfe;   /* ★ 少し濃い青：視認性UP */
-  color: #1e3a8a;        /* ★ 濃紺：可読性UP */
-  padding: 2px 6px;      /* ★ バッジ感UP（厚みUP） */
-  border-radius: 0;      /* ★ 角を直角に */
-  font-size: 0.95em;     /* ★ 文字サイズUP（明確に見える） */
-  font-weight: 700;      /* ★ 太字UP */
-  display: inline-block;
-  line-height: 1.2;
-}
-
   </style>
   <style>
    #helpBtn{
@@ -3909,12 +3904,16 @@ function buildSlotMainText(data, width){
         break;
       }
 
-      case 'proc1':
-        val = data.proc1 || '';
+      case 'proc1': {
+        const p1 = String(data.proc1 || '').trim();
+        const p2 = String(data.proc2 || '').trim();
+        val = [p1, p2].filter(Boolean).join(' ');
         break;
+      }
 
       case 'proc2':
-        val = data.proc2 || '';
+        // proc1 側に統合するのでここでは何も表示しない
+        val = '';
         break;
 
       case 'note':
@@ -4229,12 +4228,16 @@ function renderSlotColumns(leftEl, parts){
     const label = String(part.label ?? '').trim();
     if (!label) return;
 
-    // 2個目以降の前に「｜」セパレーター
+    const prev = items[idx - 1];
+    // 2個目以降の前に「｜」セパレーター（ただし proc1 → proc2 の間は除く）
     if (idx > 0){
-      const sep = document.createElement('span');
-      sep.className = 'slot-sep';
-      sep.textContent = '｜';
-      leftEl.appendChild(sep);
+      const prevKey = prev?.key;
+      if (!(prevKey === 'proc1' && key === 'proc2')){
+        const sep = document.createElement('span');
+        sep.className = 'slot-sep';
+        sep.textContent = '｜';
+        leftEl.appendChild(sep);
+      }
     }
 
     const col = document.createElement('span');
@@ -4537,11 +4540,16 @@ function fmtContent(d){
     if (iol) core.push(iol);
   }
 
-  // 6) 術式1（メイン）
-  if (d.proc1) core.push(d.proc1);
+  // 6) 術式1+2：まとめて1フィールドとして扱う
+  if (d.proc1 || d.proc2){
+    const procLabel = [d.proc1, d.proc2]
+      .map(v => String(v || '').trim())
+      .filter(Boolean)
+      .join(' ');
+    if (procLabel) core.push(procLabel);
+  }
 
-  // 7) 術式2,3, 備考は「枠に余裕があるとき」に追加
-  if (d.proc2) optional.push(d.proc2);
+  // 7) 備考は「枠に余裕があるとき」に追加
   if (d.note)  optional.push('※' + d.note);
 
   // --- ここから「長さ」に応じてどこまで入れるか決める ---
