@@ -225,7 +225,7 @@
  
   /* IOL種類・度数（ぎりぎり入る＋中央寄せ） */
   .slot .content-left .slot-col-iol{
-    min-width: 7.6ch;   /* 足りなければここを少し増やす */
+    min-width: 7.7ch;   /* 足りなければここを少し増やす */
     text-align: center;
   }
  
@@ -661,6 +661,81 @@ body.printWeek2p .slot.mergeHead .surgeon-tag {
     align-items: flex-start !important;
   }
 }
+
+/* === フォーカス表示専用：印刷レイアウト === */
+@media print {
+
+  /* --- フォーカス印刷：時刻のフォント --- */
+  body.dayFocus .time {
+    font-size: 16px;
+  }
+
+  /* --- フォーカス印刷：slots を block にする（ただし hide-on-print は尊重） --- */
+  body.dayFocus #schedule .slots {
+    display: block;   /* !important を外して、hide-on-print の方を優先させる */
+  }
+
+  /* --- スロット本体は grid のまま（時刻＋内容を横並び維持） --- */
+  body.dayFocus .slot {
+    display: grid !important;
+    grid-template-columns: 60px 1fr;   /* 時刻 60px + 内容エリア */
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  /* --- 結合枠 tail（hiddenRow）は完全に非表示 --- */
+  body.dayFocus .slot.hiddenRow {
+    display: none !important;
+  }
+
+  /* --- 時刻部分：固定幅で左側に配置 --- */
+  body.dayFocus .slot .time {
+    display: inline-block;
+    width: 40px;
+    vertical-align: top;
+  }
+
+  /* --- 内容部分：時刻の右に並べる（折り返しも自然に） --- */
+  body.dayFocus .slot .content {
+    display: inline-block;
+    width: calc(100% - 40px);
+    vertical-align: top;
+    align-items: flex-start;
+  }
+
+  /* --- 内容テキスト：普通のブロックに戻して自然な折り返しに --- */
+  body.dayFocus .content-left {
+    font-size: 18px;
+    line-height: 1.3;
+    display: block;
+    white-space: normal !important;
+    overflow: visible !important;
+  }
+
+  /* --- 結合枠 head のテキストも通常と同じ扱いに統一 --- */
+  body.dayFocus .slot.mergeHead .content-left {
+    font-size: 18px !important;
+    line-height: 1.3 !important;
+  }
+
+  /* --- フォーカス印刷：途中で切れて OK（slot 単位で改ページ許可） --- */
+  body.dayFocus .day,
+  body.dayFocus .slots,
+  body.dayFocus .slot {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  /* --- フォーカス印刷：空スロット (.slot.empty) は非表示 --- */
+  body.dayFocus .slot.empty {
+    display: none !important;
+  }
+
+}
+
+
+
+
 
 /* 週ピッカー右の曜日バッジ */
 #weekPickerWeekday {
@@ -1622,8 +1697,8 @@ function defaultLists(){
   for (let v = 15.0; v <= 30.001; v += 0.5) powers.push(v.toFixed(1)); // 使うなら
   return {
     iolTypes: ["Ni","Ho","HoT","Am","AmT","参","Le","LeT","Ko"],
-    proc1: ["白内障","VIT+IOL","IOL強膜内固定","眼瞼内反手術"],
-    proc2: ["眼内レンズ縫着","前房洗浄","瞳孔形成"],
+    proc1: ["白内障","VIT+IOL","VITのみ","IOL強膜内固定","眼瞼内反手術"],
+    proc2: ["iStent","アーメド","プリザーフロ","涙点プラグ"],
      // 術者：ショートカット:氏名 の形式（設定画面から自由に編集可）
      surgeons: [
        "k:木村",
@@ -2186,9 +2261,228 @@ function resetSlotLayoutForDay(week, dayKey, opts = {}) {
   function addExtraTailSlot(week, dayKey, section, n=1){ const s = getSectionOvr(week, dayKey, section); setSectionOvr(week, dayKey, section, { extraTail: s.extraTail + (Number(n)||0) }); }
   function removeExtraTailSlot(week, dayKey, section){ const cur = getExtraTailSlots(week, dayKey, section); if(cur > 0){ setExtraTailSlots(week, dayKey, section, cur - 1); } }
   function getSectionLayout(week, dayKey, section, baseCount){ const s = getSectionOvr(week, dayKey, section); const extraHead = s.extraHead|0; const extraTail = s.extraTail|0; const inserts = Array.from(new Set(s.inserts)).sort((a,b)=>a-b); const total = extraHead + baseCount + inserts.length + extraTail; function isTemp(idx){ if (idx < extraHead) return true; if (idx >= extraHead + baseCount + inserts.length) return true; const posInBody = idx - extraHead; return inserts.includes(posInBody); } function toBaseIndex(idx){ if (isTemp(idx)) return -1; const posInBody = idx - extraHead; const leftInserts = inserts.filter(n => n < posInBody).length; return posInBody - leftInserts; } return { total, isTemp, toBaseIndex, extraHead, extraTail, inserts }; }
-  function insertTempBefore(week, dayKey, section, displayIndex){ const all = loadSlotOverrides(week) || {}; const s = ensureSlotOvrShape(all, dayKey, section); if (displayIndex <= 0){ s.extraHead += 1; saveSlotOverrides(week, all); return; } const layout = getSectionLayout(week, dayKey, section, CONFIG[dayKey][section].slots); const posInBody = Math.max(0, displayIndex - layout.extraHead); if (!s.inserts.includes(posInBody)){ s.inserts.push(posInBody); s.inserts = Array.from(new Set(s.inserts)).sort((a,b)=>a-b); } saveSlotOverrides(week, all); }
-  function insertTempAfter(week, dayKey, section, displayIndex){ insertTempBefore(week, dayKey, section, displayIndex + 1); }
-  function removeTempAt(week, dayKey, section, displayIndex){ const all = loadSlotOverrides(week) || {}; const s = ensureSlotOvrShape(all, dayKey, section); const baseCount = CONFIG[dayKey][section].slots; const layout = getSectionLayout(week, dayKey, section, baseCount); if (!layout.isTemp(displayIndex)) return; if (displayIndex >= layout.total - 1 && s.extraTail > 0){ s.extraTail -= 1; saveSlotOverrides(week, all); return; } if (displayIndex < s.extraHead && s.extraHead > 0){ s.extraHead -= 1; saveSlotOverrides(week, all); return; } const posInBody = displayIndex - s.extraHead; const i = s.inserts.indexOf(posInBody); if (i >= 0){ s.inserts.splice(i, 1); saveSlotOverrides(week, all); } }
+  // 指定 day / section の「idx >= fromIdx」のレコードを、delta 分だけ idx シフト
+  function shiftSectionRecordsForTempInsert(week, dayKey, section, fromIdx, delta){
+    if (!delta) return;
+
+    const store = loadWeek(week) || {};
+
+    // 対象 day / section で idx >= fromIdx のものだけ集める
+    const targets = Object.keys(store)
+      .map(key => ({ key, info: parseKey(key) }))
+      .filter(o =>
+        o.info.day === dayKey &&
+        o.info.section === section &&
+        o.info.idx >= fromIdx
+      );
+
+    if (!targets.length) return;
+
+    // 後ろから前へずらす（キー衝突を防ぐ）
+    targets.sort((a, b) => b.info.idx - a.info.idx);
+
+    for (const { key, info } of targets){
+      const rec = store[key];
+      delete store[key];
+
+      const meta = { ...info, idx: info.idx + delta };
+      const newKey = slotKey(meta);
+      store[newKey] = rec;
+    }
+
+    // schedule_ を保存
+    saveWeek(week, store);
+
+  // ★ この day / section の duration アンカーを「最初から」組み直す
+  if (typeof rebuildDurationAnchorsForDaySection === 'function'){
+    rebuildDurationAnchorsForDaySection(dayKey, section, store);    }
+  }
+
+  function insertTempBefore(week, dayKey, section, displayIndex){
+    const all = loadSlotOverrides(week) || {};
+    const s   = ensureSlotOvrShape(all, dayKey, section);
+
+    // 先頭より前に挿入するケース
+    if (displayIndex <= 0){
+      // 見た目上の「頭出し」枠を 1 つ増やす
+      s.extraHead += 1;
+      saveSlotOverrides(week, all);
+
+      // ★ データ側も idx 0 以降を 1 つ下に押し出す（データが無ければ何もしない）
+      shiftSectionRecordsForTempInsert(week, dayKey, section, 0, +1);
+
+      return;
+    }
+
+    // それ以外（本文中に挿入）のケース
+  const layout    = getSectionLayout(week, dayKey, section, CONFIG[dayKey][section].slots);
+  const posInBody = Math.max(0, displayIndex - layout.extraHead);
+
+  // ★ すでに存在する臨時枠の位置も、挿入位置以降は 1 つ後ろにずらす
+  if (Array.isArray(s.inserts) && s.inserts.length){
+    s.inserts = s.inserts.map(n => (n >= posInBody ? n + 1 : n));
+  }
+
+  if (!s.inserts.includes(posInBody)){
+    s.inserts.push(posInBody);
+    s.inserts = Array.from(new Set(s.inserts)).sort((a,b)=>a-b);
+    saveSlotOverrides(week, all);
+
+    // 実データも同じ fromIdx 以降を 1 つ押し出す
+    shiftSectionRecordsForTempInsert(week, dayKey, section, posInBody, +1);
+  }
+  }
+  // 結合枠にも対応した「この枠の後に臨時枠を挿入」
+function insertTempAfter(week, dayKey, section, displayIndex){
+  const all       = loadSlotOverrides(week) || {};
+  const s         = ensureSlotOvrShape(all, dayKey, section);
+  const baseCount = CONFIG[dayKey][section].slots;
+  const layout    = getSectionLayout(week, dayKey, section, baseCount);
+
+  // クリックされた表示 index に対応する「ベース index」（0,1,2,...）
+  const baseIdx = Math.max(0, displayIndex - layout.extraHead);
+
+  // 対象スロットの span を取得（結合枠なら span>1）
+  const store = loadWeek(week) || {};
+  let span    = 1;
+
+  for (const key of Object.keys(store)){
+    const info = parseKey(key);   // { d, day, section, idx }
+    if (info.day === dayKey && info.section === section && info.idx === baseIdx){
+      const rec     = store[key];
+      const recSpan = Number(rec && rec.span);
+      if (rec && !rec.tail && Number.isFinite(recSpan) && recSpan > 1){
+        span = recSpan;          // 結合 head の span を採用
+      }
+      break;
+    }
+  }
+
+  // ★ 結合枠全体の「後ろ」に挿入したいので、baseIdx + span を挿入位置とする
+  const insertAt = baseIdx + span;
+
+  // 既存の臨時枠インデックスで、挿入位置以降のものは 1 つ後ろへずらす
+  if (Array.isArray(s.inserts) && s.inserts.length){
+    s.inserts = s.inserts.map(n => (n >= insertAt ? n + 1 : n));
+  }
+
+  // 今回の挿入位置を追加（重複は避けてソート）
+  if (!s.inserts.includes(insertAt)){
+    s.inserts.push(insertAt);
+    s.inserts = Array.from(new Set(s.inserts)).sort((a,b)=> a - b);
+  }
+
+  // レイアウトオーバーライドを保存
+  saveSlotOverrides(week, all);
+
+  // 実データ（schedule_）を、insertAt 以降 1 コマ分後ろへ押し出す
+  // → その後 rebuildDurationAnchorsForDaySection により結合枠の時間も再計算される
+  shiftSectionRecordsForTempInsert(week, dayKey, section, insertAt, +1);
+}
+
+  function removeTempAt(week, dayKey, section, displayIndex){
+    const all = loadSlotOverrides(week) || {};
+    const s = ensureSlotOvrShape(all, dayKey, section);
+    const baseCount = CONFIG[dayKey][section].slots;
+    const layout = getSectionLayout(week, dayKey, section, baseCount);
+
+    if (!layout.isTemp(displayIndex)) return;
+
+    if (displayIndex >= layout.total - 1 && s.extraTail > 0){
+      s.extraTail -= 1;
+      saveSlotOverrides(week, all);
+      return;
+    }
+
+    if (displayIndex < s.extraHead && s.extraHead > 0){
+      s.extraHead -= 1;
+      saveSlotOverrides(week, all);
+	  
+	  // ★ 先頭臨時枠を削除した場合も、idx=0 以降を詰める必要がある
+	  slideSectionDataUpFromIndex(week, dayKey, section, 0);
+	  
+      return;
+    }
+
+    // ★ 本体の途中に挿入されていた臨時枠を削除するケース
+  const posInBody = displayIndex - s.extraHead;
+  const i = s.inserts.indexOf(posInBody);
+  if (i >= 0){
+    // 1) レイアウト上の臨時枠情報を削除
+    s.inserts.splice(i, 1);
+    saveSlotOverrides(week, all);
+
+    // 2) この臨時枠が「挟まっていた位置」そのものが baseIdx なので、
+    //    その位置以降のデータを 1 コマ前に詰める
+    const baseIdx = posInBody;
+    slideSectionDataUpFromIndex(week, dayKey, section, baseIdx);
+  }
+  }
+
+
+
+// ★ 臨時枠を削除したときに、
+//    その直後（baseIdx）以降のデータを、
+//    「その日・そのセクションで実際に存在する一番最後の idx」まで
+//    すべて 1 コマずつ前に詰める。
+//    → 一番最後の idx の枠だけ空になる（誰も消えない）。
+function slideSectionDataUpFromIndex(week, dayKey, section, baseIdx){
+  const store = loadWeek(week) || {};
+
+  // 1) この day / section で実際に存在する最大 idx を求める
+  let maxIdx = -1;
+  let dISOForKeys = null;
+
+  for (const key of Object.keys(store)){
+    const p = parseKey(key);  // { d, day, section, idx }
+    if (!p) continue;
+    if (p.day !== dayKey || p.section !== section) continue;
+    if (p.idx > maxIdx){
+      maxIdx = p.idx;
+      dISOForKeys = p.d;  // 実際の d を使う
+    }
+  }
+
+  // データがない／詰める範囲が存在しない場合
+  if (maxIdx < 0 || baseIdx > maxIdx) {
+    if (typeof rebuildDurationAnchorsForDaySection === 'function'){
+      rebuildDurationAnchorsForDaySection(dayKey, section, store);
+    }
+    return;
+  }
+
+  // dISO は store に実際に入っているキーから取得したものを使う
+  const dISO = dISOForKeys;
+
+  // 2) baseIdx 〜 maxIdx-1 までを 1 コマずつ前に詰める
+  //    例：baseIdx=2 のとき
+  //      idx=2 <- 3
+  //      idx=3 <- 4
+  //      ...
+  //      idx=maxIdx-1 <- maxIdx
+  for (let idx = baseIdx; idx < maxIdx; idx++){
+    const fromKey = `${dISO}|${dayKey}|${section}|${idx+1}`;
+    const toKey   = `${dISO}|${dayKey}|${section}|${idx}`;
+
+    if (store[fromKey]){
+      store[toKey] = store[fromKey];
+    } else {
+      delete store[toKey];
+    }
+  }
+
+  // 3) いちばん最後の idx（maxIdx）は、前に詰めた結果「余り」になるので空にする
+  const lastKey = `${dISO}|${dayKey}|${section}|${maxIdx}`;
+  delete store[lastKey];
+
+  saveWeek(week, store);
+
+  if (typeof rebuildDurationAnchorsForDaySection === 'function'){
+    rebuildDurationAnchorsForDaySection(dayKey, section, store);
+  }
+}
+
+
 
   // ===== Undo / Redo =====
   let undoStack = [];
@@ -3131,21 +3425,241 @@ el.addEventListener('click', (e)=>{
       function addItem(label, onClick){ const it=document.createElement('div'); it.textContent=label; it.style.padding='8px 12px'; it.style.cursor='pointer'; it.addEventListener('mouseenter', ()=> it.style.background='#f5f5f7'); it.addEventListener('mouseleave', ()=> it.style.background=''); it.addEventListener('click', ()=>{ onClick(); document.body.removeChild(menu); }); menu.appendChild(it); }
 
       // 個別「臨時化（緊急）」
-      { const key = el.dataset.key; const em  = loadEmerg(currentMonday); const isEm = !!em[key]; addItem(isEm ? 'この枠の臨時化を解除' : 'この枠を臨時化（緊急）', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){ } setEmergency(currentMonday, key, !isEm); render(); }); }
+      {
+        const key  = el.dataset.key;
+        const em   = loadEmerg(currentMonday) || {};
+        const isEm = !!em[key];
 
-      addItem('この枠の前に臨時枠を挿入', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){} insertTempBefore(currentMonday, dayKey, section, idx); render(); });
-      addItem('この枠の後に臨時枠を挿入', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){} insertTempAfter(currentMonday, dayKey, section, idx); render(); });
-      if (layout.isTemp(idx)){ addItem('この臨時枠を削除', ()=>{ try{ undoStack.push(snapshotState()); redoStack.length=0; }catch(_){} removeTempAt(currentMonday, dayKey, section, idx); render(); }); }
+        // 日付（ISO）から祝日判定
+        const meta      = parseKey(key);   // { d, day, section, idx } など
+        const iso       = meta && meta.d;
+        const isHoliday = iso ? isHolidayISO(iso) : false;
+
+        // ★ 祝日のときだけ「臨時化」メニューを出す
+        if (isHoliday) {
+          addItem(
+            isEm ? 'この枠の臨時化を解除' : 'この枠を臨時化（緊急）',
+            ()=>{
+              try { undoStack.push(snapshotState()); redoStack.length = 0; } catch(_){}
+              setEmergency(currentMonday, key, !isEm);
+              render();
+            }
+          );
+        }
+      }
+
+
+      // ★ RLセット関連フラグ
+      //    isRLSingleMember: 片側だけ選ばれているとき true
+      //    rlBlockStartIdx / rlBlockEndIdx: セット全体の表示 idx 範囲
+      let isRLSingleMember = false;
+      let rlBlockStartIdx = null;
+      let rlBlockEndIdx   = null;
+
+      try {
+        if (typeof findRLSetRangeForSlot === 'function') {
+          const data = loadWeek(currentMonday);
+          const info = data && findRLSetRangeForSlot(el, data);
+          const base = info && data[info.baseKey];
+          const rlId = base && base.meta && base.meta.rlSetId;
+
+          if (info && rlId && Array.isArray(info.keys) && info.keys.length >= 2) {
+            // ▼ セット全体が選択されているかどうかをチェック
+            let wholeSelected = true;
+            for (const k of info.keys) {
+              const slotEl = document.querySelector(`.slot[data-key="${k}"]`);
+              if (!slotEl) {
+                wholeSelected = false;
+                break;
+              }
+              // セット選択時につくクラス：multiSelected
+              if (!slotEl.classList.contains('multiSelected')) {
+                wholeSelected = false;
+                break;
+              }
+            }
+
+            if (!wholeSelected) {
+              // 片側だけ選ばれている → 構造変更系は全部NG
+              isRLSingleMember = true;
+            } else {
+              // セット全体が選ばれている
+              // → rlBlockStartIdx / rlBlockEndIdx を決めて「1ブロック扱い」にする
+              const len = info.keys.length; // 普通は 2
+
+              if (el.classList.contains('rl-set-top')) {
+                // 上側を右クリックしている → ここが先頭
+                rlBlockStartIdx = idx;
+                rlBlockEndIdx   = idx + (len - 1);
+              } else if (el.classList.contains('rl-set-bottom')) {
+                // 下側を右クリック → ここが末尾
+                rlBlockStartIdx = idx - (len - 1);
+                rlBlockEndIdx   = idx;
+              } else {
+                // 念のためのフォールバック：idx をそのまま使う
+                rlBlockStartIdx = idx;
+                rlBlockEndIdx   = idx + (len - 1);
+              }
+            }
+          }
+        }
+      } catch(e){
+        console && console.warn && console.warn('RL guard in ctx menu failed:', e);
+      }
+
+
+
+      if (!isRLSingleMember) {
+
+        addItem('この枠の前に臨時枠を挿入', ()=>{
+          const batch = (typeof beginUndoBatch === 'function')
+            ? beginUndoBatch('temp-insert-before')
+            : null;
+          try {
+            // RLセットがセット選択されていれば、その「先頭 idx」の前に挿入
+            const targetIdx = (rlBlockStartIdx != null ? rlBlockStartIdx : idx);
+            insertTempBefore(currentMonday, dayKey, section, targetIdx);
+          } finally {
+            if (typeof endUndoBatch === 'function') {
+              endUndoBatch(batch);
+            }
+          }
+          render();
+        });
+
+        addItem('この枠の後に臨時枠を挿入', ()=>{
+          const batch = (typeof beginUndoBatch === 'function')
+            ? beginUndoBatch('temp-insert-after')
+            : null;
+          try {
+            // RLセットがセット選択されていれば、その「末尾 idx」の後ろに挿入
+            const targetIdx = (rlBlockEndIdx != null ? rlBlockEndIdx : idx);
+            insertTempAfter(currentMonday, dayKey, section, targetIdx);
+          } finally {
+            if (typeof endUndoBatch === 'function') {
+              endUndoBatch(batch);
+            }
+          }
+          render();
+        });
+
+        // （この下の「臨時枠削除」「休止系」はそのままでOK）
+        if (layout.isTemp(idx)){
+          addItem('この臨時枠を削除', ()=>{
+            const batch = (typeof beginUndoBatch === 'function')
+              ? beginUndoBatch('temp-remove')
+              : null;
+            try {
+              removeTempAt(currentMonday, dayKey, section, idx);
+            } finally {
+              if (typeof endUndoBatch === 'function') {
+                endUndoBatch(batch);
+              }
+            }
+            render();
+          });
+        }
 
       // 休止（時刻基準）— 祝日は非表示
-      const slotHHMM = normalizeTimeInput(timeEl.textContent.trim()) || timeEl.textContent.trim();
-      const iso = meta.d;  const isHoliday = isHolidayISO(iso);
-      if (!isHoliday) {
-        addItem('────────', ()=>{});
-        addItem('この枠「以後」を休止', ()=>{ const off = loadDayOff(currentMonday); const cutAfter = Object.assign({}, off[dayKey]?.cutAfter || {}); cutAfter[section] = String(slotHHMM); setDayOff(currentMonday, dayKey, { cutAfter }, { snapshot:true }); render(); });
-        addItem('この枠「より前」を休止', ()=>{ const off = loadDayOff(currentMonday); const cutBefore = Object.assign({}, off[dayKey]?.cutBefore || {}); cutBefore[section] = String(slotHHMM); setDayOff(currentMonday, dayKey, { cutBefore }, { snapshot:true }); render(); });
-        addItem('このセクションの「時刻休止」をクリア', ()=>{ const off = loadDayOff(currentMonday); const cutAfter  = Object.assign({}, off[dayKey]?.cutAfter  || {}); const cutBefore = Object.assign({}, off[dayKey]?.cutBefore || {}); delete cutAfter[section]; delete cutBefore[section]; setDayOff(currentMonday, dayKey, { cutAfter, cutBefore }, { snapshot:true }); render(); });
-      }
+      (() => {
+        const key = el.dataset.key;
+        const metaInfo = parseKey(key);   // { d, day, section, idx } など
+        const iso      = metaInfo && metaInfo.d;
+        const isHoliday= iso ? isHolidayISO(iso) : false;
+        if (isHoliday) return;
+
+        // 週データとこの枠のレコード
+        const store      = loadWeek(currentMonday) || {};
+        const recHere    = store[key];
+        const hasDataHere= !!recHere;
+
+        // 同じセクション内のスロット一覧（DOM 順）
+        const slotsContainer = el.parentElement; // .slots
+        if (!slotsContainer) return;
+        const slotEls = Array.from(slotsContainer.querySelectorAll('.slot'));
+        const domIdx  = slotEls.indexOf(el);
+        if (domIdx < 0) return;
+
+        let hasDataBefore = false;
+        let hasDataAfter  = false;
+
+        for (let i = 0; i < slotEls.length; i++){
+          const sEl = slotEls[i];
+          const k   = sEl.dataset.key;
+          if (!k) continue;
+          const r = store[k];
+
+          // ★ tail だけのレコード（結合の延長枠）や
+          //   ゴースト tail は「データあり」とはみなさない
+          if (!r || r.tail) continue;
+
+          if (i < domIdx) {
+            hasDataBefore = true;
+          } else if (i > domIdx) {
+            hasDataAfter = true;
+          }
+          if (hasDataBefore && hasDataAfter) break;
+        }
+
+
+        // このマス自体はデータなし かつ 前後にどこまでデータがあるか
+        const canPauseHere       = !hasDataHere;
+        const canPauseBeforeHere = canPauseHere && !hasDataBefore;
+        const canPauseAfterHere  = canPauseHere && !hasDataAfter;
+
+        // 現在の休止状態
+        const off       = loadDayOff(currentMonday);
+        const cutAfter  = off[dayKey]?.cutAfter  || {};
+        const cutBefore = off[dayKey]?.cutBefore || {};
+        const hasOff    = !!(cutAfter[section] || cutBefore[section]);
+
+        // 「以前/以後」も出せず、クリア対象の休止も無ければ何も出さない
+        if (!canPauseBeforeHere && !canPauseAfterHere && !hasOff) return;
+
+        addItem('────────', () => {});
+
+        // この枠の時刻（HH:MM）
+        const timeText = timeEl.textContent.trim();
+        const slotHHMM = normalizeTimeInput(timeText) || timeText;
+
+        // この枠「以後」を休止（★後ろ側にデータがないマスだけ）
+        if (canPauseAfterHere) {
+          addItem('この枠「以後」を休止', () => {
+            const off0      = loadDayOff(currentMonday);
+            const cutAfter0 = Object.assign({}, off0[dayKey]?.cutAfter || {});
+            cutAfter0[section] = String(slotHHMM);
+            setDayOff(currentMonday, dayKey, { cutAfter: cutAfter0 }, { snapshot: true });
+            render();
+          });
+        }
+
+        // この枠「より前」を休止（★前側にデータがないマスだけ）
+        if (canPauseBeforeHere) {
+          addItem('この枠「より前」を休止', () => {
+            const off0       = loadDayOff(currentMonday);
+            const cutBefore0 = Object.assign({}, off0[dayKey]?.cutBefore || {});
+            cutBefore0[section] = String(slotHHMM);
+            setDayOff(currentMonday, dayKey, { cutBefore: cutBefore0 }, { snapshot: true });
+            render();
+          });
+        }
+
+        // このセクションの「時刻休止」をクリア（★何か休止があるときだけ）
+        if (hasOff) {
+          addItem('このセクションの「時刻休止」をクリア', () => {
+            const off1       = loadDayOff(currentMonday);
+            const cutAfter1  = Object.assign({}, off1[dayKey]?.cutAfter  || {});
+            const cutBefore1 = Object.assign({}, off1[dayKey]?.cutBefore || {});
+            delete cutAfter1[section];
+            delete cutBefore1[section];
+            setDayOff(currentMonday, dayKey, { cutAfter: cutAfter1, cutBefore: cutBefore1 }, { snapshot: true });
+            render();
+          });
+        }
+      })();
+
+      } // if (!isRLSingleMember) ここまで
+
   // ==== RLセット解除 ====
   (()=>{
     try {
