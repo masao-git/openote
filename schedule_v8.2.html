@@ -7351,6 +7351,76 @@ document.addEventListener('keydown',(e)=>{
     e.preventDefault();
     const el = getActiveSlot?.(); if(!el) return;
 
+  // ============================================
+  // 🔵 複数選択されている場合：まとめて削除
+  // ============================================
+  if (multiSelected && multiSelected.size >= 2) {
+    const keysToDelete = Array.from(multiSelected);
+    if (!window.confirm(`選択された ${keysToDelete.length} 枠をまとめて削除します。よろしいですか？`)) {
+      return;
+    }
+
+    beginUndoBatch();
+    try {
+      const st = loadWeek(currentMonday) || {};
+      let anyHeadKey = null;
+
+      for (const k of keysToDelete) {
+        const rec = st[k];
+        if (!rec) continue;
+
+        // head を特定する（結合枠前提）
+        const { d, day, section, idx } = parseKey(k);
+        const baseEl = document.querySelector(`.slot[data-key="${k}"]`);
+        const headEl = (function resolveHead(n){
+          let p = n;
+          while (p && p.classList && p.classList.contains('slot')) {
+            if (p.classList.contains('mergeHead')) return p;
+            if (!p.classList.contains('hiddenRow')) return p;
+            p = p.previousElementSibling;
+          }
+          return n;
+        })(baseEl);
+
+        const headKey = headEl?.dataset?.key;
+        if (!headKey) continue;
+        if (!anyHeadKey) anyHeadKey = headKey;
+
+        // span を取得
+        function getSpan(h){
+          const s = h && h.style ? h.style.gridRowEnd : '';
+          const m = s && s.match(/span\s+(\d+)/i);
+          if (m){ const n = parseInt(m[1],10); if (Number.isFinite(n) && n>0) return n; }
+          const d = h && h.dataset ? h.dataset : {};
+          const raw = d.span || d.mergeSpan;
+          const n2 = parseInt(raw,10);
+          return (Number.isFinite(n2) && n2>0) ? n2 : 1;
+        }
+
+        const span = getSpan(headEl);
+
+        // head + tail を削除
+        for (let i = 0; i < span; i++) {
+          const key2 = `${d}|${day}|${section}|${idx + i}`;
+          delete st[key2];
+        }
+      }
+
+      // time override をまとめて再構築（代表 headKey を使用）
+      if (anyHeadKey && typeof autoRebuildTimeOverridesForSectionAfterDelete === 'function') {
+        autoRebuildTimeOverridesForSectionAfterDelete(anyHeadKey, st);
+      }
+
+      saveWeek(currentMonday, st);
+      preserveScrollWhile(()=> render());
+      clearMultiSelection();
+
+    } finally {
+      endUndoBatch();
+    }
+
+    return; // ← 一括削除はここで処理終了
+  }
     // ============================
     // 🔵 RLセット選択中ならセット削除
     // ============================
