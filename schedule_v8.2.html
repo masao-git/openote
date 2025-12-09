@@ -889,6 +889,188 @@ body.dayFocus #printWeek2pBtn {
   display: none !important;
 }
 
+
+
+.iol-table-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: 12px;
+  row-gap: 0;              /* ★ 行間スキマなし */
+  margin-top: 4px;
+}
+
+
+.iol-header,
+.iol-cell {
+  margin: 0;
+  padding: 2px 8px;        /* ★ 縦方向の余白を小さく */
+  font-size: 13px;
+}
+/* IOLの各行（種類・度数・用途）を横並びで統一 */
+.iol-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 種類・度数・用途：グレー枠の中で少し幅広に */
+.iol-input,
+.iol-select {
+  width: 6.5em;        /* ★ ここを広げるだけ（6.5〜8emくらいで好み調整OK） */
+  padding: 1px 3px;
+  height: 1.8em;
+  box-sizing: border-box;
+}
+
+/* IOL① ヘッダ */
+.iol-table-grid > .iol-header:nth-child(1) {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  padding: 4px 8px;
+}
+
+/* IOL① 種類・度数行 */
+/* IOL① 種類行（常に中段） */
+.iol-table-grid > .iol-cell:nth-child(4) {
+  background: #fafafa;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  padding: 4px 8px;
+}
+
+/* IOL① 度数行：デフォルトはここでカードを閉じる */
+.iol-table-grid > .iol-cell:nth-child(7) {
+  background: #fafafa;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0 0 4px 4px;
+  padding: 4px 8px;
+}
+
+/* IOL① 用途行（showIolUse時だけ下端として表示） */
+#editor.showIolDetail .iol-table-grid > .iol-cell:nth-child(10) {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  padding: 4px 8px;
+}
+
+/* showIolUse中は度数行を中段扱いに変更 */
+#editor.showIolDetail .iol-table-grid > .iol-cell:nth-child(7) {
+  border-bottom: none;
+  border-radius: 0;
+}
+
+/* IOL② ヘッダ */
+.iol-table-grid > .iol-header:nth-child(2) {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  padding: 4px 8px;
+}
+
+/* IOL② 種類行 */
+.iol-table-grid > .iol-cell:nth-child(5) {
+  background: #fafafa;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  padding: 4px 8px;
+}
+
+/* IOL② 度数行：通常はここでカードを閉じる */
+.iol-table-grid > .iol-cell:nth-child(8) {
+  background: #fafafa;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0 0 4px 4px;
+  padding: 4px 8px;
+}
+
+/* IOL② 用途行：詳細表示時だけ下端にする */
+#editor.showIolDetail .iol-table-grid > .iol-cell:nth-child(11) {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-top: none;            /* ★ ここで二重線を防ぐ */
+  border-radius: 0 0 4px 4px;
+  padding: 4px 8px;
+}
+
+/* 詳細表示中は度数行を中段扱いに変更 */
+#editor.showIolDetail .iol-table-grid > .iol-cell:nth-child(8) {
+  border-bottom: none;         /* ★ 下の線を消して用途に引き継ぐ */
+  border-radius: 0;
+}
+
+
+/* IOL③ ヘッダ */
+.iol-table-grid > .iol-header:nth-child(3) {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  padding: 4px 8px;
+}
+
+/* IOL③ 種類行 */
+.iol-table-grid > .iol-cell:nth-child(6) {
+  background: #fafafa;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  padding: 4px 8px;
+}
+
+/* IOL③ 度数行：通常はここでカードを閉じる */
+.iol-table-grid > .iol-cell:nth-child(9) {
+  background: #fafafa;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-radius: 0 0 4px 4px;
+  padding: 4px 8px;
+}
+
+/* IOL③ 用途行：詳細表示時だけ下端にする */
+#editor.showIolDetail .iol-table-grid > .iol-cell:nth-child(12) {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-top: none;            /* ★ 二重線防止 */
+  border-radius: 0 0 4px 4px;
+  padding: 4px 8px;
+}
+
+/* 詳細表示中は度数行を中段扱いに変更 */
+#editor.showIolDetail .iol-table-grid > .iol-cell:nth-child(9) {
+  border-bottom: none;         /* ★ 下線を用途に譲る */
+  border-radius: 0;
+}
+
+
+/* ① IOL②・③のセル：位置は維持して中身だけ隠す */
+.iol-extra-cell {
+  visibility: hidden;   /* ← display:none をやめて visibility で隠す */
+}
+
+/* ② 用途行は行ごと消したいので display:none のまま */
+.iol-use-cell {
+  display: none;
+}
+
+/* ③ 詳細表示モード：IOL②・③＋用途をいっしょに表示 */
+#editor.showIolDetail .iol-extra-cell {
+  visibility: visible;
+}
+
+#editor.showIolDetail .iol-use-cell {
+  display: flex;        /* 他の .iol-cell と同じ flex で表示 */
+}
+
+
 	
   </style>
   </head>
@@ -970,9 +1152,62 @@ body.dayFocus #printWeek2pBtn {
   <!-- 備考 -->
   <label>備考</label><textarea name="note" rows="3" style="resize:vertical"></textarea>
 
-  <!-- IOL を最後の方へ -->
-  <label>IOL種類</label><input name="iolType" list="iolTypes" />
-  <label>IOL度数</label><input name="iolPower" list="iolPowers" />
+  <!-- ▼ 新 IOL 3カラムブロック -->
+<label>IOL情報</label>
+<div>
+  <div class="iol-table-grid">
+    <!-- ▼ 1行目：ヘッダ -->
+    <div class="iol-header">IOL①</div>
+	<div class="iol-header iol-extra-cell">IOL②</div>
+	<div class="iol-header iol-extra-cell">IOL③</div>
+
+    <!-- ▼ 2行目：種類 -->
+    <div class="iol-cell">
+      種類 <input name="iolType"   list="iolTypes"  class="iol-input">
+    </div>
+    <div class="iol-cell iol-extra-cell">
+      種類 <input name="iolType2"  list="iolTypes"  class="iol-input">
+    </div>
+    <div class="iol-cell iol-extra-cell">
+      種類 <input name="iolType3"  list="iolTypes"  class="iol-input">
+    </div>
+
+    <!-- ▼ 3行目：度数 -->
+    <div class="iol-cell">
+      度数 <input name="iolPower"  list="iolPowers" class="iol-input">
+    </div>
+    <div class="iol-cell iol-extra-cell">
+      度数 <input name="iolPower2" list="iolPowers" class="iol-input">
+    </div>
+    <div class="iol-cell iol-extra-cell">
+      度数 <input name="iolPower3" list="iolPowers" class="iol-input">
+    </div>
+
+    <!-- ▼ 4行目：用途 -->
+    <div class="iol-cell iol-use-cell">
+      用途
+      <input name="iolUse1" class="iol-input" list="iolUses">
+    </div>
+    <div class="iol-cell iol-use-cell">
+      用途
+      <input name="iolUse2" class="iol-input" list="iolUses">
+    </div>
+    <div class="iol-cell iol-use-cell">
+      用途
+      <input name="iolUse3" class="iol-input" list="iolUses">
+    </div>
+  </div> <!-- /.iol-table-grid -->
+
+  <div style="text-align:right; font-size:11px; margin-top:2px;">
+    <button type="button"
+            id="toggleIolUseRow"
+            style="border:none; background:none; color:#2563eb; cursor:pointer; padding:0;">
+      IOL②・③を表示
+    </button>
+  </div>
+</div>
+
+
 
   <!-- 入退室時間 -->
 <label>入退室時間</label>
@@ -1035,6 +1270,12 @@ body.dayFocus #printWeek2pBtn {
 <!-- datalist（IOL候補） -->
 <datalist id="iolTypes"></datalist>
 <datalist id="iolPowers"></datalist>
+<datalist id="iolUses">
+  <option value="in">
+  <option value="out">
+  <option value="fix">
+</datalist>
+
 
   <template id="slotTemplate">
     <div class="slot" draggable="false">
@@ -5693,9 +5934,27 @@ function toKatakana(input){
   return s;
 }
 
+const editor = document.getElementById('editor');
+const toggleIolUseBtn = document.getElementById('toggleIolUseRow');
+
+if (editor && toggleIolUseBtn) {
+  toggleIolUseBtn.addEventListener('click', () => {
+    const on = editor.classList.toggle('showIolDetail');
+    toggleIolUseBtn.textContent = on ? 'IOL②・③を隠す' : 'IOL②・③を表示';
+  });
+}
+
 /* ---------- エディタ ---------- */
 function openEditor(keys){
   const editor = document.getElementById('editor');
+
+  // 毎回「IOL①のみ・用途なし」の状態からスタート
+  editor.classList.remove('showIolDetail');
+  const toggleIolUseBtn = document.getElementById('toggleIolUseRow');
+  if (toggleIolUseBtn) {
+    toggleIolUseBtn.textContent = 'IOL②・③を表示';
+  }
+  
   const f = document.getElementById('editorForm');
   const st = loadWeek(currentMonday);
 
@@ -5790,10 +6049,44 @@ function openEditor(keys){
   f.age.value  = first.age  || '';
   f.eye.value  = first.eye  || '';
   f.io.value   = first.io   || '';
+
+  // IOL①〜③ をフォームに反映
   f.iolType.value  = first.iolType  || '';
   f.iolPower.value = first.iolPower || '';
+  if (f.iolUse1)  f.iolUse1.value  = first.iolUse1  || '';
+
+  if (f.iolType2)  f.iolType2.value  = first.iolType2  || '';
+  if (f.iolPower2) f.iolPower2.value = first.iolPower2 || '';
+  if (f.iolUse2)   f.iolUse2.value   = first.iolUse2   || '';
+
+  if (f.iolType3)  f.iolType3.value  = first.iolType3  || '';
+  if (f.iolPower3) f.iolPower3.value = first.iolPower3 || '';
+  if (f.iolUse3)   f.iolUse3.value   = first.iolUse3   || '';
+
   f.proc1.value = first.proc1 || '';
   f.proc2.value = first.proc2 || '';
+
+  // ★ IOL②・③に何か入っていたら自動で展開
+  (function(){
+    const btn = document.getElementById('toggleIolDetail');
+    const hasDetail =
+      (f.iolType2  && f.iolType2.value.trim())  ||
+      (f.iolPower2 && f.iolPower2.value.trim()) ||
+      (f.iolUse1   && f.iolUse1.value.trim())   ||
+      (f.iolUse2   && f.iolUse2.value.trim())   ||
+      (f.iolType3  && f.iolType3.value.trim())  ||
+      (f.iolPower3 && f.iolPower3.value.trim()) ||
+      (f.iolUse3   && f.iolUse3.value.trim());
+
+    if (hasDetail) {
+      editor.classList.add('showIolDetail');
+      if (btn) btn.textContent = 'IOL②・③を隠す';
+    } else {
+      editor.classList.remove('showIolDetail');
+      if (btn) btn.textContent = 'IOL②・③を表示';
+    }
+  })();
+
    // 術者：候補にあれば select、なければフリー欄へ
    (function(){
      const surgeonName = first.surgeon || '';
@@ -6229,8 +6522,20 @@ editor.addEventListener('close', function handler(){
         age:  f.age.value.trim(),
         eye:  f.eye.value,
         io:   f.io.value,
-        iolType: f.iolType.value.trim(),
+
+        // IOL①〜③
+        iolType:  f.iolType.value.trim(),
         iolPower: normalizeDiopter(f.iolPower.value.trim()),
+        iolUse1:  (f.iolUse1  ? f.iolUse1.value.trim()  : ''),
+
+        iolType2:  (f.iolType2  ? f.iolType2.value.trim()  : ''),
+        iolPower2: (f.iolPower2 ? normalizeDiopter(f.iolPower2.value.trim()) : ''),
+        iolUse2:   (f.iolUse2   ? f.iolUse2.value.trim()   : ''),
+
+        iolType3:  (f.iolType3  ? f.iolType3.value.trim()  : ''),
+        iolPower3: (f.iolPower3 ? normalizeDiopter(f.iolPower3.value.trim()) : ''),
+        iolUse3:   (f.iolUse3   ? f.iolUse3.value.trim()   : ''),
+
         proc1: f.proc1.value.trim(),
         proc2: f.proc2.value.trim(),
         surgeon: (() => {
