@@ -241,6 +241,11 @@
     padding-left: 4px;
   }
 
+.slot .content-left .iol-use{
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+
 /* 眼の赤強調（お好みで） */
 .eye-mark{
   color: #b91c1c;
@@ -1069,8 +1074,6 @@ body.dayFocus #printWeek2pBtn {
 #editor.showIolDetail .iol-use-cell {
   display: flex;        /* 他の .iol-cell と同じ flex で表示 */
 }
-
-
 	
   </style>
   </head>
@@ -4653,9 +4656,7 @@ function buildSlotMainText(data, width){
         break;
 
       case 'iol': {
-        let p = (data.iolPower || '').toString().trim();
-        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
-        val = `${(data.iolType || '').trim()} ${p}`.trim();
+        val = buildIolInlineText(data);
         break;
       }
 
@@ -4726,9 +4727,7 @@ function buildSlotMainParts(data, width){
         break;
 
       case 'iol': {
-        let p = (data.iolPower || '').toString().trim();
-        if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
-        val = `${(data.iolType || '').trim()} ${p}`.trim();
+        val = buildIolInlineText(data);
         break;
       }
 
@@ -5013,7 +5012,10 @@ function renderSlotColumns(leftEl, parts){
       col.appendChild(badge);
     }
     // それ以外は通常テキスト
-    else {
+    else if (key === 'iol') {
+      // IOL だけは span(.iol-use) を含む HTML をそのまま解釈させる
+      col.innerHTML = label;
+    } else {
       col.textContent = label;
     }
 
@@ -5260,6 +5262,47 @@ function toHalfWidthKana(str){
 
 function flipEye(v){ if(!v) return v; if(v==='R') return 'L'; if(v==='L') return 'R'; if(v==='右') return '左'; if(v==='左') return '右'; return v; }
 
+// === IOL①〜③＋用途を 1本の文字列にまとめる ===
+function buildIolInlineText(d){
+  if (!d) return '';
+
+  const list = [];
+
+  const entries = [
+    { idx: 1, t: d.iolType,  p: d.iolPower,  u: d.iolUse1 },
+    { idx: 2, t: d.iolType2, p: d.iolPower2, u: d.iolUse2 },
+    { idx: 3, t: d.iolType3, p: d.iolPower3, u: d.iolUse3 },
+  ];
+
+  for (const e of entries){
+    const t = (e.t || '').trim();
+    let p = (e.p || '').toString().trim();
+    const u = (e.u || '').trim();
+
+    // 種類も度数も空ならスキップ
+    if (!t && !p) continue;
+
+    // 度数は数値なら 0.1 ステップに整形
+    if (p && !isNaN(Number(p))) {
+      p = Number(p).toFixed(1);
+    }
+
+    let label = `${[t, p].filter(Boolean).join(' ')}`.trim();
+    if (u) {
+      // 用途はあとで CSS で小さくする
+      label += ` <span class="iol-use">(${u})</span>`;
+    }
+
+    list.push(label);
+  }
+
+  // 何もなければ空
+  if (!list.length) return '';
+
+  // 「IOL1 …/IOL2 …/IOL3 …」の形で結合
+  return list.join('・');
+}
+
 /** 週表示用：優先表示＋「｜」区切りテキストを生成 */
 function fmtContent(d){
   if (!d) return '';
@@ -5269,8 +5312,6 @@ function fmtContent(d){
 
   // 1) 入院/外来/当日
   let ioLabel = d.io || '';
-  // もし「当日」の情報を別に持たせるなら、ここで付け足せる
-  // if (d.sameDay) ioLabel = (ioLabel ? ioLabel : '') + '当';
   if (ioLabel) core.push(ioLabel);
 
   // 2) 氏名
@@ -5278,7 +5319,9 @@ function fmtContent(d){
 
   // 3) 患者ID（#なし10桁）
   if (d.pid){
-    const id = toHalfWidthNum(String(d.pid)).replace(/^#/, '').slice(0, 10);
+    const id = toHalfWidthNum(String(d.pid))
+      .replace(/^#/, '')
+      .slice(0, 10);
     core.push(id);
   }
 
@@ -5287,12 +5330,10 @@ function fmtContent(d){
     core.push(String(d.eye).trim());
   }
 
-  // 5) IOL種類・度数
-  if (d.iolType || d.iolPower){
-    let p = (d.iolPower || '').toString().trim();
-    if (p && !isNaN(Number(p))) p = Number(p).toFixed(1);
-    const iol = `${(d.iolType || '').trim()} ${p}`.trim();
-    if (iol) core.push(iol);
+  // 5) IOL①〜③＋用途（今回の主役）
+  const iolText = buildIolInlineText(d);
+  if (iolText){
+    core.push(iolText);
   }
 
   // 6) 術式1+2：まとめて1フィールドとして扱う
@@ -5305,34 +5346,32 @@ function fmtContent(d){
   }
 
   // 7) 備考は「枠に余裕があるとき」に追加
-  if (d.note)  optional.push('※' + d.note);
+  if (d.note){
+    optional.push('※' + d.note);
+  }
 
   // --- ここから「長さ」に応じてどこまで入れるか決める ---
 
-  // まず「重要項目だけ」で組み立て
   let text = core.join('｜');
   const lenCore = text.length;
 
-  // ざっくりしきい値（必要ならあとで調整）
-  const MAX_NARROW = 24; // 狭い枠：このくらいまで
-  const MAX_MEDIUM = 40; // そこそこ広い枠
+  const MAX_NARROW = 24;
+  const MAX_MEDIUM = 40;
 
   if (optional.length === 0){
-    // 追加項目が何もないならそのまま
     return text;
   }
 
   if (lenCore <= MAX_NARROW){
-    // かなり短い → optional も全部入れてしまう
     text = core.concat(optional).join('｜');
   } else if (lenCore <= MAX_MEDIUM){
-    // そこそこ → optional の先頭だけ足す
     text = core.concat(optional[0]).join('｜');
   }
   // それ以上長いときは core だけ（＝狭い枠は重要項目のみ）
 
   return text;
 }
+
 
 /** datalist（最低限） */
 (function ensureDatalists(){
