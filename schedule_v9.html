@@ -1343,7 +1343,6 @@ body.iolModeOn .slot.is-selected,
 body.iolModeOn .slot.multiSelected {
   outline: none !important;
   box-shadow: none !important;
-  background: inherit !important;
 }
 body.iolModeOn .multiRangeOutline{ display:none !important; }
 
@@ -5712,6 +5711,42 @@ restoreState = function(snap){
 /** 共通ユーティリティ */
 function parseKey(key){ const [d,day,section,idx] = key.split('|'); return {d,day,section:Number(section),idx:Number(idx)}; }
 function slotKey(meta){ return `${meta.d}|${meta.day}|${meta.section}|${meta.idx}`; }
+
+// ===== フェーズ1-③：当日入院（当） 配置チェック =====
+function __isWeekendDayKey(dayKey){
+  return dayKey === 'Weekend' || dayKey === 'Sat' || dayKey === 'Sun';
+}
+function __getSectionPeriod(dayKey, sectionIdx){
+  try{
+    const sec = CONFIG?.[dayKey]?.[sectionIdx];
+    const title = String(sec?.title || '');
+    if (title.includes('午前')) return 'AM';
+    if (title.includes('午後')) return 'PM';
+  }catch(_){}
+  // フォールバック（将来拡張に強くする）
+  if (Number(sectionIdx) === 0) return 'AM';
+  return 'PM';
+}
+function __warnIfTouInMorning(dayKey, sectionIdx){
+  if (__isWeekendDayKey(dayKey)) return true;     // 週末は警告しない方針
+  const period = __getSectionPeriod(dayKey, sectionIdx);
+  if (period !== 'AM') return true;
+  return window.confirm('【注意】午前枠に「当」（当日入院）を入れようとしています。\n通常は午前入院→午後手術を想定します。\nこのまま保存/移動しますか？');
+}
+
+
+// 「当」をこのdestKeyに置いてよいか（週末は常にOK、午前ならconfirm）
+function __allowTouPlacementForKey(destKey, dataObj){
+  try{
+    if (!dataObj) return true;
+    if ((dataObj.io || '').trim() !== '当') return true;
+    const p = parseKey(destKey);
+    if (!p) return true;
+    return __warnIfTouInMorning(p.day, p.section);
+  }catch(_e){
+    return true; // 失敗時は運用停止にならないよう通す
+  }
+}
 function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 function toHalfWidthNum(str){ if(str==null) return ""; return String(str).replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)); }
 function normalizeDiopter(s){ if(!s) return ''; const v = Number(String(s).replace(',', '.')); return isFinite(v) ? v.toFixed(1) : s; }
@@ -7208,6 +7243,32 @@ editor.addEventListener('close', function handler(){
   const hadMergeBatch = !!mergeEditBatchOpen;
 
   if (editor.returnValue === 'save') {
+  
+    // ===== フェーズ1-③：保存前チェック（午前×当は警告 / 週末は除外）=====
+    try{
+      const p0 = parseKey(firstKey); // firstKey はこのスコープに既にある想定
+      const dayKey = p0?.day;
+      const secIdx = p0?.section;
+      const isTou  = ((f?.io?.value || '').trim() === '当');
+      if (isTou && dayKey && secIdx != null && !__isWeekendDayKey(dayKey)) {
+        const period = __getSectionPeriod(dayKey, secIdx); // 'AM' / 'PM'
+        if (period === 'AM') {
+          const ok = window.confirm(
+            '【注意】午前枠に「当」（当日入院）を入れようとしています。\n' +
+            '通常は午前入院→午後手術を想定します。\n' +
+            'このまま保存しますか？'
+          );
+          if (!ok) {
+            // ★ ここが肝：save 処理自体を中止して「キャンセル扱い」に寄せる
+            editor.returnValue = 'cancel';
+            // 結合→即編集のバッチが開いていたら閉じる（save以外ルートと同等に）
+            return; // ← 外側（saveブロック）から抜けるので保存されない
+          }
+        }
+      }
+    }catch(e){
+      console.warn('tou-in-morning pre-save check skipped:', e);
+    }
 
     // 結合から続いているバッチがあればそれを再利用、なければ新規に開始
     const reuseBatch = hadMergeBatch;
@@ -7272,6 +7333,68 @@ editor.addEventListener('close', function handler(){
         })()
       };
       nd = normalizePatientFields(nd);
+
+      // ★ 編集→保存で IOLドット等の「モード系フラグ」が消えないように既存データから引き継ぐ
+      //   （フォームに項目が無い＝ndに入らないため、上書きで消えるのを防ぐ）
+      const __storeForFlags = loadWeek(currentMonday) || {};
+      function __carryFlags(prev, next){
+        if (!prev || !next) return next;
+        // 必要に応じてここに「消したくないフラグ」を追加
+        const keep = [
+          // arrival ✓ 系（将来拡張してもここで守れる）
+          'arrivalNotified', 'arrivalChecked', 'arrivalFlag',
+
+          // IOL ● 系（あなたの実装名に合わせて）
+          'iolOrdered', 'iolOrdered1', 'iolOrdered2', 'iolOrdered3'
+        ];
+        for (const k of keep){
+          if (prev[k] !== undefined && next[k] === undefined){
+            next[k] = prev[k];
+          }
+        }
+        return next;
+      }
+
+      // openEditor(keys) の「先頭キー」を代表として一旦 carry（単枠保存の事故防止）
+      // ※ この後の「各キーに書き込む」ループでも個別に carry してください（下に追加DIFFあり）
+      const __prev0 = __storeForFlags[keys?.[0]];
+      __carryFlags(__prev0, nd);
+
+// ★ IOLの「種類 or 度数」が変わったら、そのIOLの発注ドット(iolOrdered1/2/3)を自動OFF（用途は無視）
+(function(){
+  const key0 = keys?.[0];
+  const prev = key0 ? __storeForFlags[key0] : null;
+  if (!prev || prev.tail) return;
+
+  const normS = v => (v ?? '').toString().trim();
+  const normP = v => {
+    const s = normS(v);
+    if (!s) return '';
+    const num = Number(s);
+    return Number.isFinite(num) ? num.toFixed(1) : s; // 22 と 22.0 の揺れ対策
+  };
+
+  const pairs = [
+    { idx: 1, t: 'iolType',  p: 'iolPower',  flag: 'iolOrdered1' },
+    { idx: 2, t: 'iolType2', p: 'iolPower2', flag: 'iolOrdered2' },
+    { idx: 3, t: 'iolType3', p: 'iolPower3', flag: 'iolOrdered3' },
+  ];
+
+  for (const x of pairs){
+    const prevType = normS(prev[x.t]);
+    const nextType = normS(nd[x.t]);
+
+    const prevPow  = normP(prev[x.p]);
+    const nextPow  = normP(nd[x.p]);
+
+    if (prevType !== nextType || prevPow !== nextPow){
+      nd[x.flag] = false; // ★ ここでOFF（用途変更では消えない）
+    }
+  }
+})();
+
+	  
+
 
       // 所要時間 → span 自動決定
       const durNum = Number(nd.duration || 0);
@@ -7383,9 +7506,9 @@ editor.addEventListener('close', function handler(){
         const headKey = keysToUse[0];
         const base = { ...nd, head:true, span: keysToUse.length };
 
-        // ★ 既存 meta があれば引き継ぐ（rlSetId を含む）
-        if (prevMeta && (!base.meta || !base.meta.rlSetId)) {
-          base.meta = { ...prevMeta };
+        // ★ 既存 meta は常にマージして保持（IOLドット等が保存で消えないように）
+        if (prevMeta) {
+          base.meta = { ...prevMeta, ...(base.meta || {}) };
         }
 
         // ★ arrival ✓ を引き継ぐ
@@ -7402,9 +7525,9 @@ editor.addEventListener('close', function handler(){
         } else {
           const base = { ...nd };
 
-          // ★ 既存 meta があれば引き継ぐ
-          if (prevMeta && (!base.meta || !base.meta.rlSetId)) {
-            base.meta = { ...prevMeta };
+          // ★ 既存 meta は常にマージして保持（IOLドット等が保存で消えないように）
+          if (prevMeta) {
+            base.meta = { ...prevMeta, ...(base.meta || {}) };
           }
 
           // ★ arrival ✓ を引き継ぐ
@@ -8005,6 +8128,21 @@ if (clip.type === 'multi') {
     probe += span;
   }
 
+  // ★ 1-b) 事前チェック：当日入院（当）× 午前セクションは警告（週末は除外）
+  probe = base;
+  for (const b of blocks) {
+    const span = Number(b.span || 1);
+    // single はその1枠、merge は headData が代表
+    const would =
+      (b.kind === 'single') ? b.data :
+      (b.kind === 'merge')  ? b.data : null;
+    if (would && (would.io || '').trim() === '当') {
+      const destKey = list[probe].dataset.key; // 代表キー（mergeもheadがprobe）
+      if (!__allowTouPlacementForKey(destKey, would)) return;
+    }
+    probe += span;
+  }
+
   // 2) 実際の書き込み＋保存を1バッチにまとめる
   beginUndoBatch();
   try {
@@ -8088,6 +8226,9 @@ if (clip.type === 'single') {
     const data = deepClone(clip.data.data);
     if (flip && data.eye) data.eye = flipEye(data.eye);
     delete data.linkWith;
+
+    // ★ 当日入院（当）× 午前セクションは警告（週末は除外）
+    if (!__allowTouPlacementForKey(tKey, data)) return;
 
     // 貼り付け先に書き込み
     st[tKey] = data;
