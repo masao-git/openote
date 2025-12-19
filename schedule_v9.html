@@ -166,6 +166,86 @@ body.arrivalModeOn .arrival-check{
  }
 body:not(.arrivalModeOn) .arrival-check.is-off { display: none !important; } /* 通常時はtrueのみ表示 */
 
+ /* ===== パス ●（黒）モード：遮断（arrival思想） ===== */
+ body.pathModeOn #schedule{ pointer-events:none; }
+ body.pathModeOn .topbar .group *{ pointer-events:none; }
+ body.pathModeOn #pathModeBtn{
+   pointer-events:auto;
+   background:#111827;
+   color:#fff;
+   border-color:#000;
+   font-weight:700;
+ }
+
+ /* パスモード中：青枠/外枠残骸を非表示（IOLと同じ） */
+ body.pathModeOn .slot.focused,
+ body.pathModeOn .slot.is-selected,
+ body.pathModeOn .slot.multiSelected{
+   outline:none !important;
+   box-shadow:none !important;
+ }
+ body.pathModeOn .multiRangeOutline{ display:none !important; }
+ body.pathModeOn .path-check{ pointer-events:auto; cursor:pointer; }
+
+#pathModeBanner{
+  position: fixed;
+  top: 56px;        /* arrival / IOL と同じ高さ */
+  left: 12px;
+  z-index: 2000;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255,255,255,.98);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.10);
+  font-size: 12px;
+  display: none;
+}
+body.pathModeOn #pathModeBanner{ display:block; }
+
+#pathModeBtn{
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  line-height: 32px;
+  font-size: 16px;
+  /* 通常時：黒ドット */
+  color: #111827;
+}
+
+/* パス入力済み（入／当）：時刻の右横（arrival ✓ と同じ位置） */
+.path-check{
+  position:absolute;
+  right:0px;
+  top:8px;                 /* ★ ここ：8px */
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:#111827;
+  display:inline-block;
+  font-size:0;
+  line-height:0;
+  pointer-events:none;
+  user-select:none;
+}
+
+.path-check.is-off{
+  opacity:.25;  
+}
+body:not(.pathModeOn) .path-check.is-off{ display:none !important; } /* 通常時はtrueのみ表示（arrivalと同思想） */
+body.pathModeOn .path-check{ pointer-events:auto; cursor:pointer; }  /* 後でモード入れたらクリック可 */
+
+/* ★ 当たり判定（透明） */
+.path-check::before{
+  content:'';
+  position:absolute;
+  left:-8px;
+  top:-8px;
+  width:20px;   /* ← IOLドット相当のヒット感 */
+  height:20px;
+  background:transparent;
+}
+
+
 /* ===== IOL ●（発注済表示：StepB=表示だけ） ===== */
 .iol-dot{
   display:inline-block;
@@ -413,6 +493,35 @@ body.iolModeOn .iol-dot:hover::after{
   font-weight: 700;
   display: inline-block;
   line-height: 1.0;      /* 行の高さを詰めて“背を低く” */
+  position: relative;      /* ★ 右下ドットの基準 */
+  padding-right: 10px;     /* ★ 右下ドットの逃げ */ 
+}
+
+/* ===== デバイス(proc2)用：右下 赤●（IOLと同系統） ===== */
+.device-dot{
+  position:absolute;
+  right:1px;
+  bottom:1px;
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:#dc2626;      /* 赤（IOLと同色） */
+  opacity:.85;
+  font-size:0;
+  pointer-events:none;     /* 通常は触れない */
+  user-select:none;
+}
+.device-dot.is-off{ opacity:.25; }
+body:not(.iolModeOn) .device-dot.is-off{ display:none !important; }
+body.iolModeOn .device-dot{ pointer-events:auto; cursor:pointer; }
+body.iolModeOn .device-dot::before{
+  content:"";
+  position:absolute;
+  left:-9px; top:-9px;
+  width:22px; height:22px;   /* ★ ヒット範囲拡大（IOLと同等） */
+  background:transparent;
+  border-radius:12px;
+  pointer-events:auto;
 }
 
 /* ② 結合枠（head）は行数制限を解除して自由に表示 */
@@ -1328,6 +1437,9 @@ body.iolModeOn .iol-dot:hover::after{
   padding: 0;
   line-height: 32px;
   font-size: 16px;
+  /* ★ 通常時も「IOL=赤」を分かるように */
+  border-color: #bbb;
+  color: #dc2626;
 }
 /* ===== IOL確認モード中：●以外の操作をブロック ===== */
 body.iolModeOn #schedule{ pointer-events:none; }
@@ -1364,6 +1476,56 @@ body.iolModeOn #iolModeBanner{
   display: block;
 }
 
+#todoListExec {
+  display: none;
+}
+
+/* ===== モード中：トップバー内はすべて通常カーソル（⇖）に統一 ===== */
+body.arrivalModeOn .topbar *,
+body.iolModeOn .topbar *,
+body.pathModeOn .topbar *{
+  cursor: default !important;
+}
+
+/* 例外：モード解除ボタンだけは pointer に戻す */
+body.arrivalModeOn #arrivalModeBtn,
+body.iolModeOn #iolModeBtn,
+body.pathModeOn #pathModeBtn{
+  cursor: pointer !important;
+}
+/* ===== モード中：トップバーの hover/active/focus を無効化（モードボタン自身は除外） ===== */
+body.arrivalModeOn .topbar *:hover:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.arrivalModeOn .topbar *:active:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.arrivalModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.iolModeOn .topbar *:hover:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.iolModeOn .topbar *:active:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.iolModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.pathModeOn .topbar *:hover:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.pathModeOn .topbar *:active:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn),
+body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathModeBtn){
+  background: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  outline: none !important;
+}
+
+/* 未完了リスト用 小ドット */
+.todo-dot{
+  display:inline-block;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  vertical-align:middle;
+  margin:0 4px;
+}
+
+.todo-dot.iol{
+  background:#dc2626;   /* 赤（IOL） */
+}
+
+.todo-dot.path{
+  background:#111827;   /* 黒（パス） */
+}
 
 
   </style>
@@ -1389,8 +1551,11 @@ body.iolModeOn #iolModeBanner{
       <button id="mode2col">2列</button>
       <button id="mode4col">4列</button>
       <button id="mode5col">5列</button>
-      <button id="arrivalModeBtn" title="来院✓編集モード (Ctrl+K)">✓</button>
-	  <button id="iolModeBtn" class="modeBtn" title="IOL確認モード">●</button>
+      <button id="arrivalModeBtn" title="来院時刻✓ (Ctrl+K)">✓</button>
+	  <button id="iolModeBtn" class="modeBtn" title="IOL・DEV確認">●</button>	  
+	  <button id="pathModeBtn" class="modeBtn" title="パス入力済">●</button>
+	  <button id="globalSearchBtn" title="全週検索">🔍</button>
+	  <button id="todoListBtn" title="未完了リスト（✓/●）">📋</button>
     </div>
   </header>
   <main id="schedule">
@@ -1622,6 +1787,20 @@ body.iolModeOn #iolModeBanner{
   </form>
 </dialog>
 
+<dialog id="globalSearchDialog">
+  <form method="dialog" style="min-width:520px;max-width:720px;padding:16px">
+    <h3 style="margin:0 0 8px;">全週検索</h3>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input id="globalSearchInput" placeholder="患者名 または ID" style="flex:1">
+      <button id="globalSearchExec" type="button" class="primary">検索</button>
+    </div>
+    <div id="globalSearchResult" style="max-height:50vh;overflow:auto;font-size:13px;"></div>
+    <menu style="display:flex;justify-content:flex-end;margin-top:8px">
+      <button value="cancel">閉じる</button>
+    </menu>
+  </form>
+</dialog>
+
   <script>
   "use strict";
 
@@ -1659,12 +1838,16 @@ body.iolModeOn #iolModeBanner{
   const mode5 = document.getElementById('mode5col');
   const editBtn     = document.getElementById('editBtn'); 
   const arrivalModeBtn = document.getElementById('arrivalModeBtn');
+  const pathModeBtn    = document.getElementById('pathModeBtn');
 
   // ===== arrival ✓ 編集モード（Step2: 骨組み）=====
   let arrivalModeOn = false;
+  let pathModeOn = false;
   let arrivalModeTimer = null;
+  let pathModeTimer = null;
   let iolModeTimer = null;
   let arrivalModeLastActive = 0;
+  let pathModeLastActive = 0;
   let iolModeLastActive = 0;
 
   function ensureArrivalBanner(){
@@ -1679,6 +1862,14 @@ function ensureIolBanner(){
   const b = document.createElement('div');
   b.id = 'iolModeBanner';
   b.textContent = '● IOL確認モード中（Escで終了）';
+  document.body.appendChild(b);
+}
+
+function ensurePathBanner(){
+  if (document.getElementById('pathModeBanner')) return;
+  const b = document.createElement('div');
+  b.id = 'pathModeBanner';
+  b.textContent = '● パス確認モード中（Escで終了）';
   document.body.appendChild(b);
 }
 
@@ -1740,7 +1931,52 @@ function touchIolActivity(){
   iolModeLastActive = Date.now();
   if (iolModeOn) scheduleIolAutoOff();
 }
-  
+
+function schedulePathAutoOff(){
+  clearTimeout(pathModeTimer);
+  pathModeTimer = setTimeout(()=>{
+    const now = Date.now();
+    if (pathModeOn && (now - pathModeLastActive) >= 30000){
+      setPathMode(false);
+    } else if (pathModeOn){
+      schedulePathAutoOff();
+    }
+  }, 1000);
+}
+function touchPathActivity(){
+  pathModeLastActive = Date.now();
+  if (pathModeOn) schedulePathAutoOff();
+}
+
+function setPathMode(on){
+  ensurePathBanner();
+  pathModeOn = !!on;
+  document.body.classList.toggle('pathModeOn', pathModeOn);
+
+  // arrival / IOL と排他
+  if (pathModeOn){
+    setArrivalMode(false);
+    setIolMode(false);
+  }
+
+  if (pathModeOn){
+    clearActiveSlot?.();
+    // 青枠残骸を消す（arrival/IOLと同じ）
+    document.querySelectorAll('.multiRangeOutline').forEach(el => el.remove());
+    document.querySelectorAll('.slot.multiSelected, .slot.is-selected, .slot.focused')
+      .forEach(el => {
+        el.classList.remove('multiSelected');
+        el.classList.remove('is-selected');
+        el.classList.remove('focused');
+      });
+    if (window.multiSelected) { try { window.multiSelected.clear(); } catch(_){} }
+    window.currentRLSetId = null;
+    touchPathActivity();
+  } else {
+    clearTimeout(pathModeTimer);
+    pathModeTimer = null;
+  }
+}  
   
   // ===== IOL ● モード =====
 let iolModeOn = false;
@@ -1786,12 +2022,13 @@ function setIolMode(on){
    document.addEventListener(ev, ()=>{
      if (arrivalModeOn) touchArrivalActivity();
 	 if (iolModeOn)     touchIolActivity();
+	 if (pathModeOn)    touchPathActivity();
    }, true);
  });
 
 // ★ モード中はナビ系キー操作を止める（arrival / IOL 共通）
 document.addEventListener('keydown', (e)=>{
-  if (!(arrivalModeOn || iolModeOn)) return;
+  if (!(arrivalModeOn || iolModeOn || pathModeOn)) return;
 
   const t = e.target;
   const tag = t?.tagName?.toLowerCase();
@@ -1818,6 +2055,72 @@ iolModeBtn?.addEventListener('click', (e)=>{
   e.stopImmediatePropagation();
   setIolMode(!iolModeOn);
 });  
+
+pathModeBtn?.addEventListener('click', (e)=>{
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  setPathMode(!pathModeOn);
+});
+
+// ★ モード中はトップバーのボタン操作を全部止める（arrival / IOL / path 共通）
+document.addEventListener('click', (e)=>{
+  if (!(arrivalModeOn || iolModeOn || pathModeOn)) return;
+
+  const btn = e.target.closest('button');
+  if (!btn) return;
+
+  // 例外：モード解除に必要なボタンだけは許可
+  if (btn.id === 'arrivalModeBtn' || btn.id === 'iolModeBtn' || btn.id === 'pathModeBtn') return;
+
+  // トップバー内のボタンは全部止める（ヘルプ/読込/保存も含めて）
+  if (btn.closest('.topbar')){
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  }
+}, true);
+
+// ★ パスモード中：時刻横のパスドット（.path-check）クリックでトグル
+document.addEventListener('click', (e)=>{
+  if (!pathModeOn) return;
+
+  const hit = e.target.closest('.path-check');
+  if (!hit) return;
+
+  const slot = e.target.closest('.slot');
+  const key = slot?.dataset?.key;
+  if (!key) return;
+
+  const store = loadWeek(currentMonday) || {};
+  const d = store[key];
+  if (!d || d.tail) return;
+
+  const io = (d.io || '').trim();
+  if (!(io === '入' || io === '当')) return;
+
+  // pathDone を反転（RLセットなら相方も同じ値に揃える）
+  const newVal = !d.pathDone;
+  d.pathDone = newVal;
+
+  const rlId = d?.meta?.rlSetId;
+  if (rlId){
+    for (const k of Object.keys(store)){
+      const r = store[k];
+      if (!r || r.tail) continue;
+      if (r?.meta?.rlSetId !== rlId) continue;
+      const io2 = (r.io || '').trim();
+      if (!(io2 === '入' || io2 === '当')) continue;  // パス対象だけ
+      r.pathDone = newVal;                              // ← 相方も同時に揃える
+    }
+  }
+  saveWeek(currentMonday, store);
+  paintSlotsFromStore();
+
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+}, true);
+
 // ===== arrival ✓ クリック処理（Step3-② 本体）=====
 document.addEventListener('click', (e)=>{
   const checkEl = e.target.closest('.arrival-check');
@@ -1887,6 +2190,30 @@ document.addEventListener('click', (e)=>{
   
   touchIolActivity();
 }, true);  
+
+// ===== デバイス(proc2) ● クリック処理：deviceOrdered =====
+document.addEventListener('click', (e)=>{
+  const dotEl = e.target.closest('.device-dot');
+  if (!dotEl) return;
+  if (!iolModeOn) return;          // IOL確認モード中のみ
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const slotEl = dotEl.closest('.slot');
+  const key = slotEl?.dataset?.key;
+  if (!key) return;
+
+  const store = loadWeek(currentMonday) || {};
+  const d = store[key];
+  if (!d || d.tail) return;
+  if (!String(d.proc2 || '').trim()) return;   // proc2無しなら対象外
+
+  d.deviceOrdered = !d.deviceOrdered;
+  saveWeek(currentMonday, store);
+  paintSlotsFromStore();
+  touchIolActivity();
+}, true);
 
 // ==== シンプル⇅：clickで現在slotを記録し、hiddenRowを飛ばして移動 ====
 (function(){
@@ -3357,8 +3684,8 @@ saveWeek = function(week, obj){
   document.getElementById('redoBtn')?.addEventListener('click', redo);
   function isTypingContext(e){ const el = e.target; const tag = (el?.tagName || '').toLowerCase(); return el?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'; }
 document.addEventListener('keydown', (e)=>{
-// ===== モード中のキー操作制御（arrival / IOL 共通）=====
-if (arrivalModeOn || iolModeOn) {
+// ===== モード中のキー操作制御（arrival / IOL / PATH 共通）=====
+if (arrivalModeOn || iolModeOn || pathModeOn) {
   const k = e.key.toLowerCase();
 
   // Esc：モード終了
@@ -3366,6 +3693,7 @@ if (arrivalModeOn || iolModeOn) {
     e.preventDefault();
     setArrivalMode(false);
     setIolMode(false);
+	setPathMode(false);
     return;
   }
 
@@ -5313,7 +5641,11 @@ function buildSlotMainParts(data, width){
 
     if (!val) continue;
 
-    parts.push({ key: def.key, label: val });
+    if (def.key === 'proc2'){
+      parts.push({ key: def.key, label: val, deviceOrdered: !!data.deviceOrdered });
+    } else {
+      parts.push({ key: def.key, label: val });
+    }
   }
 
   return parts;
@@ -5547,6 +5879,33 @@ const isOn  = !!(data && data.arrivalFixed);
   }
 }
 
+// ===== パス（入／当：右端マーク）=====
+{
+  const isInpatient = !!(data && !data.tail && ((data.io || '').trim() === '入' || (data.io || '').trim() === '当'));
+  const timeEl = el.querySelector('.time');
+  if (timeEl){
+    let pEl = timeEl.querySelector('.path-check');
+    if (!pEl){
+      pEl = document.createElement('span');
+      pEl.className = 'path-check';
+      pEl.textContent = '●';
+      pEl.setAttribute('aria-hidden','true');
+      timeEl.appendChild(pEl);   // 「9:30●」にしたいので末尾へ
+    }
+
+    if (isInpatient){
+      pEl.style.display = '';
+      // pathDone=true なら ON、未設定/false なら OFF（= is-off）
+      if (data.pathDone) pEl.classList.remove('is-off');
+      else              pEl.classList.add('is-off');
+    } else {
+      // 外来は完全非表示（arrival✓側が外だけ出る設計なので衝突しない）
+      pEl.style.display = 'none';
+    }
+  }
+}
+
+
   // ▼▼ 結合バッジの表示内容を「◯◯分」にする ▼▼
   // 対象：結合head（span>1）。所要時間があればそれを優先、なければ span×20分
   (function(){
@@ -5668,6 +6027,13 @@ function renderSlotColumns(leftEl, parts){
       const badge = document.createElement('span');
       badge.className = 'proc2-badge';
       badge.textContent = label;
+
+      // ★ device dot（proc2 右下）
+      const dot = document.createElement('span');
+      const ordered = !!part.deviceOrdered;
+      dot.className = 'device-dot' + (ordered ? '' : ' is-off');
+      badge.appendChild(dot);
+	  
       col.appendChild(badge);
     }
     // それ以外は通常テキスト
@@ -7345,7 +7711,11 @@ editor.addEventListener('close', function handler(){
           'arrivalNotified', 'arrivalChecked', 'arrivalFlag',
 
           // IOL ● 系（あなたの実装名に合わせて）
-          'iolOrdered', 'iolOrdered1', 'iolOrdered2', 'iolOrdered3'
+         'iolOrdered', 'iolOrdered1', 'iolOrdered2', 'iolOrdered3',
+		 'deviceOrdered',
+
+         // パス ● 系
+         'pathDone'
         ];
         for (const k of keep){
           if (prev[k] !== undefined && next[k] === undefined){
@@ -9607,7 +9977,434 @@ function importScheduleFromJson(file) {
   window.addEventListener('afterprint',  removePrintMode);
 })();
 
+// ===== フェーズ2：全データ横断検索（Step1：表示のみ） =====
+const globalSearchBtn   = document.getElementById('globalSearchBtn');
+const globalSearchDlg   = document.getElementById('globalSearchDialog');
+const globalSearchInput = document.getElementById('globalSearchInput');
+const globalSearchExec  = document.getElementById('globalSearchExec');
+const globalSearchRes   = document.getElementById('globalSearchResult');
+
+globalSearchBtn.addEventListener('click', ()=>{
+  globalSearchInput.value = '';
+  globalSearchRes.innerHTML = '';
+  globalSearchDlg.showModal();
+  globalSearchInput.focus();
+});
+
+function searchAllWeeks(keyword){
+  const hits = [];
+  if(!keyword) return hits;
+  const kw = keyword.trim();
+
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(!k)  continue;
+    const raw = localStorage.getItem(k);
+    if(!raw) continue;
+    // JSONっぽくないものは除外（__pcName等）
+    if(raw[0] !== '{' && raw[0] !== '[') continue;
+    let store = null;
+    try{
+      store = JSON.parse(raw);
+    }catch(_e){
+      continue; // 壊れた/非JSONは無視
+    }
+    if(!store || typeof store !== 'object') continue;
+	
+    for(const key in store){
+      const d = store[key];
+      if(!d || d.tail) continue;
+     const name = d.name || '';
+     const pid  = d.pid  || '';
+     const nName = normalizeJa(name);
+     const nPid  = normalizeJa(pid);
+     const nKw   = normalizeJa(kw);
+     if(nName.includes(nKw) || nPid.includes(nKw)){
+        hits.push({
+          weekKey: k,
+          key,
+          name,
+          pid,
+          time: d.time || ''
+        });
+      }
+    }
+  }
+  return hits;
+}
+
+function renderSearchResult(list){
+  if(!list.length){
+    globalSearchRes.innerHTML = '<div style="opacity:.6">該当なし</div>';
+    return;
+  }
+  const __JP_DOW = ['日','月','火','水','木','金','土'];
+  const __fmtDateDow = (iso)=>{
+    if(!iso) return '';
+    const dt = new Date(iso);
+    if(!Number.isFinite(dt.getTime())) return iso;
+    return `${iso}（${__JP_DOW[dt.getDay()]}）`;
+  };  
+  globalSearchRes.innerHTML = list.map(r=>`
+    ${(()=>{
+      const p = (typeof parseKey==='function') ? parseKey(r.key) : null;
+      const dateISO = (p && p.d) ? p.d : '';
+      const dateLabel = __fmtDateDow(dateISO);
+      const timeLabel = (r.time || '').trim();
+      return `  
+    <div class="search-row"
+         data-week="${r.weekKey}"
+         data-slot="${r.key}"
+         style="padding:6px 4px;border-bottom:1px solid #eee;cursor:pointer">
+      <span style="opacity:.75">${dateLabel || ''}</span>
+      <span style="opacity:.65;margin-left:6px">${timeLabel || ''}</span>
+      <strong style="margin-left:8px">${r.name || '(氏名なし)'}</strong>
+      <span style="opacity:.7;margin-left:6px">${r.pid || ''}</span>
+    </div>
+      `;
+    })()}
+  `).join('');
+}
+
+globalSearchExec.addEventListener('click', ()=>{
+  const list = searchAllWeeks(globalSearchInput.value);
+  renderSearchResult(list);
+});
+
+globalSearchInput.addEventListener('keydown',(e)=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    globalSearchExec.click();
+  }
+});
+
+// 検索結果クリック → 週ジャンプ＋slotへフォーカス（青枠も対象に）
+globalSearchRes.addEventListener('click', (e)=>{
+  const row = e.target.closest('.search-row');
+  if(!row) return;
+
+  const weekKey = row.dataset.week;   // ★ これが抜けていると何もできない
+  const slotKey = row.dataset.slot;   // data-key と同じ
+  if(!weekKey || !slotKey) return;
+
+  // ★ 週移動直後の「先頭を選ぶ／上寄せ」予約が残っていると、検索先が上書きされるので必ず解除
+  window.__snapTopOnNextRender = false;
+  window.__snapTopTargetISO    = null;
+  window.__selectFirstOnNextRender = false;
+
+  // ★ 復元選択の仕組みに「このキーを選べ」と先に指示しておく
+  window.lastSelectedKey = slotKey;
+
+  // slotKey から日付を取得 → その週の月曜へジャンプ
+  const p = parseKey(slotKey); // { d, day, section, idx }
+  if(!p || !p.d) return;
+
+  const d = new Date(p.d);
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const isoMon = monday.toISOString().slice(0,10);
+
+  // 週移動
+  weekPicker.value = isoMon;
+  weekPicker.dispatchEvent(new Event('change', { bubbles:true }));
+
+  // ダイアログを閉じる
+  globalSearchDlg.close();
+
+  // ★ DOM確定後に「最後の一押し」で必ず検索ターゲットへスクロール＆青枠
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      const el = document.querySelector(`.slot[data-key="${slotKey}"]`);
+      if(!el) return;
+
+      // 既存の青枠を整理してから、対象を正式選択
+      document.querySelectorAll('.slot.focused').forEach(x=>x.classList.remove('focused'));
+      window.setActiveSlot?.(el, { scroll:false });
+
+      // スクロールは明示的に検索ターゲットへ
+      try{
+        el.scrollIntoView({ block:'center', inline:'nearest', behavior:'auto' });
+      }catch(_){
+        try{ el.scrollIntoView(); }catch(_2){}
+      }
+    });
+  });
+});
+
+// ===== 検索用 正規化：半角/全角カナ＋ひらがな/カタカナを吸収 =====
+function normalizeJa(str){
+  if(!str) return '';
+  // 1) Unicode正規化（半角→全角など）
+  let s = str.normalize('NFKC');
+  // 2) ひらがな→カタカナ
+  s = s.replace(/[\u3041-\u3096]/g, ch =>
+    String.fromCharCode(ch.charCodeAt(0) + 0x60)
+  );
+  // 3) 前後空白除去（念のため）
+  return s.trim();
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+// ===== フェーズ2：✓／● 未完了リスト（別表示） =====
+const todoListBtn   = document.getElementById('todoListBtn');
+const todoListDlg   = document.getElementById('todoListDialog');
+const todoListExec  = document.getElementById('todoListExec');
+const todoArrivalEl = document.getElementById('todoArrivalList');
+const todoIolEl     = document.getElementById('todoIolList');
+const todoPathEl    = document.getElementById('todoPathList');
+
+// 追加：IOL対象かどうか（IOL欄が1つでも埋まっている）
+function needsIOL(d){
+  const hasIol = !!(
+    (d.iolType || d.iolPower || d.iolUse1) ||
+    (d.iolType2 || d.iolPower2 || d.iolUse2) ||
+    (d.iolType3 || d.iolPower3 || d.iolUse3)
+  );
+  const hasDev = !!String(d.proc2 || '').trim();   // ★ デバイス（proc2）
+  return hasIol || hasDev;  
+}
+
+function slotKeyExistsInCurrentConfig(slotKey){
+  const p = parseKey(slotKey); // { d, day, section, idx }
+  if(!p) return false;
+
+  const dayCfg = CONFIG[p.day];
+  if(!dayCfg) return false;
+
+  const sec = dayCfg[p.section];
+  if(!sec) return false;
+
+  return p.idx >= 0 && p.idx < sec.slots;
+}
+
+todoListBtn.addEventListener('click', ()=>{
+  todoArrivalEl.innerHTML = '';
+  todoIolEl.innerHTML = '';
+  todoPathEl.innerHTML = '';
+  todoListDlg.showModal();
+  todoListExec.click(); // 開いたら自動更新
+});
+
+function scanAllWeeksTodos(){
+  const arrivalsMap = new Map(); // key: rlSetId or slotKey
+  const iols = [];
+  const pathsMap = new Map();    // key: rlSetId or slotKey
+  for(let i=0;i<localStorage.length;i++){
+    const weekKey = localStorage.key(i);
+    if(!weekKey) continue;
+    const raw = localStorage.getItem(weekKey);
+    if(!raw) continue;
+    if(raw[0] !== '{' && raw[0] !== '[') continue;
+    let store = null;
+    try{ store = JSON.parse(raw); }catch(_e){ continue; }
+    if(!store || typeof store !== 'object') continue;
+
+    for(const slotKey in store){
+      const d = store[slotKey];
+      if(!d || d.tail) continue;               // headのみ
+    if(!(d.name || d.pid)) continue;
+
+    // ★ 旧構成/残骸キーを除外（表示されない枠→先頭フォーカス問題を防ぐ）
+    if(!slotKeyExistsInCurrentConfig(slotKey)) continue;
+
+      const p = parseKey(slotKey);
+      if(!p || !p.d) continue;
+	  
+	  if(!slotKeyExistsInCurrentConfig(slotKey)) continue;
+
+      const dateISO = p.d;                     // YYYY-MM-DD
+      const timeStr = d.time || '';            // 表示用（無ければ空）
+
+      const row = {
+        weekKey,
+        slotKey,
+        dateISO,
+        timeStr,
+        name: d.name || '(氏名なし)',
+        pid: d.pid || ''
+      };
+	  
+      const rlId = d?.meta?.rlSetId;
+      const groupKey = rlId ? `RL:${rlId}` : `SLOT:${slotKey}`;	  
+
+      // A) ✓未：外だけ
+      if(d.io === '外' && d.arrivalFixed !== true){
+        if(!arrivalsMap.has(groupKey)) arrivalsMap.set(groupKey, row);
+      }
+      // B) ●未：IOL対象だけ（白内障など）
+      const hasIol = !!(
+        (d.iolType || d.iolPower || d.iolUse1) ||
+        (d.iolType2 || d.iolPower2 || d.iolUse2) ||
+        (d.iolType3 || d.iolPower3 || d.iolUse3)
+      );
+      const hasDev = !!String(d.proc2 || '').trim();
+      const iolNG = hasIol && d.iolOrdered1 !== true;      // 代表は従来通り①
+      const devNG = hasDev && d.deviceOrdered !== true;
+
+if(needsIOL(d) && (iolNG || devNG)){
+  const reasons = [];
+  if (iolNG) reasons.push('IOL');
+  if (devNG) reasons.push('DEV');
+
+  iols.push({
+    ...row,
+    reason: reasons.join(',')
+  });
+}
+
+      // C) パス未：入／当だけ
+      if((d.io === '入' || d.io === '当') && d.pathDone !== true){
+        if(!pathsMap.has(groupKey)) pathsMap.set(groupKey, row);
+      }	  
+    }
+  }
+
+  // 手術日が近い順（同日なら時刻文字列で軽く整列）
+  const cmp = (a,b)=> (a.dateISO.localeCompare(b.dateISO) || a.timeStr.localeCompare(b.timeStr) || a.name.localeCompare(b.name));
+  const arrivals = [...arrivalsMap.values()];
+  const paths = [...pathsMap.values()];
+
+  arrivals.sort(cmp);
+  iols.sort(cmp);
+  paths.sort(cmp);
+
+  return { arrivals, iols, paths };
+}
+
+function renderTodoList(container, list){
+  if(!list.length){
+    container.innerHTML = '<div style="padding:8px;opacity:.6">該当なし</div>';
+    return;
+  }
+  const __JP_DOW2 = ['日','月','火','水','木','金','土'];
+  const __fmtDateDow2 = (iso)=>{
+    if(!iso) return '';
+    const dt = new Date(iso);
+    if(!Number.isFinite(dt.getTime())) return iso;
+    return `${iso}（${__JP_DOW2[dt.getDay()]}）`;
+  };  
+  container.innerHTML = list.map(r=>`
+    <div class="todo-row"
+         data-week="${r.weekKey}"
+         data-slot="${r.slotKey}"
+         style="padding:6px 8px;border-bottom:1px solid #eee;cursor:pointer">
+      <span style="opacity:.75">${__fmtDateDow2(r.dateISO)}</span>
+      <span style="opacity:.65;margin-left:6px">${r.timeStr || ''}</span>
+      <strong style="margin-left:8px">${r.name}</strong>
+      <span style="opacity:.7;margin-left:6px">${r.pid}</span>
+	  ${r.reason ? `<span style="margin-left:6px;font-size:11px;opacity:.6">(${r.reason})</span>` : ''}
+    </div>
+  `).join('');
+}
+
+todoListExec.addEventListener('click', ()=>{
+  const {arrivals, iols, paths} = scanAllWeeksTodos();
+  renderTodoList(todoArrivalEl, arrivals);
+  renderTodoList(todoIolEl, iols);
+  renderTodoList(todoPathEl, paths);
+});
+
+function jumpToSlotByKey(slotKey){
+  // 検索と同じ安全策：先頭枠フォーカス予約を解除
+  window.__snapTopOnNextRender = false;
+  window.__snapTopTargetISO    = null;
+  window.__selectFirstOnNextRender = false;
+  window.lastSelectedKey = slotKey;
+
+  const p = parseKey(slotKey);
+  if(!p || !p.d) return;
+
+  const d = new Date(p.d);
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const isoMon = monday.toISOString().slice(0,10);
+
+  weekPicker.value = isoMon;
+  weekPicker.dispatchEvent(new Event('change', { bubbles:true }));
+
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      const el = document.querySelector(`.slot[data-key="${slotKey}"]`);
+      if(!el) return;
+      document.querySelectorAll('.slot.focused').forEach(x=>x.classList.remove('focused'));
+      window.setActiveSlot?.(el, { scroll:false });
+      try{ el.scrollIntoView({ block:'center', inline:'nearest', behavior:'auto' }); }
+      catch(_){ try{ el.scrollIntoView(); }catch(_2){} }
+    });
+  });
+}
+
+// クリックでジャンプ（A/B 共通）
+todoArrivalEl.addEventListener('click', (e)=>{
+  const row = e.target.closest('.todo-row');
+  if(!row) return;
+  const slotKey = row.dataset.slot;
+  if(!slotKey) return;
+  todoListDlg.close();
+  jumpToSlotByKey(slotKey);
+});
+todoIolEl.addEventListener('click', (e)=>{
+  const row = e.target.closest('.todo-row');
+  if(!row) return;
+  const slotKey = row.dataset.slot;
+  if(!slotKey) return;
+  todoListDlg.close();
+  jumpToSlotByKey(slotKey);
+});
+todoPathEl.addEventListener('click', (e)=>{
+  const row = e.target.closest('.todo-row');
+  if(!row) return;
+  const slotKey = row.dataset.slot;
+  if(!slotKey) return;
+  todoListDlg.close();
+  jumpToSlotByKey(slotKey);
+});
+});
+
+ function fmtDateDowTime(weekKey, slotKey){
+   // slotKey: YYYY-MM-DD|Day|section|idx
+   const p = parseKey(slotKey);
+   if(!p) return '';
+   const d = new Date(p.d);
+   const dow = ['日','月','火','水','木','金','土'][d.getDay()];
+   const sec = CONFIG[p.day]?.[p.section];
+   if(!sec) return `${p.d}(${dow})`;
+   const [hh, mm] = sec.start.split(':').map(Number);
+   const t = new Date(d);
+   t.setHours(hh, mm + (p.idx||0)*20, 0, 0); // 20分枠前提（既存仕様）
+   const time = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+   return `${p.d}(${dow}) ${time}`;
+ }
+
 </script>  
- 
+    <dialog id="todoListDialog">
+      <form method="dialog" style="min-width:560px;max-width:760px;padding:16px">
+        <h3 style="margin:0 0 8px;">
+          ✓ <span class="todo-dot iol"></span><span class="todo-dot path"></span> 未完了リスト
+        </h3>
+
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <button id="todoListExec" type="button" class="primary">更新</button>
+          <div style="opacity:.7;font-size:12px">（閲覧専用：クリックで週へジャンプ）</div>
+        </div>
+    
+        <div style="margin:10px 0 6px;font-weight:700;">A) 来院時刻 未連絡 ✓</div>
+        <div id="todoArrivalList" style="max-height:26vh;overflow:auto;font-size:13px;border:1px solid #eee;"></div>
+    
+        <div style="margin:14px 0 6px;font-weight:700;">
+          B) IOL / DEV 未確認 <span class="todo-dot iol"></span>
+        </div>
+        <div id="todoIolList" style="max-height:26vh;overflow:auto;font-size:13px;border:1px solid #eee;"></div>
+   
+        <div style="margin:14px 0 6px;font-weight:700;">
+          C) パス 未入力 <span class="todo-dot path"></span>
+        </div>
+       <div id="todoPathList" style="max-height:26vh;overflow:auto;font-size:13px;border:1px solid #eee;"></div>
+    
+        <menu style="display:flex;justify-content:flex-end;margin-top:10px">
+          <button value="cancel">閉じる</button>
+        </menu>
+      </form>
+    </dialog> 
  </body>
 </html>
