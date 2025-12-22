@@ -275,21 +275,6 @@ body:not(.iolModeOn) .iol-dot.is-off{ display:none !important; }
 
 /* IOLモード中だけ：ホバー説明は出せる（まだクリックはしない） */
 body.iolModeOn .iol-dot{ pointer-events:auto; cursor:help; }
-body.iolModeOn .iol-dot:hover::after{
-  content:"IOL発注済";
-  position:absolute;
-  left:calc(100% + 8px);
-  top:50%;
-  transform:translateY(-50%);
-  background:rgba(0,0,0,.85);
-  color:#fff;
-  font-size:12px;
-  padding:4px 8px;
-  border-radius:8px;
-  white-space:nowrap;
-  z-index:4000;
-  pointer-events:none;
-}
 
     /* レイアウト切替用 */
     body.fiveCols #schedule{grid-template-columns:repeat(5,minmax(var(--col-min-5,300px),1fr));gap:16px;align-items:start;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -1400,22 +1385,6 @@ body.iolModeOn .iol-dot::before{
   pointer-events:auto;
 }
 
-/* ツールチップ：右側に出す（左見切れ回避） */
-body.iolModeOn .iol-dot:hover::after{
-  content:"IOL確認済";
-  position:absolute;
-  left: calc(100% + 12px);  /* ← 右に逃がす（8→12px） */
-  top: 50%;
-  transform: translateY(-50%);
-  background: rgba(0,0,0,.85);
-  color: #fff;
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  white-space: nowrap;
-  z-index: 9999;
-  pointer-events: none;
-}
 
 /* IOLドットのホバーが見切れないようにする */
 .slot,
@@ -1527,6 +1496,144 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
   background:#111827;   /* 黒（パス） */
 }
 
+/* === 未完了リスト rows === */
+#todoListDialog .todo-row{
+  display: grid;
+  grid-template-columns: 120px 1fr 0.9fr 2fr;
+  gap: 4px 6px;
+  align-items: center;
+  padding: 4px 2px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+#todoListDialog .todo-row:hover{
+  background: rgba(0,0,0,0.03);
+}
+
+/* === Global Search result rows (Phase2) === */
+#globalSearchResult .search-row{
+  display: grid;
+  grid-template-columns: 120px 1.2fr 0.9fr 32px 2fr;
+  gap: 4px 6px;
+  align-items: center;
+  padding: 4px 2px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+#globalSearchResult .search-row:hover{
+  background: rgba(0,0,0,0.03);
+}
+
+#globalSearchResult .sr-date{ opacity: .78; white-space: nowrap; }
+#globalSearchResult .sr-name{ font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#globalSearchResult .sr-id{ opacity: .7; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#globalSearchResult .sr-eye{
+  opacity: .9;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+#globalSearchResult .sr-proc{
+  opacity: .9;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* モーダルが狭い時は自動で段組みを崩して折返し表示 */
+@media (max-width: 640px){
+  #globalSearchResult .search-row{
+    grid-template-columns: 1fr 60px 34px;
+    grid-template-areas:
+      "date date eye"
+      "name name name"
+      "id   id   id"
+      "proc proc proc";
+    align-items: start;
+  }
+  #globalSearchResult .sr-date{ grid-area: date; }
+  #globalSearchResult .sr-eye{  grid-area: eye; text-align:right; }
+  #globalSearchResult .sr-name{ grid-area: name; white-space: normal; }
+  #globalSearchResult .sr-id{   grid-area: id; white-space: normal; }
+  #globalSearchResult .sr-proc{ grid-area: proc; white-space: normal; }
+}
+
+/* === ジャンル管理（最小版 Step1：骨組み） === */
+#genreManagerDialog .gm-wrap{
+  display:grid;
+  grid-template-columns: 260px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+#genreManagerDialog .gm-left,
+#genreManagerDialog .gm-right{
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+}
+#genreManagerDialog .gm-list{
+  border: 1px solid #eee;
+  min-height: 240px;
+  max-height: 420px;
+  overflow: auto;
+  font-size: 13px;
+  padding: 6px;
+}
+#genreManagerDialog .gm-row{
+  display:grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+#genreManagerDialog .gm-label{
+  opacity: .75;
+  padding-top: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+#genreManagerDialog input,
+#genreManagerDialog textarea{
+  width: 100%;
+}
+
+#genreManagerDialog .gm-item{
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+#genreManagerDialog .gm-item:hover{
+  background: rgba(0,0,0,.05);
+}
+#genreManagerDialog .gm-item.is-selected{
+  background: rgba(37,99,235,.14);
+  box-shadow: inset 0 0 0 2px rgba(37,99,235,.35);
+  font-weight: 700;
+}
+
+/* === 全週検索：日付ピッカー open 中の視認性UP === */
+
+/* 1) カレンダーを開いている input を目立たせる（最重要） */
+#globalSearchDialog .gs-date.is-open{
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.35);
+  border-color: rgba(37,99,235,.75);
+}
+
+/* 2) open 中は検索ダイアログ本体を少しトーンダウンして、カレンダーを浮かせる */
+#globalSearchDialog:has(.gs-date.is-open){
+  background: #f5f5f5;   /* 完全不透明 */
+  box-shadow: 0 10px 40px rgba(0,0,0,.35);
+}
+
+/* 3) 結果行の白背景が強い場合だけ、少し抑える（不要なら削除OK） */
+#globalSearchDialog:has(.gs-date.is-open) .search-row{
+  background: transparent;
+}
 
   </style>
   </head>
@@ -1554,7 +1661,7 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
       <button id="arrivalModeBtn" title="来院時刻✓ (Ctrl+K)">✓</button>
 	  <button id="iolModeBtn" class="modeBtn" title="IOL・DEV確認">●</button>	  
 	  <button id="pathModeBtn" class="modeBtn" title="パス入力済">●</button>
-	  <button id="globalSearchBtn" title="全週検索">🔍</button>
+	  <button id="globalSearchBtn" title="検索">🔍</button>
 	  <button id="todoListBtn" title="未完了リスト（✓/●）">📋</button>
     </div>
   </header>
@@ -1789,11 +1896,45 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
 
 <dialog id="globalSearchDialog">
   <form method="dialog" style="min-width:520px;max-width:720px;padding:16px">
-    <h3 style="margin:0 0 8px;">全週検索</h3>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <input id="globalSearchInput" placeholder="患者名 または ID" style="flex:1">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;">
+      <h3 style="margin:0;">検索</h3>
+      <button id="genreManageBtn" type="button" title="ジャンル辞書を編集">⚙ジャンル管理</button>
+    </div>
+    <!-- 検索キーワード -->
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <input id="globalSearchInput" placeholder="患者名 / ID / 術式 / 術者" style="flex:1">
       <button id="globalSearchExec" type="button" class="primary">検索</button>
     </div>
+
+    <!-- 期間指定 -->
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:13px">
+      <span style="opacity:.75;min-width:44px;">期間</span>
+      <input id="globalSearchFrom" type="date" class="gs-date" style="width:160px">
+      <span style="opacity:.6;">〜</span>
+      <input id="globalSearchTo" type="date" class="gs-date" style="width:160px">
+      <span style="opacity:.6;">（未指定＝全期間）</span>
+    </div>
+
+    <!-- 検索対象 -->
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;font-size:13px">
+      <span style="opacity:.75;min-width:44px;">対象</span>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input id="globalSearchTargetNameId" type="checkbox" checked>
+        <span>患者名/ID</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input id="globalSearchTargetProc" type="checkbox">
+        <span>術式1/2</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;">
+        <input id="globalSearchTargetSurgeon" type="checkbox">
+        <span>術者</span>
+      </label>	  
+    </div>
+
+    <!-- 件数表示 -->
+    <div id="globalSearchCount" style="margin:0 0 6px;font-size:13px;opacity:.75;"></div>
+
     <div id="globalSearchResult" style="max-height:50vh;overflow:auto;font-size:13px;"></div>
     <menu style="display:flex;justify-content:flex-end;margin-top:8px">
       <button value="cancel">閉じる</button>
@@ -9983,18 +10124,124 @@ const globalSearchDlg   = document.getElementById('globalSearchDialog');
 const globalSearchInput = document.getElementById('globalSearchInput');
 const globalSearchExec  = document.getElementById('globalSearchExec');
 const globalSearchRes   = document.getElementById('globalSearchResult');
+const globalSearchFrom  = document.getElementById('globalSearchFrom');
+const globalSearchTo    = document.getElementById('globalSearchTo');
+const globalSearchTName = document.getElementById('globalSearchTargetNameId');
+const globalSearchTProc = document.getElementById('globalSearchTargetProc');
+const globalSearchTSurg = document.getElementById('globalSearchTargetSurgeon');
+const globalSearchCount = document.getElementById('globalSearchCount');
+
+
+// ===== ジャンル管理（Step1：開閉のみ）=====
+const genreManageBtn = document.getElementById('genreManageBtn');
+
+// === date picker open 強調（focus中を open とみなす）===
+function __bindDateOpenStyle(inp){
+  if(!inp) return;
+  inp.addEventListener('focus', ()=> inp.classList.add('is-open'));
+  inp.addEventListener('blur',  ()=> inp.classList.remove('is-open'));
+}
+
+// 1回だけバインド（showModal前でもOK：要素は既に存在している）
+__bindDateOpenStyle(globalSearchFrom);
+__bindDateOpenStyle(globalSearchTo);
 
 globalSearchBtn.addEventListener('click', ()=>{
   globalSearchInput.value = '';
   globalSearchRes.innerHTML = '';
+  if (globalSearchCount) globalSearchCount.textContent = '';
+  if (globalSearchFrom) globalSearchFrom.value = '';
+  if (globalSearchTo) globalSearchTo.value = '';
+  if (globalSearchTName) globalSearchTName.checked = true;
+  if (globalSearchTProc) globalSearchTProc.checked = false; 
+  if (globalSearchTSurg) globalSearchTSurg.checked = false;
   globalSearchDlg.showModal();
   globalSearchInput.focus();
 });
 
-function searchAllWeeks(keyword){
+// ✅ 検索ボタン：ここで必ずバインド（🔍と同じスコープに置く）
+globalSearchExec.addEventListener('click', ()=>{
+  try{
+    const fromISO = (globalSearchFrom && globalSearchFrom.value) ? globalSearchFrom.value : '';
+    const toISO   = (globalSearchTo   && globalSearchTo.value)   ? globalSearchTo.value   : '';
+    const useNameId  = !!(globalSearchTName && globalSearchTName.checked);
+    const useProc    = !!(globalSearchTProc && globalSearchTProc.checked);
+    const useSurgeon = !!(globalSearchTSurg && globalSearchTSurg.checked);
+
+    const list = searchAllWeeks(globalSearchInput.value, {
+      fromISO, toISO,
+      useNameId: (useNameId || (!useProc && !useSurgeon)),
+      useProc,
+      useSurgeon
+    });
+
+// ===== 検索結果の並び替え：日付 → スロット順 → 患者名 → ID → R/L/B =====
+list.sort((a, b) => {
+  const pa = parseKey(a.key);
+  const pb = parseKey(b.key);
+
+  // 1) 日付（昇順：古い → 新しい）
+  const da = pa?.d || '';
+  const db = pb?.d || '';
+  if (da !== db) return da < db ? -1 : 1;
+
+  // 2) スロット順（day → section → idx）
+  if (pa.day !== pb.day) return pa.day - pb.day;
+  if (pa.section !== pb.section) return pa.section - pb.section;
+  if (pa.idx !== pb.idx) return pa.idx - pb.idx;
+
+  // 3) 患者名
+  const na = normalizeJa(a.name || '');
+  const nb = normalizeJa(b.name || '');
+  if (na !== nb) return na.localeCompare(nb, 'ja');
+
+  // 4) ID
+  const ia = (a.pid || '').toString();
+  const ib = (b.pid || '').toString();
+  if (ia !== ib) return ia.localeCompare(ib, 'ja');
+
+  // 5) 眼（R → L → B）
+  const order = { R: 1, L: 2, B: 3 };
+  return (order[a.eye] || 9) - (order[b.eye] || 9);
+});
+
+    renderSearchResult(list);
+  }catch(e){
+    console.error(e);
+    alert(e && e.message ? e.message : e);
+  }
+});
+
+// Enterでも検索（任意だけど便利）
+globalSearchInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    globalSearchExec.click();
+  }
+});
+
+function searchAllWeeks(keyword, opt){
   const hits = [];
-  if(!keyword) return hits;
-  const kw = keyword.trim();
+  const kw = (keyword || '').trim();
+  if(!kw) return hits;
+  
+  const tokens = splitAndTokens(kw);
+  if(!tokens.length) return hits;
+
+  opt = opt || {};
+  const terms = expandSearchTerms(kw);
+  const nKw = terms[0] || normalizeJa(kw); // 患者名/ID用（通常は1語）
+
+  // 期間（ISO文字列：YYYY-MM-DD なら文字比較でOK）
+  const fromISO = (opt.fromISO || '').trim();
+  const toISO   = (opt.toISO   || '').trim();
+  const hasFrom = !!fromISO;
+  const hasTo   = !!toISO;
+
+  // 対象
+  const useNameId = (opt.useNameId !== false);     // デフォルト true
+  const useProc   = !!opt.useProc;                // デフォルト false
+  const useSurgeon = !!opt.useSurgeon; // デフォルト false
 
   for(let i=0;i<localStorage.length;i++){
     const k = localStorage.key(i);
@@ -10014,26 +10261,89 @@ function searchAllWeeks(keyword){
     for(const key in store){
       const d = store[key];
       if(!d || d.tail) continue;
-     const name = d.name || '';
-     const pid  = d.pid  || '';
-     const nName = normalizeJa(name);
-     const nPid  = normalizeJa(pid);
-     const nKw   = normalizeJa(kw);
-     if(nName.includes(nKw) || nPid.includes(nKw)){
-        hits.push({
-          weekKey: k,
-          key,
-          name,
-          pid,
-          time: d.time || ''
-        });
+
+      // --- 期間フィルタ（slotKeyから日付を取る）---
+      const p = (typeof parseKey==='function') ? parseKey(key) : null; // { d, day, section, idx }
+      const dateISO = (p && p.d) ? p.d : '';
+      if (hasFrom && dateISO && dateISO < fromISO) continue;
+      if (hasTo   && dateISO && dateISO > toISO)   continue;
+
+      // --- マッチング対象 ---
+      const name = d.name || '';
+      const pid  = d.pid  || '';
+      const proc1 = d.proc1 || '';
+      const proc2 = d.proc2 || '';
+      const eye   = (d.eye || '').trim();
+	  const surgeon = d.surgeon || '';
+
+      // ===== AND検索：全tokenを満たす必要あり =====
+      let okAll = true;
+
+      for (const token of tokens){
+        let okToken = false;
+
+        // token 用にジャンル展開
+        const terms = expandSearchTerms(token);
+        const nKw = terms[0] || normalizeJa(token);
+
+        // ① 患者名・ID
+        if (useNameId){
+          const nName = normalizeJa(name);
+          const nPid  = normalizeJa(pid);
+          if (nName.includes(nKw) || nPid.includes(nKw)){
+            okToken = true;
+          }
+        }
+
+        // ② 術式（ジャンル展開OR）
+        if (!okToken && useProc){
+          const nP1 = normalizeJa(proc1);
+          const nP2 = normalizeJa(proc2);
+          if (terms.some(t =>
+                (nP1 && nP1.includes(t)) ||
+                (nP2 && nP2.includes(t))
+             )){
+            okToken = true;
+          }
+        }
+
+        // ③ 術者
+        if (!okToken && useSurgeon){
+          const nS = normalizeJa(surgeon);
+          if (nS.includes(nKw)){
+            okToken = true;
+          }
+        }
+
+        // この token が満たせなければ即NG
+        if (!okToken){
+          okAll = false;
+          break;
+        }
       }
+
+      if (!okAll) continue;
+
+
+      hits.push({
+        weekKey: k,
+        key,
+        name,
+        pid,
+        time: d.time || '',
+        eye,
+        proc1,
+        proc2
+      });
     }
   }
   return hits;
 }
 
 function renderSearchResult(list){
+  if (typeof globalSearchCount !== 'undefined' && globalSearchCount){
+    globalSearchCount.textContent = `${list.length}件`;
+  }
   if(!list.length){
     globalSearchRes.innerHTML = '<div style="opacity:.6">該当なし</div>';
     return;
@@ -10050,26 +10360,25 @@ function renderSearchResult(list){
       const p = (typeof parseKey==='function') ? parseKey(r.key) : null;
       const dateISO = (p && p.d) ? p.d : '';
       const dateLabel = __fmtDateDow(dateISO);
-      const timeLabel = (r.time || '').trim();
+      const eye = (r.eye || '').trim();
+      const eyeLabel = (eye === 'R' || eye === 'L' || eye === 'B') ? eye : '';
+      const proc1 = (r.proc1 || '').trim();
+      const proc2 = (r.proc2 || '').trim();
+	  const procLabel = proc1 && proc2 ? `${proc1}／${proc2}` : (proc1 || proc2 || '');
       return `  
     <div class="search-row"
          data-week="${r.weekKey}"
-         data-slot="${r.key}"
-         style="padding:6px 4px;border-bottom:1px solid #eee;cursor:pointer">
-      <span style="opacity:.75">${dateLabel || ''}</span>
-      <span style="opacity:.65;margin-left:6px">${timeLabel || ''}</span>
-      <strong style="margin-left:8px">${r.name || '(氏名なし)'}</strong>
-      <span style="opacity:.7;margin-left:6px">${r.pid || ''}</span>
+         data-slot="${r.key}">
+      <div class="sr-date">${dateLabel || ''}</div>
+      <div class="sr-name">${r.name || '(氏名なし)'}</div>
+      <div class="sr-id">${r.pid || ''}</div>
+      <div class="sr-eye">${eyeLabel || ''}</div>
+      <div class="sr-proc">${procLabel}</div>
     </div>
       `;
     })()}
   `).join('');
 }
-
-globalSearchExec.addEventListener('click', ()=>{
-  const list = searchAllWeeks(globalSearchInput.value);
-  renderSearchResult(list);
-});
 
 globalSearchInput.addEventListener('keydown',(e)=>{
   if(e.key === 'Enter'){
@@ -10131,20 +10440,343 @@ globalSearchRes.addEventListener('click', (e)=>{
   });
 });
 
-// ===== 検索用 正規化：半角/全角カナ＋ひらがな/カタカナを吸収 =====
+// ===== 検索用 正規化：半角/全角・大小文字・かな種別を吸収 =====
 function normalizeJa(str){
   if(!str) return '';
-  // 1) Unicode正規化（半角→全角など）
+  // 1) Unicode正規化（全角/半角を統一）
   let s = str.normalize('NFKC');
   // 2) ひらがな→カタカナ
   s = s.replace(/[\u3041-\u3096]/g, ch =>
     String.fromCharCode(ch.charCodeAt(0) + 0x60)
   );
-  // 3) 前後空白除去（念のため）
+  // 3) 小文字化（★ここが追加）
+  s = s.toLowerCase();
+  // 4) 前後空白除去
   return s.trim();
 }
 
+// ===== AND分割（"AND" または 空白）=====
+function splitAndTokens(input){
+  if(!input) return [];
+  // 全角ANDも吸収、大小文字無視
+  const s = input
+    .replace(/ＡＮＤ/gi, 'AND')
+    .replace(/\band\b/gi, 'AND');
+  // AND または 空白で分割
+  return s
+    .split(/\s+AND\s+|\s+/)
+    .map(t => t.trim())
+    .filter(Boolean);
+}
+
+// ===== ジャンル辞書（検索用：概念語 → 同義語展開）=====
+// ===== 検索ジャンル辞書（localStorage版）=====
+function getSearchGenreDict(){
+  const KEY = 'searchGenreDict';
+
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch(e){
+    console.warn('searchGenreDict load failed, fallback to default', e);
+  }
+
+  // 初回 or 壊れていた場合：初期辞書を保存
+  localStorage.setItem(KEY, JSON.stringify(DEFAULT_SEARCH_GENRE_DICT));
+  return DEFAULT_SEARCH_GENRE_DICT;
+}
+
+// ===== 初期ジャンル辞書（初回のみ使われる）=====
+const DEFAULT_SEARCH_GENRE_DICT = [
+  {
+      genre: '緑内障',
+      // ユーザーが入力してよい検索語（別名）
+      keywords: [
+        '緑内障',
+        'りょくないしょう','ryokunaisyou',
+        'gla','ぐら'
+      ],
+      // 術式欄に含まれていたらヒットさせる語
+      terms: [
+        '緑内障',
+        'ロトミー', 'トラベクロトミー', 'trabeculotomy','lotomy',
+        'レクトミー', 'トラベクレクトミー', 'trabeculectomy','lectomy',
+        'アーメド', 'ahmed',
+        'バルベルト', 'baerveldt',
+        'プリザーフロ', 'ﾌﾟﾘｻﾞｰﾌﾛ', 'preserflo',
+        'アイステント', 'ｱｲｽﾃﾝﾄ', 'istent', 'i-stent',
+		'ニードリング', 'ﾆｰﾄﾞﾘﾝｸﾞ', 'needling',
+		'gsl', '隅角癒着', 
+        '虹彩切除','周辺虹彩切除', 'iridectomy',
+        'pi', 'lpi', 'レーザー虹彩切開', '虹彩切開'
+      ]
+    },
+    {
+      genre: '斜視',
+      keywords: [
+        '斜視', 'しゃし', 'syasi'
+      ],
+      terms: [
+        // 一般
+        '斜視', '眼筋', '斜視手術',
+		'XT', 'ET', 'HT','saggingEye', 'サギングアイ', 'hypo',
+
+        // 操作・術式一般
+        '前後転', '後転短縮', '短縮後転', '筋切除', '筋移動',
+		'SOタッキング', 'SOﾀｯｷﾝｸﾞ','IO切除', 
+        '横山法', '稲富法', '西田法', '原田伊藤', 'harada-ito', 'haradaito',
+        'plication', 'プリケーション','プライケーション',
+        'hang-back', 'ハングバック','adjust', '調節糸',
+        'faden', 'ファーデン',
+
+        // 筋名（日本語）
+        '外直筋', '内直筋', '上直筋', '下直筋','上斜筋', '下斜筋',
+		
+        // よくある関連語（必要なら）
+        'ボトックス', 'botox', 'btx'
+      ]
+    },
+    {
+      genre: '網膜硝子体',
+      keywords: [
+        '硝子体', '網膜','網膜硝子体',
+		'しょうしたい','もうまく','もうまくしょうしたい','moumakusyousitai','syousitai','moumaku'
+      ],
+      terms: [
+        'vit', '硝子体', 'ビトレクトミー',
+		'眼球破裂','PVR',
+		'網膜', 'バックリング', '強膜内陥','バックル', 'buckle','buckling',
+		'輪状締結','エンサークリング', 'encircling', 
+		'タッピング', 'tapping',
+		'液空気置換', 'ガス','SF6', 'C3F8','空気',
+		'シリコン','オイル', 'SO抜去', 'SO除去'
+    ]
+  },
+  {
+    genre: '水晶体',
+    keywords: ['水晶体', 'すいしょうたい', 'suisyoutai'],
+    terms: [
+      '白内障', '水晶体', 'iol',
+      '強膜内固定', 'cat', 'lens', 'レンズ',
+      '縫着', 'pea', '前嚢', '後嚢', 'ccc'
+    ]
+  },
+  {
+    genre: '外眼部',
+    keywords: ['外眼部', 'がいがんぶ', 'gaiganbu', 'gaigannbu'],
+    terms: [
+      '眼瞼', '結膜', '霰粒腫', '脂肪ヘルニア',
+      '内反', '外反', '挙筋', '皮膚', '眉毛',
+      'ミュラー', 'ミューラー', 'アポ', '睫毛', '毛根', '電気分解',
+      '埋没', 'ホッツ', 'hotz', '麦粒腫',
+      '涙腺', 'つりあげ', '吊り上げ', '吊上げ', 'つり上げ', '吊あげ',
+      '涙道', '鼻涙管', 'dcr', '涙嚢', '涙点', '涙小管',
+      '眼窩',
+      '翼状片', 'ptery',
+      '角膜', 'edta', 'bsk'
+    ]
+  }  
+];
+// 検索語をジャンル定義に基づいて展開
+function expandSearchTerms(keyword){
+  const nk = normalizeJa(keyword || '');
+  if(!nk) return [];
+
+  const dict = getSearchGenreDict();
+
+  for(const g of dict){
+    if (g.keywords.some(k => nk === normalizeJa(k))){
+      return g.terms.map(t => normalizeJa(t)).filter(Boolean);
+    }
+  }
+  // ジャンル未該当なら、その語だけで通常検索
+  return [nk];
+}
+
+
 document.addEventListener('DOMContentLoaded', ()=>{
+// ===== ジャンル管理（Step2：読込→一覧→選択→右反映）=====
+const gmDlg   = document.getElementById('genreManagerDialog');
+const gmList  = document.getElementById('gmGenreList');
+const gmName  = document.getElementById('gmGenreName');
+const gmKw    = document.getElementById('gmKeywords');
+const gmTerms = document.getElementById('gmTerms');
+const gmSave  = document.getElementById('gmSave');
+
+[gmName, gmKw, gmTerms].forEach(el=>{
+  if(!el) return;
+  el.addEventListener('input', ()=>{
+    __gmSetDirty(true);
+    __gmApplyFormToDraft();
+    try { __gmRenderList?.(); } catch(_){}
+  });
+});
+
+
+let __gmDraft = null;      // UI編集用ワークコピー（Step2では読むだけ）
+let __gmSel   = -1;        // 選択index
+let __gmDirty = false;     // 未保存変更あり
+
+function __gmCloneDict(dict){
+  if(!Array.isArray(dict)) return [];
+  return dict.map(g=>({
+    genre: String(g?.genre ?? ''),
+    keywords: Array.isArray(g?.keywords) ? g.keywords.map(x=>String(x)) : [],
+    terms: Array.isArray(g?.terms) ? g.terms.map(x=>String(x)) : [],
+  }));
+}
+
+function __gmFillForm(idx){
+  const g = (__gmDraft && __gmDraft[idx]) ? __gmDraft[idx] : null;
+  gmName.value  = g ? (g.genre || '') : '';
+  gmKw.value    = g ? (g.keywords || []).join('\n') : '';
+  gmTerms.value = g ? (g.terms || []).join('\n') : '';
+}
+
+function __gmNormLines(s){
+  return String(s||'')
+    .split(/\r?\n/)
+    .map(v=>v.trim())
+    .filter(v=>v.length>0);
+}
+
+function __gmSetDirty(v){
+  __gmDirty = !!v;
+  if (gmSave) gmSave.disabled = !__gmDirty;
+}
+
+function __gmApplyFormToDraft(){
+  if (!__gmDraft) return;
+  if (!(__gmSel >= 0 && __gmSel < __gmDraft.length)) return;
+  const g = __gmDraft[__gmSel] || {};
+  g.genre    = String(gmName.value || '').trim();
+  g.keywords = __gmNormLines(gmKw.value);
+  g.terms    = __gmNormLines(gmTerms.value);
+  __gmDraft[__gmSel] = g;
+}
+
+function __gmPersistDraft(){
+  const KEY = 'searchGenreDict';
+  localStorage.setItem(KEY, JSON.stringify(__gmDraft || []));
+}
+
+function __gmRenderList(){
+  if(!gmList) return;
+  gmList.innerHTML = '';
+  const arr = __gmDraft || [];
+  arr.forEach((g, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'gm-item' + (idx===__gmSel ? ' is-selected' : '');
+    row.textContent = g.genre || '(no genre)';
+    row.dataset.idx = String(idx);
+    row.tabIndex = 0;
+    row.addEventListener('click', ()=> __gmSelect(idx));
+    row.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        __gmSelect(idx);
+      }
+    });
+    gmList.appendChild(row);
+  });
+}
+
+function __gmSelect(idx){
+  __gmApplyFormToDraft();   // ★ 切替前に現在フォーム内容をdraftへ反映
+  __gmSel = idx;
+  __gmRenderList();
+  __gmFillForm(idx);
+}
+
+function openGenreManager(){
+  // ★ localStorage優先の辞書を取得（無ければDEFAULTを保存して返る既存仕様）
+  __gmDraft = __gmCloneDict(getSearchGenreDict());
+  if(__gmDraft.length){
+    __gmSelect(0);
+  }else{
+    __gmSel = -1;
+    __gmRenderList();
+    __gmFillForm(-1);
+  }
+  if(gmDlg && typeof gmDlg.showModal === 'function') gmDlg.showModal();
+}
+
+// ===== E) 保存：localStorageへ反映 =====
+if (gmSave){
+  gmSave.disabled = true; // 初期は無効（入力でdirtyになったら有効化）
+  gmSave.addEventListener('click', (e)=>{
+    // form method="dialog" で閉じがちなので、まず閉じを止める
+    e.preventDefault();
+    __gmApplyFormToDraft();
+    // genre名の重複チェック（保存時のみ）
+    const seen = new Set();
+    for(const g of (__gmDraft||[])){
+      const n = String(g.genre||'').trim();
+      if(!n || seen.has(n)){
+        alert('genre名が空、または重複しています。修正してください。');
+        return;
+      }
+      seen.add(n);
+    }	
+    __gmPersistDraft();
+    __gmSetDirty(false);
+    try { gmDlg.close(); } catch(_){}
+  });
+}
+
+// ===== Step4) 追加／削除 =====
+const gmAdd = document.getElementById('gmAddGenre');
+const gmDel = document.getElementById('gmDeleteGenre');
+
+function __gmUniqueName(base){
+  const names = new Set((__gmDraft||[]).map(g=>g.genre));
+  if(!names.has(base)) return base;
+  let i = 2;
+  while(names.has(`${base}${i}`)) i++;
+  return `${base}${i}`;
+}
+
+if (gmAdd){
+  gmAdd.addEventListener('click', ()=>{
+    if(!__gmDraft) __gmDraft = [];
+    __gmApplyFormToDraft(); // 現在編集中の内容を保持
+    const name = __gmUniqueName('新規ジャンル');
+    __gmDraft.push({ genre: name, keywords: [], terms: [] });
+    __gmSel = __gmDraft.length - 1;
+    __gmRenderList();
+    __gmFillForm(__gmSel);
+    __gmSetDirty(true);
+  });
+}
+
+if (gmDel){
+  gmDel.addEventListener('click', ()=>{
+    if(!__gmDraft || __gmSel < 0) return;
+    const g = __gmDraft[__gmSel];
+    if(!confirm(`「${g?.genre||''}」を削除しますか？`)) return;
+    __gmDraft.splice(__gmSel, 1);
+    // 選択位置を調整
+    if(__gmDraft.length){
+      __gmSel = Math.min(__gmSel, __gmDraft.length-1);
+      __gmRenderList();
+      __gmFillForm(__gmSel);
+    }else{
+      __gmSel = -1;
+      __gmRenderList();
+      __gmFillForm(-1);
+    }
+    __gmSetDirty(true);
+  });
+}
+// 検索ダイアログ内の「⚙ジャンル管理」ボタンから起動
+const genreManageBtn = document.getElementById('genreManageBtn');
+if(genreManageBtn){
+  genreManageBtn.addEventListener('click', openGenreManager);
+}
+
 // ===== フェーズ2：✓／● 未完了リスト（別表示） =====
 const todoListBtn   = document.getElementById('todoListBtn');
 const todoListDlg   = document.getElementById('todoListDialog');
@@ -10221,7 +10853,17 @@ function scanAllWeeksTodos(){
         dateISO,
         timeStr,
         name: d.name || '(氏名なし)',
-        pid: d.pid || ''
+        pid: d.pid || '',
+
+        // ★ 表示用（B: IOL未確認の要約に使う）
+        eye: (d.eye || '').trim(),
+        proc2: (d.proc2 || '').trim(),
+        iolType:  (d.iolType  || '').trim(),
+        iolPower: (d.iolPower || '').trim(),
+        iolType2:  (d.iolType2  || '').trim(),
+        iolPower2: (d.iolPower2 || '').trim(),
+        iolType3:  (d.iolType3  || '').trim(),
+        iolPower3: (d.iolPower3 || '').trim()
       };
 	  
       const rlId = d?.meta?.rlSetId;
@@ -10248,6 +10890,7 @@ if(needsIOL(d) && (iolNG || devNG)){
 
   iols.push({
     ...row,
+	kind: 'B',
     reason: reasons.join(',')
   });
 }
@@ -10259,8 +10902,28 @@ if(needsIOL(d) && (iolNG || devNG)){
     }
   }
 
-  // 手術日が近い順（同日なら時刻文字列で軽く整列）
-  const cmp = (a,b)=> (a.dateISO.localeCompare(b.dateISO) || a.timeStr.localeCompare(b.timeStr) || a.name.localeCompare(b.name));
+  // 手術日が近い順（同日なら slotKey の並び＝day/section/idx でスロット順）
+  const cmp = (a,b)=>{
+    const d = a.dateISO.localeCompare(b.dateISO);
+    if (d) return d;
+
+    const pa = parseKey(a.slotKey);
+    const pb = parseKey(b.slotKey);
+    // parseKey失敗時は従来の timeStr にフォールバック
+    if (!pa || !pb){
+      return (a.timeStr||'').localeCompare(b.timeStr||'') || a.name.localeCompare(b.name);
+    }
+
+    // day -> section -> idx の順で並べる（「表示上のスロット順」に近い）
+    const dayCmp = String(pa.day).localeCompare(String(pb.day));
+    if (dayCmp) return dayCmp;
+    const secCmp = (pa.section|0) - (pb.section|0);
+    if (secCmp) return secCmp;
+    const idxCmp = (pa.idx|0) - (pb.idx|0);
+    if (idxCmp) return idxCmp;
+
+    return a.name.localeCompare(b.name);
+  };
   const arrivals = [...arrivalsMap.values()];
   const paths = [...pathsMap.values()];
 
@@ -10269,6 +10932,23 @@ if(needsIOL(d) && (iolNG || devNG)){
   paths.sort(cmp);
 
   return { arrivals, iols, paths };
+}
+
+// B) IOL未確認：要約表示（あるものだけ／ラベルなし／・区切り）
+function fmtIolBrief(r){
+  const parts = [];
+
+  const pushIol = (t, p)=>{
+    if(t || p) parts.push([t, p].filter(Boolean).join(' '));
+  };
+
+  pushIol(r.iolType,  r.iolPower);
+  pushIol(r.iolType2, r.iolPower2);
+  pushIol(r.iolType3, r.iolPower3);
+
+  if(r.proc2) parts.push(r.proc2);
+
+  return parts.join('・');
 }
 
 function renderTodoList(container, list){
@@ -10283,18 +10963,16 @@ function renderTodoList(container, list){
     if(!Number.isFinite(dt.getTime())) return iso;
     return `${iso}（${__JP_DOW2[dt.getDay()]}）`;
   };  
-  container.innerHTML = list.map(r=>`
-    <div class="todo-row"
-         data-week="${r.weekKey}"
-         data-slot="${r.slotKey}"
-         style="padding:6px 8px;border-bottom:1px solid #eee;cursor:pointer">
-      <span style="opacity:.75">${__fmtDateDow2(r.dateISO)}</span>
-      <span style="opacity:.65;margin-left:6px">${r.timeStr || ''}</span>
-      <strong style="margin-left:8px">${r.name}</strong>
-      <span style="opacity:.7;margin-left:6px">${r.pid}</span>
-	  ${r.reason ? `<span style="margin-left:6px;font-size:11px;opacity:.6">(${r.reason})</span>` : ''}
-    </div>
-  `).join('');
+container.innerHTML = list.map(r=>`
+  <div class="todo-row"
+       data-week="${r.weekKey}"
+       data-slot="${r.slotKey}">
+    <div class="sr-date">${__fmtDateDow2(r.dateISO)}</div>
+    <div class="sr-name">${r.name}</div>
+    <div class="sr-id">${r.pid}</div>
+    <div class="sr-proc">${r.kind === 'B' ? fmtIolBrief(r) : ''}</div>
+  </div>
+`).join('');
 }
 
 todoListExec.addEventListener('click', ()=>{
@@ -10328,6 +11006,30 @@ function jumpToSlotByKey(slotKey){
       if(!el) return;
       document.querySelectorAll('.slot.focused').forEach(x=>x.classList.remove('focused'));
       window.setActiveSlot?.(el, { scroll:false });
+
+      // ===== 未完了リストジャンプ：RLセットなら外周選択（= 1回目クリック相当） =====
+      try{
+        const st = (typeof loadWeek === 'function') ? loadWeek(currentMonday) : null;
+        if (st && typeof findRLSetRangeForSlot === 'function') {
+          const info = findRLSetRangeForSlot(el, st);
+          if (info && info.keys && info.keys.length > 1) {
+            const baseRec = st[info.baseKey];
+            const rlId = baseRec?.meta?.rlSetId;
+            if (rlId) {
+              // 単枠ロックは解除して「外周表示」を優先
+              window.rlSetSingleLocked = null;
+              if (typeof clearMultiSelection === 'function') clearMultiSelection();
+              info.keys.forEach(k=>{
+                const el2 = document.querySelector(`.slot[data-key="${CSS.escape(k)}"]`);
+                if (el2 && typeof addMultiSelect === 'function') addMultiSelect(el2);
+              });
+              window.currentRLSetId = rlId;
+              if (typeof updateMultiRangeOutline === 'function') updateMultiRangeOutline();
+            }
+          }
+        }
+      }catch(_){}
+
       try{ el.scrollIntoView({ block:'center', inline:'nearest', behavior:'auto' }); }
       catch(_){ try{ el.scrollIntoView(); }catch(_2){} }
     });
@@ -10376,7 +11078,47 @@ todoPathEl.addEventListener('click', (e)=>{
    return `${p.d}(${dow}) ${time}`;
  }
 
-</script>  
+</script>
+
+    <!-- ▼ ジャンル管理（最小版：Step1=骨組みのみ） -->
+    <dialog id="genreManagerDialog">
+      <form method="dialog" style="min-width:720px;max-width:920px;padding:16px">
+        <h3 style="margin:0 0 10px;">ジャンル管理（辞書編集）</h3>
+
+        <div class="gm-wrap">
+          <div class="gm-left">
+            <div style="font-weight:700;margin-bottom:6px;">ジャンル一覧</div>
+            <div id="gmGenreList" class="gm-list"></div>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button id="gmAddGenre" type="button">＋追加</button>
+              <button id="gmDeleteGenre" type="button">削除</button>
+            </div>
+          </div>
+
+          <div class="gm-right">
+            <div style="font-weight:700;margin-bottom:6px;">編集</div>
+            <label class="gm-row">
+              <span class="gm-label">genre</span>
+              <input id="gmGenreName" placeholder="例：白内障" />
+            </label>
+            <label class="gm-row">
+              <span class="gm-label">keywords</span>
+              <textarea id="gmKeywords" rows="6" placeholder="1行=1キーワード（例：cat, cata, 白内）"></textarea>
+            </label>
+            <label class="gm-row">
+              <span class="gm-label">terms</span>
+              <textarea id="gmTerms" rows="10" placeholder="1行=1語（例：白内障手術 / phaco / IOL など）"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <menu style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+          <button value="cancel" id="gmCancel">キャンセル</button>
+          <button value="ok" class="primary" id="gmSave" disabled>保存（Step2で有効化）</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="todoListDialog">
       <form method="dialog" style="min-width:560px;max-width:760px;padding:16px">
         <h3 style="margin:0 0 8px;">
