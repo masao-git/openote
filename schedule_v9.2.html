@@ -41,7 +41,8 @@
   align-items:start;
   cursor:grab;
   position:relative;
-}    .slot.empty{opacity:.8;background:#fbfbfb}
+}    
+	.slot.empty{opacity:.8;background:#fbfbfb}
 	    /* ★ RLセット用：左端の細い縦バー */
     .slot.rl-set-slot::before{
       content:"";
@@ -703,17 +704,18 @@ body.iolModeOn .device-dot::before{
 
 
 /* === 日フォーカス表示（方式A） ===================== */
-body.dayFocus { --slot-h: 44px; }              /* スロットを少し背高に */
+/* ★フォーカスの行高は「#schedule の中だけ」で上げる（モーダルに波及させない） */
+body.dayFocus #schedule { --slot-h: 44px; }              /* スロットを少し背高に */
 body.dayFocus #schedule { grid-template-columns: 1fr; }
-body.dayFocus .day { display:none; }           /* 他日は隠す */
-body.dayFocus .day[data-focus="true"] {display:block;}
+body.dayFocus #schedule .day { display:none; }           /* 他日は隠す */
+body.dayFocus #schedule .day[data-focus="true"] {display:block;}
 
-/* フォーカス時の文字サイズを少しアップ（お好みで） */
-body.dayFocus .time { font-size: 18px; }
-body.dayFocus .content-left { font-size: 20px; line-height: 1.3; }
+/* ★フォーカス時の文字サイズ：#schedule の中だけ */
+body.dayFocus #schedule .time { font-size: 18px; }
+body.dayFocus #schedule .content-left { font-size: 20px; line-height: 1.3; }
 
-/* フォーカス時：結合枠も同じフォントサイズにする */
-body.dayFocus .slot.mergeHead .content-left {
+/* フォーカス時：結合枠も同じフォントサイズにする（#schedule内だけ） */
+body.dayFocus #schedule .slot.mergeHead .content-left {
   font-size: 20px !important;
   line-height: 1.3;
 }
@@ -1662,10 +1664,39 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
 
 /* ★モーダル内だけ：時刻カラムを週表示と同等(80px)に戻す（所要時間バッジの被り防止） */
 #dayReorderDialog .dor-row.slot{
-  grid-template-columns: 80px 1fr !important;
+  grid-template-columns: 94px 1fr !important;
 }
 #dayReorderDialog .dor-row.slot .time{
-  width: 80px;
+  width: 94px;
+  display: grid;
+  grid-template-columns: 44px 1fr 8px; /* 時刻｜バッジ｜✓ */
+  column-gap: 0px;
+  align-items: center;
+}
+
+#dayReorderDialog .dor-row.slot .time .time-text{
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#dayReorderDialog .dor-row.slot .time .time-badges{
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;  /* はみ出したら隠す（80px内に収める） */
+  padding-right: 0;
+  margin-right: 0;  
+}
+
+#dayReorderDialog .dor-row.slot .time .arrival-check{
+  position: static;
+  display: inline-block;
+  width: 6px;
+  text-align: center;
+  margin-left: 0;
+  justify-self: end;   /* ✓を右端に寄せる */  
+}
+#dayReorderDialog .dor-row.slot .time .arrival-check.placeholder{
+  visibility: hidden; /* 幅は残す */
 }
 
 /* ★モーダル内だけ：2行化防止（旧 dor-main と同じ “1行flex” に戻す） */
@@ -1764,7 +1795,172 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
 #dayReorderList .dor-row.drop-insert-after{
   box-shadow:none !important;
 }
+/* ===== dayReorder：arrival ✓ 用スペース ===== */
+#dayReorderDialog .dor-row .arrival-check{
+  position: static;        /* absolute は使わない */
+  width: 14px;             /* ✓ 用の固定幅 */
+  margin-left: 4px;
+  transform: none;
+}
 
+/* ✓ が無い行でも幅だけ確保 */
+#dayReorderDialog .dor-row .arrival-check.placeholder{
+  visibility: hidden;      /* 見えないが幅は残す */
+}
+
+
+/* === 当日並び替え：複数選択の見た目（単枠も同じ見た目に統一） === */
+#dayReorderDialog .dor-row.slot.is-selected{
+  outline: 3px solid rgba(37,99,235,.55);
+  outline-offset: -3px;
+  border-radius: 0px;
+}
+/* 連続選択：外周だけ青（中の“線”は消す） */
+#dayReorderDialog .dor-row.slot.is-selected.sel-run-mid{
+  outline: none;
+  /* 連続選択の“中間”は左右だけ（上下線は出さない） */
+  box-shadow: inset 3px 0 0 0 rgba(37,99,235,.55),
+              inset -3px 0 0 0 rgba(37,99,235,.55);
+  border-radius: 0;
+}
+#dayReorderDialog .dor-row.slot.is-selected.sel-run-top{
+  outline: none;
+  box-shadow: inset 0 3px 0 0 rgba(37,99,235,.55), inset 3px 0 0 0 rgba(37,99,235,.55), inset -3px 0 0 0 rgba(37,99,235,.55);
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+}
+#dayReorderDialog .dor-row.slot.is-selected.sel-run-bottom{
+  outline: none;
+  box-shadow: inset 0 -3px 0 0 rgba(37,99,235,.55), inset 3px 0 0 0 rgba(37,99,235,.55), inset -3px 0 0 0 rgba(37,99,235,.55);
+  border-bottom-left-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+/* D&Dの挿入線（1本） */
+#dayReorderList{
+  position: relative;
+}
+#dayReorderList .dor-insert-line{
+  position:absolute;
+  left:0; right:0;
+  height:3px;
+  background: rgba(37,99,235,.8);
+  border-radius: 999px;
+  pointer-events:none;
+  z-index: 20;
+}
+#dayReorderDialog{ position: relative; }
+
+/* swap 対象候補（needSlotsぶん）の強調 */
+#dayReorderDialog .dor-row.swap-target{
+  /* 一旦リセット：行ごとのoutlineは使わない */
+  outline: none;
+}
+#dayReorderDialog .dor-row.swap-target .slot{
+  /* row全体を強調したい場合は不要。必要なら軽く背景 */
+  /* background: rgba(43,115,255,.06); */
+}
+
+/* swap-target 連続範囲をひとつの枠に見せる（外周だけ青） */
+#dayReorderDialog .dor-row.swap-target{
+  border-left: 2px solid #2b73ff;
+  border-right: 2px solid #2b73ff;
+}
+/* 範囲の先頭：上辺 */
+#dayReorderDialog .dor-row.swap-target:not(.swap-target-prev){
+  border-top: 2px solid #2b73ff;
+}
+/* 範囲の末尾：下辺 */
+#dayReorderDialog .dor-row.swap-target:not(.swap-target-next){
+  border-bottom: 2px solid #2b73ff;
+}
+
+/* 範囲内部の横線（行境界）を消す：必要なら調整 */
+#dayReorderDialog .dor-row.swap-target.swap-target-prev{
+  border-top-color: transparent;
+}
+
+/* ===== dayReorder：複数ドラッグの見た目（“縦に連結した塊”ゴースト） ===== */
+.dor-drag-ghost{
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  pointer-events: none;
+  z-index: 99999;
+  opacity: .75;                 /* ★ 全体を一定で薄く（グラデなし） */
+}
+.dor-drag-ghost .dor-ghost-stack{
+  display: flex;
+  flex-direction: column;
+  width: 680px;                 /* ★ dayReorderの行幅に近い値（必要なら微調整） */
+  background: rgba(255,255,255,.98);
+  border: 2px solid rgba(37,99,235,.55); /* ★ “青枠の塊”感 */
+  border-radius: 0;             /* ★ 直角 */
+  box-shadow: 0 10px 28px rgba(0,0,0,.18);
+  overflow: hidden;
+}
+.dor-drag-ghost .dor-ghost-item{
+  position: static;             /* ★重ねない */
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  opacity: 1 !important;        /* ★ 各行は同じ濃さ（内部由来の薄化を防ぐ） */
+}
+.dor-drag-ghost .dor-row{
+  opacity: 1 !important;        /* ★ 行側にも保険 */
+}
+.dor-drag-ghost .dor-ghost-item + .dor-ghost-item{
+  border-top: 1px solid #d0d5dd; /* ★行の区切り（元のslotに近い） */
+}
+
+/* ドラッグ中：選択行も“掴まれてる感”を出す */
+#dayReorderDialog .dor-row.dragging-multi{
+  opacity: .55;
+}
+.dor-drag-ghost .dor-ghost-stack{
+  filter: brightness(.92);
+}
+
+/* ===== dayReorder：連続選択の外周を「1本の青枠」で囲う（表示専用） ===== */
+#dayReorderList{ position: relative; }
+#dayReorderList .dor-sel-frame{
+  position: absolute;
+  left: 0;
+  right: 0;
+  border: 3px solid rgba(37,99,235,.85);
+  border-radius: 0;
+  pointer-events: none;
+  z-index: 40;
+  display: none;      /* 選択があるときだけ表示 */
+  box-sizing: border-box;
+}
+#dorSwapOverlay{
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border: 2px solid #2b73ff;
+  box-sizing: border-box;
+  pointer-events: none;
+  display: none;
+  z-index: 50; /* 行より上 */
+  border-radius: 0;                 /* ★角を直角に */
+  background: rgba(43,115,255,.12); /* 好みで。とにかく overlay 1枚で統一 */
+}
+ 
+/* ★swap-hit は「行を塗る」方式をやめる（濃淡差・境界線が出る原因） */
+#dayReorderDialog .dor-row.swap-hit{
+  box-shadow: none !important;
+  outline: none !important;
+}
+/* ★swapターゲット範囲は「元の背景色」を無効化して、青ハイライトを統一 */
+#dayReorderDialog #dayReorderList .dor-row.swap-hit{
+  background: #fff !important; /* まず元色を落とす */
+}
+/* slot内のセル/テキスト領域側が背景を持っている場合もあるので念押し */
+#dayReorderDialog #dayReorderList .dor-row.swap-hit > *{
+  background: transparent !important;
+}
   </style>
   </head>
 <body>
@@ -3392,6 +3588,9 @@ function applyUndoWithFocus(){
   // 既存の undo を実行（内部で render() していてもOK）
   try { if (typeof undo === 'function') undo(); } catch{}
 
+  // ★ Undo 後に時間配列を必ず再計算（30分・50分枠復活時のズレ防止）
+  try { paintSlotsFromStore(); } catch{}
+
   // 描画の一本化：フォーカス中は必ずフォーカス維持で、週表示は念のため render
   if (wasFocus) {
     reRenderPreservingFocus(preferKey);
@@ -4106,14 +4305,58 @@ function applyLayout(mode){
   function autumnalEquinoxDay(Y){ return Math.floor(23.2488 + 0.242194*(Y-1980) - Math.floor((Y-1980)/4)); }
   function nthWeekdayOfMonth(Y, M, weekday, n){ const d = new Date(Y, M-1, 1); const first = d.getDay(); const delta = (weekday - first + 7) % 7; return 1 + delta + 7*(n-1); }
   function genHolidaysAuto(year){ const H = new Set(); const push = (m, d)=> H.add(`${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`); push(1,1); push(2,11); if(year >= 2020) push(2,23); push(4,29); push(5,3); push(5,4); push(5,5); push(8,11); push(11,3); push(11,23); const MON=1,SUN=0; push(1, nthWeekdayOfMonth(year, 1, MON, 2)); push(7, nthWeekdayOfMonth(year, 7, MON, 3)); push(9, nthWeekdayOfMonth(year, 9, MON, 3)); push(10, nthWeekdayOfMonth(year,10, MON, 2)); push(3, vernalEquinoxDay(year)); push(9, autumnalEquinoxDay(year)); const isHoliday = (iso)=> H.has(iso); const addSubstitute = (isoStart)=>{ let d = isoToDate(isoStart); do { d.setDate(d.getDate()+1); } while (d.getDay() === SUN || isHoliday(ymd(d))); H.add(ymd(d)); }; for(const iso of Array.from(H)){ const dt = isoToDate(iso); if (dt.getDay() === SUN) addSubstitute(iso); } const span = (m)=> new Date(year, m, 0).getDate(); for(let m=1;m<=12;m++){ for(let d=2; d<span(m-1); d++){ const cur = `${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const prev = ymd(new Date(year, m-1, d-1)); const next = ymd(new Date(year, m-1, d+1)); const wd = isoToDate(cur).getDay(); if (!H.has(cur) && H.has(prev) && H.has(next) && wd !== SUN){ H.add(cur); } } } return H; }
-  function loadHolidayAuto(year){ try{ const s = localStorage.getItem('holidays_auto_'+year); return s? new Set(JSON.parse(s)) : new Set(); }catch(_){ return new Set(); }
+  // ★ 祝日キャッシュの互換性救済：古い形式/壊れた形式でも ISO(YYYY-MM-DD) に正規化して復活させる
+  function __normISODate(s){
+    if (!s) return null;
+    s = String(s).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // 例: "2026/1/1" "2026-1-1" を救済
+    const m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (!m) return null;
+    return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
   }
-  function saveHolidayAuto(year, set){ localStorage.setItem('holidays_auto_'+year, JSON.stringify(Array.from(set||[]))); }
-  function ensureHolidayAuto(year){ let s = loadHolidayAuto(year); if(!s || s.size===0){ s = genHolidaysAuto(year); saveHolidayAuto(year, s); } return s; }
-  function loadHolidayPatch(year){ try{ return JSON.parse(localStorage.getItem('holidays_patch_'+year))||{}; }catch(_){ return {}; } }
+
+  function loadHolidayAuto(year){
+    try{
+      const s = localStorage.getItem('holidays_auto_'+year);
+      if (!s) return new Set();
+      const arr = JSON.parse(s);
+      if (!Array.isArray(arr)) return new Set();
+      const out = new Set();
+      for (const v of arr){
+        const iso = __normISODate(v);
+        if (iso && Number(iso.slice(0,4)) === Number(year)) out.add(iso);
+      }
+      return out;
+    }catch(_){
+      return new Set();
+    }
+  }
+  function saveHolidayAuto(year, set){
+    try{ localStorage.setItem('holidays_auto_'+year, JSON.stringify(Array.from(set||[]))); }catch(_){}
+  }
+  function ensureHolidayAuto(year){
+    let s = loadHolidayAuto(year);
+    // ★ 「空ではないが壊れている」ケースを救う（正規化後に0件なら作り直し）
+    if (!s || s.size === 0){
+      s = genHolidaysAuto(year);
+      saveHolidayAuto(year, s);
+    }
+    return s;
+  }  function loadHolidayPatch(year){ try{ return JSON.parse(localStorage.getItem('holidays_patch_'+year))||{}; }catch(_){ return {}; } }
   function loadHolidayManual(){ try{ return JSON.parse(localStorage.getItem('holidays_manual'))||{}; }catch(_){ return {}; } }
   function saveHolidayManual(obj){ localStorage.setItem('holidays_manual', JSON.stringify(obj||{})); }
-  function isHolidayISO(iso){ const Y = Number(iso.slice(0,4)); const manual = loadHolidayManual(); if (manual[iso] === true)  return true; if (manual[iso] === false) return false; const patch = loadHolidayPatch(Y); if (patch[iso]) return true; const auto = ensureHolidayAuto(Y); return auto.has(iso); }
+  function isHolidayISO(iso){
+    iso = __normISODate(iso) || iso;
+    const Y = Number(String(iso).slice(0,4));
+    const manual = loadHolidayManual();
+    if (manual[iso] === true)  return true;
+    if (manual[iso] === false) return false;
+    const patch = loadHolidayPatch(Y);
+    if (patch[iso]) return true;
+    const auto = ensureHolidayAuto(Y);
+    return auto.has(iso);
+  }
   function toggleHolidayManual(iso, toFlag){ const m = loadHolidayManual(); m[iso] = toFlag; saveHolidayManual(m); }
 
   // ===== ノート =====
@@ -4174,8 +4417,8 @@ function __dor_getAllPositionKeysForDay(dateIso, dayKey){
   for (let sidx=0; sidx<sections.length; sidx++){
     const sec = sections[sidx];
     const baseCount = sec.slots;
-    const layout = getSectionLayout(currentMonday, dayKey, sidx, baseCount);
-    for (let i=0; i<layout.total; i++){
+    const mon = arguments.length >= 3 ? arguments[2] : currentMonday; // ★monday優先
+    const layout = getSectionLayout(mon, dayKey, sidx, baseCount);    for (let i=0; i<layout.total; i++){
       keys.push(`${dateIso}|${dayKey}|${sidx}|${i}`);
     }
   }
@@ -4200,8 +4443,9 @@ function __dor_pickLabelForBlock(block, store){
 
 function __dor_buildBlocksForDay(dateIso, dayKey){
   // 1) その日の全ポジション（臨時枠込み）を作る
-  const posKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey);
-  const store = loadWeek(currentMonday) || {};
+  const mon = arguments.length >= 3 ? arguments[2] : currentMonday; // ★monday優先
+  const posKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey, mon);
+  const store = loadWeek(mon) || {};
 
   // 2) 1行=1ブロック（空も含む）。結合(span)は1ブロック、RLセットも1ブロック。
   const blocks = [];
@@ -4233,9 +4477,23 @@ function __dor_buildBlocksForDay(dateIso, dayKey){
         if (rl && Array.isArray(rl.keys) && rl.keys.length){
           // baseKey の時だけ採用（重複防止）
           if (rl.baseKey === k){
-            const keys = rl.keys.slice();
-            keys.forEach(x=> used.add(x));
-            blocks.push({ kind:'rl', keys });
+            // ★ RLブロックの keys は「headKeyの配列」だと枠数がズレる（各headが結合の可能性あり）
+            //    → 実スロット数ぶんに keys を展開して持つ（これで keys.length が常に枠数になる）
+            const keysExpanded = [];
+            for (const headKey of rl.keys){
+              const rec2 = store[headKey];
+              const span2 = (!rec2 || rec2.tail) ? 1 : Math.max(1, Number(rec2.span || 1));
+              const p2 = parseKey(headKey);
+              if (!p2){
+                keysExpanded.push(headKey);
+                continue;
+              }
+              for (let j=0; j<span2; j++){
+                keysExpanded.push(`${p2.d}|${p2.day}|${p2.section}|${p2.idx + j}`);
+              }
+            }
+            keysExpanded.forEach(x=> used.add(x));
+            blocks.push({ kind:'rl', keys: keysExpanded });
             continue;
           } else {
             // baseKey以外はbase側で処理される
@@ -4275,9 +4533,12 @@ function __dor_clone(obj){
   try{ return JSON.parse(JSON.stringify(obj)); }catch(_){ return Object.assign({}, obj); }
 }
 
-function __dor_applyBlocksToStore(dateIso, dayKey, blocks, store){
+function __dor_applyBlocksToStore(dateIso, dayKey, blocks, store, mon){
   // その日の全ポジション（臨時枠込み）
-  const originalKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey);
+  // ★モーダルで算出した「対象週(mon)」を優先（currentMondayズレでセクション境界が崩れるのを防ぐ）
+  const wk = mon || currentMonday;
+  const originalKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey, wk);
+
 
   // 旧データのスナップショット（この日のキーだけ）
   const snapshot = {};
@@ -4321,15 +4582,12 @@ function __dor_applyBlocksToStore(dateIso, dayKey, blocks, store){
     }
 
     // 3) RL / one：keys をそのまま対応付けてコピー
-    //   ※ RL 内に span>1 が混ざる場合は __dor_buildBlocksForDay 側の分割が必要（次段）
+    //   ※ ここで tail/span を消すと「週表示で merge/所要時間バッジ」が壊れるので消さない
     for (let j=0; j<destSlice.length; j++){
       const srcKey = b.keys[j];
       const src = snapshot[srcKey];
       if (!src) continue;
       const rec = __dor_clone(src);
-      // 非merge領域に tail/span が混入していたら掃除（事故防止）
-      if (rec.tail) delete rec.tail;
-      if (Number(rec.span || 1) > 1) rec.span = 1;
       next[destSlice[j]] = rec;
     }
   }
@@ -4337,7 +4595,29 @@ function __dor_applyBlocksToStore(dateIso, dayKey, blocks, store){
   // この日分のキーをいったん全部消して、next を上書き
   originalKeys.forEach(k=>{ delete store[k]; });
   Object.keys(next).forEach(k=>{ store[k] = next[k]; });
-
+  // ★この日の tail/head/span/所要時間アンカーを正規化（週表示の applyMerges/バッジ崩れ防止）
+  //   dayKey 内のセクションを抽出して、そのセクションだけ再構築する（影響範囲を最小化）
+  try{
+    const secs = new Set();
+    for (const k of originalKeys){
+      const p = (typeof parseKey === 'function') ? parseKey(k) : null;
+      if (!p) continue;
+      if (String(p.day) !== String(dayKey)) continue;
+      secs.add(Number(p.section));
+    }
+    secs.forEach(sec=>{
+      try{
+        if (typeof rebuildTailLinksForDaySection === 'function') {
+          rebuildTailLinksForDaySection(dayKey, sec, store);
+        }
+      }catch(_){}
+      try{
+        if (typeof rebuildDurationAnchorsForDaySection === 'function') {
+          rebuildDurationAnchorsForDaySection(dayKey, sec, store);
+        }
+      }catch(_){}
+    });
+  }catch(_){}
   return { originalKeys };
 }
 
@@ -4345,9 +4625,92 @@ function __dor_applyBlocksToStore(dateIso, dayKey, blocks, store){
 function __dor_redrawFromBlocks(dlg){
   const { dateIso, dayKey, blocks } = dlg.__dor;
   const list = document.getElementById('dayReorderList');
-  const store = loadWeek(currentMonday) || {};
+  const mon = (dlg.__dor && dlg.__dor.monday) ? dlg.__dor.monday : currentMonday; // ★
+  const store = loadWeek(mon) || {};
   list.innerHTML = '';
 
+  // ★swap枠 overlay は redraw で消えるので毎回先頭に復活
+  const __dorSwapOverlay = document.createElement('div');
+  __dorSwapOverlay.id = 'dorSwapOverlay';
+  __dorSwapOverlay.setAttribute('aria-hidden','true');
+  list.appendChild(__dorSwapOverlay);
+
+  // ★このブロックが「何スロット分」かを安全に決める（b.keys.length だけに依存しない）
+  function __dor_blockSlots(b){
+    if (!b) return 1;
+    // 1) 明示keys（merge/RLなど）が複数ならそれを優先
+    const klen = (Array.isArray(b.keys) ? b.keys.length : 0);
+    if (klen > 1) return klen;
+    // 2) keysが1（または壊れた）でも、store側spanで救う
+    const headKey = b.keys && b.keys[0];
+    const headRec = headKey ? store[headKey] : null;
+    const span = Math.max(1, Number(headRec?.span || 1));
+    return span;
+  }
+
+// ===== セクション境界保持用（午前/午後・OR別） =====
+function __dor_splitKeysBySection(originalKeys){
+  const sections = [];
+  let buf = [];
+  let lastSec = null;
+
+  for (const k of originalKeys){
+    const sec = k.split('|')[1];
+    if (lastSec !== null && sec !== lastSec){
+      sections.push(buf);
+      buf = [];
+    }
+    buf.push(k);
+    lastSec = sec;
+  }
+  if (buf.length) sections.push(buf);
+  return sections;
+}
+
+  // ★ "HH:MM" → 分（例 "9:30" / "09:30" どちらもOK）
+  function __dor_hhmmToMin(hhmm){
+    const m = String(hhmm||'').match(/(\d{1,2}):(\d{2})/);
+    if(!m) return 0;
+    const h = Number(m[1]||0), mm = Number(m[2]||0);
+    return h*60 + mm;
+  }
+  // ★ 分 → "H:MM"（先頭ゼロなし）
+  function __dor_minToHHMM(min){
+    min = Math.max(0, Number(min||0));
+    const h = Math.floor(min/60);
+    const m = min % 60;
+    return `${h}:${String(m).padStart(2,'0')}`;
+  }
+
+  // ★ブロックの所要時間（分）を「モーダル内の並び替え表示」用に決める
+  //   ※storeの“旧配置キー”に依存しない（keysのレコードを参照して算出する）
+  function __dor_blockMinutes(b){
+    if(!b) return 20;
+    // ★削除（空）化した行は、モーダル内では常に 1枠=20分 扱い（結合枠の時刻飛び防止）
+    if (b.__deleted) return 20;	
+    if(b.kind === 'merge'){
+      const head = store[b.keys?.[0]] || {};
+      const span = Math.max(1, Number(head?.span || b.keys?.length || 1));
+      const dur  = Number(head?.duration || 0);
+      return (Number.isFinite(dur) && dur>0) ? dur : (span*20);
+    }
+    if(b.kind === 'rl'){
+      // RL：各 head の duration 優先。未入力は span*20（span無ければ20）
+      return (b.keys||[]).reduce((sum,k)=>{
+        const r = store[k];
+        if(!r || r.tail) return sum;
+        const span = Math.max(1, Number(r.span || 1));
+        const dur  = Number(r.duration || 0);
+        const m = (Number.isFinite(dur) && dur>0) ? dur : (span*20);
+        return sum + m;
+      }, 0) || 40; // どれも取れないときの保険
+    }
+    // 通常：headRec.duration 優先、無ければ span*20、無ければ20
+    const head = store[b.keys?.[0]] || {};
+    const span = Math.max(1, Number(head?.span || 1));
+    const dur  = Number(head?.duration || 0);
+    return (Number.isFinite(dur) && dur>0) ? dur : (span*20);
+  }
   // 週表示の「実スロット色」をモーダル行にコピーする（安全：見つからなければ何もしない）
   function __dor_copySlotVisual(rowEl, slotKey){
     try{
@@ -4365,6 +4728,29 @@ function __dor_redrawFromBlocks(dlg){
       rowEl.style.borderLeftStyle = cs.borderLeftStyle;
     }catch(_){}
   }
+ 
+   // ★「削除（空）化」した行は、週表示の見た目コピー(inline背景)を必ず剥がして“真っ白”に戻す
+   function __dor_clearSlotVisual(rowEl){
+     if (!rowEl) return;
+     rowEl.style.background = '';
+     rowEl.style.backgroundColor = '';
+     rowEl.style.borderColor = '';
+     rowEl.style.boxShadow = '';
+     rowEl.style.borderLeftColor = '';
+     rowEl.style.borderLeftWidth = '';
+     rowEl.style.borderLeftStyle = '';
+   
+     // ★行内の主要要素にも残りが出ることがあるので、内側も白に戻す
+     const inners = rowEl.querySelectorAll(
+       '.time, .time-inner, .slot-main, .slot-content, .slot, .dor-cell, .title, .desc'
+     );
+     inners.forEach(el=>{
+       el.style.background = '';
+       el.style.backgroundColor = '';
+       el.style.boxShadow = '';
+       el.style.borderColor = '';
+     });	 
+   }
   
   // ===== ここから：セクション単位で描画（週表示と同じ構造） =====
   // section順を「CONFIGの定義順」にするため、先に sectionKeys を作る
@@ -4376,17 +4762,34 @@ function __dor_redrawFromBlocks(dlg){
 
   // blocks を「移動先（= 現在の並びが割り当てられる destKey）」基準で section ごとにグループ化する
   // （元key基準で描画すると、午前⇄午後の移動がモーダル上で“戻ったように見える”）
-  const bySec = {};
-  const originalKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey); // day内の全スロットkey（CONFIG順）
+const bySec = {};
+const originalKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey, mon);
+
+// ★ originalKeys をセクション単位で分割
+const secKeysList = __dor_splitKeysBySection(originalKeys);
+
+// ★ blocks を「元の所属セクション」で固定分類
+blocks.forEach(b=>{
+  const headKey = b.keys?.[0];
+  const p = parseKey(headKey);
+  const secKey = `${p.day}|${p.section}`;
+  (bySec[secKey] ||= []).push(b);
+});
+
+// ★ 各セクション内でのみ destHeadKey を割り当てる
+secKeysList.forEach(secKeys=>{
+  const p = parseKey(secKeys[0]);
+  const secKey = `${p.day}|${p.section}`;
+  const list = bySec[secKey] || [];
+
   let cursor = 0;
-  blocks.forEach(b=>{
-    const destHeadKey = originalKeys[cursor] || b.keys[0]; // 念のためフォールバック
-    b.__dor_destHeadKey = destHeadKey;                     // 描画専用（保存データには影響しない）
-    const p = parseKey(destHeadKey);
-    const k = `${p.day}|${p.section}`;
-    (bySec[k] ||= []).push(b);
-    cursor += (b.keys?.length || 1);
+  list.forEach(b=>{
+    const destHeadKey = secKeys[cursor] || b.keys[0];
+    b.__dor_destHeadKey = destHeadKey;
+    cursor += __dor_blockSlots(b);
   });
+});
+
 
   // 描画
   sectionKeys.forEach(secKey=>{
@@ -4410,6 +4813,9 @@ function __dor_redrawFromBlocks(dlg){
     slotsDiv.className = 'slots';
     secWrap.appendChild(slotsDiv);
 
+    // ★このセクションの表示時刻は「blocks順」で累積計算する（旧配置storeに引っ張られない）
+    let __dor_tMin = __dor_hhmmToMin(sec?.start || '00:00');
+
     arr.forEach((b, idxInSec)=>{
       // ※ D&D用 index は blocks 全体の index を使う必要があるので、dataset.idx は全体idxにする
       const globalIdx = blocks.indexOf(b);
@@ -4418,29 +4824,40 @@ function __dor_redrawFromBlocks(dlg){
       row.className = 'slot dor-row';
       row.dataset.idx = String(globalIdx);
 
-      // 時刻は「移動先（dest）」のスロット時刻を表示する（午前⇄午後で見た目が戻るのを防ぐ）
-      const p = parseKey(b.__dor_destHeadKey || b.keys[0]);
-      const time = getSlotTimeHHMMEx(
-        CONFIG[p.day][p.section].start,
-        currentMonday,
-        p.day,
-        p.section,
-        p.idx
-      );
+      // ★安全：以前の実験で付いた inline height を必ずリセット（クリック不能バグ防止）
+      row.style.height = '';	  
+
+      // ★時刻は「このセクション内の blocks の順」で累積（destKey依存をやめて乱れを根治）
+      const timeDisp = __dor_minToHHMM(__dor_tMin);
   
       // 左端：週表示と同じ .time 構造（時刻 + 所要時間バッジ）
+      // ★ このブロックの head レコード（arrival ✓ 判定にも使うので先に取る）
+      //   削除（空）化した行は store を見ない＝モーダル内で“完全に白”にする
+      const headRecRaw = store[b.keys[0]] || {};
+      const headRec = (b && b.__deleted) ? {} : headRecRaw;
+
+	  
       const timeEl = document.createElement('div');
       timeEl.className = 'time';
-      timeEl.appendChild(document.createTextNode(time));
+ 
+      // ★ 3カラム固定：時刻｜バッジ｜✓
+      const tText = document.createElement('span');
+      tText.className = 'time-text';
+      tText.textContent = timeDisp;
+      timeEl.appendChild(tText);
+ 
+      const badges = document.createElement('span');
+      badges.className = 'time-badges';
+      timeEl.appendChild(badges);
   
-      // 結合 / RL のときだけ所要時間バッジを出す
+      // 結合 / RL のときだけ所要時間バッジを出す（ただし削除（空）化は出さない）
       let minutes = 0;
-      if (b.kind === 'merge'){
+      if (!b.__deleted && b.kind === 'merge'){
         const head = store[b.keys[0]];
         const span = Math.max(1, Number(head?.span || b.keys.length || 1));
         const dur  = Number(head?.duration || 0);
         minutes = (Number.isFinite(dur) && dur > 0) ? dur : (span * 20);
-      } else if (b.kind === 'rl'){
+      } else if (!b.__deleted && b.kind === 'rl'){
         // RL：各枠の duration 優先。未入力なら 20 分扱い（= 20+20 → 40）
         minutes = b.keys.reduce((sum, k)=>{
           const r = store[k];
@@ -4458,20 +4875,28 @@ function __dor_redrawFromBlocks(dlg){
         mb.textContent = (typeof formatMinutesColon === 'function')
           ? formatMinutesColon(minutes)
           : String(minutes);
-        timeEl.appendChild(mb);
+        badges.appendChild(mb);
       }
 
+      // ★ arrival ✓（常に幅確保：無い行も placeholder を置く）
+      const ac = document.createElement('span');
+      ac.className = 'arrival-check';
+      if (headRec && headRec.arrivalFixed){
+        ac.textContent = '✓';
+      }else{
+        ac.classList.add('placeholder');
+      }
+      timeEl.appendChild(ac);
+
       // 本文（1行）
-      const { title:tt, desc } = __dor_pickLabelForBlock(b, store);
+      let { title:tt, desc } = __dor_pickLabelForBlock(b, store);
+      if (b && b.__deleted){ tt = '（空）'; desc = ''; }
       const main = document.createElement('div');
       main.className = 'content';
       const left = document.createElement('span');
       left.className = 'content-left';
       // 本文：患者名｜術式1（位置揃え）
       main.textContent = ''; // いったん空にする
-
-      // 既にこのブロック内で rec を使っている場合があるので、別名にする（再宣言事故防止）
-      const headRec = store[b.keys[0]] || {};
       
       // 区切り
       const sep1 = document.createElement('span');
@@ -4551,17 +4976,69 @@ function __dor_redrawFromBlocks(dlg){
       }
 
       // 週表示の色をコピー
-      if (b.keys && b.keys[0]) __dor_copySlotVisual(row, b.keys[0]);
+     if (b && b.__deleted){
+       __dor_clearSlotVisual(row);
+     }else if (b.keys && b.keys[0]){
+       __dor_copySlotVisual(row, b.keys[0]);
+     }
 
       slotsDiv.appendChild(row);
+  
+
+      // ★次行の開始時刻へ
+      __dor_tMin += __dor_blockMinutes(b);
     });
 
     list.appendChild(secWrap);
   });
 
   __dor_bindDnD(dlg);
+  __dor_updateSelVisual(dlg); // ★行が作り直されるので、選択見た目を再適用  
   // ===== ここまで：セクション単位で描画 =====
 
+}
+
+// ★フォーカス表示からの「この日の並び替え…」：見た目はフォーカスのまま、内部は一瞬だけ週表示DOMを復元して開く
+function __dor_openDayReorderFromWrap(wrap, dayKey){
+  const dateIso = wrap?.dataset?.date;
+  const dk = wrap?.dataset?.dayKey || dayKey;
+  if (!dateIso || !dk) return;
+
+  // 非フォーカスならそのまま
+  if (!document.body.classList.contains('dayFocus')) {
+    openDayReorderDialog(dateIso, dk);
+    return;
+  }
+
+  const schedule = document.getElementById('schedule');
+  const days = Array.from(document.querySelectorAll('#schedule .day'));
+  const prev = days.map(d => ({ d, display: d.style.display, focus: d.getAttribute('data-focus') }));
+
+  // ★瞬間的なDOM復元のちらつき防止
+  if (schedule) schedule.style.visibility = 'hidden';
+
+  try{
+    // 週表示DOM前提の処理が通るよう、全dayを一旦表示状態にする
+    days.forEach(d => { d.style.display = 'block'; });
+
+    // ★並び替え対象日の週に currentMonday を合わせる（保存先もここに依存）
+    if (typeof mondayOf === 'function'){
+      const [y,m,d] = String(dateIso).split('-').map(Number);
+      const dt = new Date(y, (m||1)-1, d||1);
+      if (!isNaN(+dt)) window.currentMonday = mondayOf(dt);
+    }
+
+    openDayReorderDialog(dateIso, dk);
+
+  } finally {
+    // 元のフォーカス表示へ戻す
+    prev.forEach(p => {
+      p.d.style.display = p.display;
+      if (p.focus != null) p.d.setAttribute('data-focus', p.focus);
+      else p.d.removeAttribute('data-focus');
+    });
+    if (schedule) schedule.style.visibility = '';
+  }
 }
 
 function openDayReorderDialog(dateIso, dayKey){
@@ -4572,19 +5049,44 @@ function openDayReorderDialog(dateIso, dayKey){
 
   dateEl.textContent = `${__dor_dateLabel(dateIso)}`;
 
-  const store = loadWeek(currentMonday) || {};
-  const { blocks } = __dor_buildBlocksForDay(dateIso, dayKey);
+  // ★フォーカス表示でも「その日付が属する週」を正として読む（モーダル空表示対策）
+  // 週表示は元々 currentMonday が合っているので実質ノーダメ
+  try{
+    if (dateIso && typeof mondayOf === 'function'){
+      const [y,m,d] = String(dateIso).split('-').map(Number);
+      const dt = new Date(y, (m||1)-1, d||1);
+      if (!isNaN(+dt)) window.currentMonday = mondayOf(dt);
+    }
+  }catch(_){}
+
+  // ★対象日から「その週の月曜」を必ず算出（フォーカス中の currentMonday ずれ対策）
+  const __dor_mondayOfISO = (iso)=>{
+    const [y,m,d] = String(iso||'').split('-').map(Number);
+    const dt = new Date(y, (m||1)-1, d||1);
+    dt.setHours(0,0,0,0);
+    dt.setDate(dt.getDate() - ((dt.getDay()+6)%7)); // Mon start
+    return dt;
+  };
+  const mon = __dor_mondayOfISO(dateIso);
+  const { blocks } = __dor_buildBlocksForDay(dateIso, dayKey, mon);
 
 // 状態保持＋初回描画（★undo/redo用の履歴も初期化）
 dlg.__dor = {
   dateIso,
   dayKey,
+  monday: mon,         // ★このモーダルは常にこの週キーで読む/書く  
   blocks,
   undoStack: [ __dor_cloneBlocks(blocks) ],
-  redoStack: []
+  redoStack: [],
+  sel: new Set(),       // 選択
+  anchorIdx: null,      // Shift連続選択の基点
+  lastClickIdx: null    // 直近クリック（DnDの起点などに利用）
 };
 __dor_bindUndoRedoKeysOnce();   // ★Ctrl+Z / Ctrl+Y をモーダル優先にする
 __dor_redrawFromBlocks(dlg);
+__dor_bindSelectionAndCutPasteOnce(dlg); // ★クリック選択（Shift/Ctrl）
+__dor_bindDeleteOnce(dlg);               // ★削除（（空）化）
+__dor_updateSelVisual(dlg);
 
 // ★⑤-5（FIX）：確定で当日並び替えを反映
 const okBtn = document.getElementById('dayReorderOk');
@@ -4595,27 +5097,61 @@ if (okBtn && !okBtn.__bound){
     if (!st) return;
 
     const { dateIso, dayKey, blocks } = st;
-    const store = loadWeek(currentMonday) || {};
+    const mon = st.monday || currentMonday;
+    const store = loadWeek(mon) || {};
+
 
     // ① blocks から newKeys を作る（変更判定用）
-    const originalKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey);
+    const originalKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey, mon);
     const newKeys = blocks.flatMap(b => b.keys);
     if (originalKeys.length !== newKeys.length){
       alert('並び替え内部エラー：スロット数が一致しません');
       return;
     }
 
-    // ★変更なしなら何もしない（既に直ったガード）
+    // ★並び順が同じでも「削除（空）化」があれば変更扱いにする
     const sameOrder =
       originalKeys.length === newKeys.length &&
       originalKeys.every((k,i)=>k===newKeys[i]);
-    if (sameOrder){
+    const hasDeleted = (blocks || []).some(b => b && b.__deleted);
+    if (sameOrder && !hasDeleted){
       dlg.close();
       return;
     }
 
+    // ★このOK反映（store更新＋time override再構築）を Undo 1手にまとめる
+    const __batch = (typeof beginUndoBatch === 'function')
+      ? beginUndoBatch('dayreorder-ok')
+      : null;
+    try {
+
+    // ★削除（空）化の確定：該当キーのレコードを store から削除する（間隔は詰めない）
+    if (hasDeleted){
+      const delHeadKeys = new Set();
+      (blocks || []).forEach(b=>{
+        if (!b || !b.__deleted) return;
+        (Array.isArray(b.keys) ? b.keys : []).forEach(k=> delHeadKeys.add(k));
+      });
+      delHeadKeys.forEach(headKey=>{
+        const rec = store[headKey];
+        if (!rec) return;
+        if (rec.tail) return; // tail直指定はスキップ（head側でまとめて消す）
+        const span = Math.max(1, Number(rec.span || 1));
+        const i0 = originalKeys.indexOf(headKey);
+        if (i0 < 0){
+          delete store[headKey];
+          return;
+        }
+        for (let i=0;i<span;i++){
+          const k = originalKeys[i0+i];
+          if (!k) break;
+          delete store[k];
+        }
+      });
+    }
+
     // ★安定適用：blocks 正で store を再構築（merge の head/span/tail を必ず再生成）
-    const { originalKeys: okKeys } = __dor_applyBlocksToStore(dateIso, dayKey, blocks, store);
+    const { originalKeys: okKeys } = __dor_applyBlocksToStore(dateIso, dayKey, blocks, store, mon);
 
     // ついでに duration アンカーも再構築（所要時間表示のズレ防止）
     const sections = new Set();
@@ -4627,9 +5163,21 @@ if (okBtn && !okBtn.__bound){
       rebuildDurationAnchorsForDaySection(dayKey, sec, store);
     });
 
-    saveWeek(currentMonday, store);
+    saveWeek(mon, store);
     dlg.close();
+    } finally {
+      if (__batch) endUndoBatch();
+    }	
+    const __wasFocus = document.body.classList.contains('dayFocus');
+    const __focusISO = window.focusDate;
     render();
+    // ★フォーカス表示を維持：描画後に同じ日へフォーカスし直す（見た目はフォーカスのまま）
+    if (__wasFocus && __focusISO){
+      requestAnimationFrame(()=>{
+        const dayEl = Array.from(document.querySelectorAll('#schedule .day')).find(d=>d?.dataset?.date===__focusISO);
+        if (dayEl) enterDayFocus(dayEl);
+      });
+    }
   });
 
   okBtn.__bound = true;
@@ -4654,12 +5202,69 @@ function __dor_cloneBlocks(blocks){
   catch(_){ return []; }
 }
 
+ function __dor_snapshotState(st){
+   return {
+     blocks: __dor_cloneBlocks(st.blocks),
+     sel: Array.from(st.sel || []),
+     anchorIdx: (st.anchorIdx ?? null),
+     lastClickIdx: (st.lastClickIdx ?? null),
+   };
+ }
+
+function __dor_restoreState(dlg, snap){
+  const st = dlg && dlg.__dor;
+  if (!st || !snap) return;
+
+  // ★互換：旧形式（blocks配列）も許容
+  const isOld = Array.isArray(snap);
+  const blocks = isOld ? snap : (snap.blocks || []);
+
+  // ★復元前：現在の選択ブロックの「キー集合」を退避（旧形式でも青枠を復元する材料）
+  //  - ブロックは {keys:[...]} を持つ想定（単枠なら1、RL/mergeなら複数）
+  const prevSelIdxs = Array.from(st.sel || []).map(Number).filter(n=>Number.isFinite(n));
+  const prevKeySet = new Set();
+  if (prevSelIdxs.length){
+    prevSelIdxs.forEach(i=>{
+      const b = st.blocks && st.blocks[i];
+      const ks = b && Array.isArray(b.keys) ? b.keys : null;
+      if (ks) ks.forEach(k=> prevKeySet.add(String(k)));
+    });
+  }
+
+  st.blocks = __dor_cloneBlocks(blocks);
+
+  if (!isOld){
+    // 新形式：そのまま復元
+    st.sel = new Set(snap.sel || []);
+    st.anchorIdx = (snap.anchorIdx ?? null);
+    st.lastClickIdx = (snap.lastClickIdx ?? null);
+  } else {
+    // 旧形式：キー集合から「復元後blocks内の該当ブロックidx」を再構成して青枠を戻す
+    const hit = [];
+    if (prevKeySet.size){
+      for (let i=0;i<(st.blocks?.length||0);i++){
+        const b = st.blocks[i];
+        const ks = b && Array.isArray(b.keys) ? b.keys : null;
+        if (!ks || !ks.length) continue;
+        // ブロックのkeysが prevKeySet と交差するなら “同じブロック群” とみなす
+        if (ks.some(k=> prevKeySet.has(String(k)))) hit.push(i);
+      }
+    }
+    st.sel = new Set(hit);
+    st.anchorIdx = hit.length ? hit[0] : null;
+    st.lastClickIdx = hit.length ? hit[hit.length-1] : null;
+  }
+
+  __dor_redrawFromBlocks(dlg);
+  requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+}
+
 function __dor_pushHistory(dlg){
   const st = dlg && dlg.__dor;
   if (!st) return;
   st.undoStack = st.undoStack || [];
   st.redoStack = st.redoStack || [];
-  st.undoStack.push(__dor_cloneBlocks(st.blocks));
+  st.undoStack.push(__dor_snapshotState(st));
   // 履歴が増えすぎないよう上限（任意）
   if (st.undoStack.length > 60) st.undoStack.shift();
   st.redoStack.length = 0;
@@ -4670,22 +5275,20 @@ function __dor_undo(dlg){
   if (!st || !st.undoStack || st.undoStack.length <= 1) return;
   st.redoStack = st.redoStack || [];
   // 現在を redo へ
-  st.redoStack.push(__dor_cloneBlocks(st.blocks));
+  st.redoStack.push(__dor_snapshotState(st));
   // 1つ前へ
   st.undoStack.pop();
-  st.blocks = __dor_cloneBlocks(st.undoStack[st.undoStack.length - 1]);
-  __dor_redrawFromBlocks(dlg);
+  __dor_restoreState(dlg, st.undoStack[st.undoStack.length - 1]);
 }
 
 function __dor_redo(dlg){
   const st = dlg && dlg.__dor;
   if (!st || !st.redoStack || st.redoStack.length === 0) return;
   const next = st.redoStack.pop();
-  st.blocks = __dor_cloneBlocks(next);
+  __dor_restoreState(dlg, next);
   st.undoStack = st.undoStack || [];
-  st.undoStack.push(__dor_cloneBlocks(st.blocks));
+  st.undoStack.push(__dor_snapshotState(st));
   if (st.undoStack.length > 60) st.undoStack.shift();
-  __dor_redrawFromBlocks(dlg);
 }
 
 function __dor_bindUndoRedoKeysOnce(){
@@ -4717,6 +5320,314 @@ function __dor_bindUndoRedoKeysOnce(){
   }, true); // capture で先に横取り
 }
 
+// ===== 当日並び替え：複数選択（Shift/Ctrl） =====
+function __dor_allRows(){
+  return Array.from(document.querySelectorAll('#dayReorderDialog .dor-row.slot[data-idx]'));
+}
+
+function __dor_clearSelClasses(){
+  __dor_allRows().forEach(r=>{
+    r.classList.remove('is-selected','sel-run-top','sel-run-mid','sel-run-bottom');
+  });
+}
+
+function __dor_getSelIdxs(st){
+  return Array.from(st.sel || []).map(Number).filter(n=>Number.isFinite(n)).sort((a,b)=>a-b);
+}
+
+function __dor_updateSelVisual(dlg){
+  const st = dlg && dlg.__dor;
+  if (!st) return;
+
+  __dor_clearSelClasses();
+  const sel = st.sel || new Set();
+  const rows = __dor_allRows();
+
+
+  // 選択クラス
+  rows.forEach(r=>{
+    const idx = Number(r.dataset.idx);
+    if (!sel.has(idx)) return;
+    r.classList.add('is-selected');
+  });
+
+  // 連続選択：外周だけ（中の線は出さない）
+  rows.forEach(r=>{
+    const idx = Number(r.dataset.idx);
+    if (!sel.has(idx)) return;
+    const hasPrev = sel.has(idx-1);
+    const hasNext = sel.has(idx+1);
+    if (!hasPrev && hasNext) r.classList.add('sel-run-top');
+    else if (hasPrev && !hasNext) r.classList.add('sel-run-bottom');
+    else if (hasPrev && hasNext) r.classList.add('sel-run-mid');
+  });
+  // ===== 追加：選択を「連続runごと」に枠で囲う（飛び飛びは別枠） =====
+  const list = document.getElementById('dayReorderList');
+  if (!list) return;
+
+  // ★D&D挿入ラインが残りやすいので、選択更新のたびに強制で消す
+  const insertLine = list.querySelector('.dor-insert-line');
+  if (insertLine) insertLine.style.display = 'none';
+
+  // 既存フレームは全部消して作り直す（数が可変なので）
+  list.querySelectorAll('.dor-sel-frame').forEach(el=>el.remove());
+
+  const selRows = rows.filter(r=>{
+    const idx = Number(r.dataset.idx);
+    return (st.sel && st.sel.has(idx));
+  });
+  if (!selRows.length) return;
+
+  // idxで並べて「連続run」に分割
+  const selIdxs = selRows
+    .map(r=>Number(r.dataset.idx))
+    .filter(n=>Number.isFinite(n))
+    .sort((a,b)=>a-b);
+
+  const runs = [];
+  let cur = [selIdxs[0]];
+  for (let i=1;i<selIdxs.length;i++){
+    if (selIdxs[i] === selIdxs[i-1] + 1) cur.push(selIdxs[i]);
+    else { runs.push(cur); cur = [selIdxs[i]]; }
+  }
+  runs.push(cur);
+
+  // rect（list基準）で各runの枠を配置
+  const listRect = list.getBoundingClientRect();
+  const rowByIdx = new Map(rows.map(r=>[Number(r.dataset.idx), r]));
+
+  runs.forEach(runIdxs=>{
+    const first = rowByIdx.get(runIdxs[0]);
+    const last  = rowByIdx.get(runIdxs[runIdxs.length-1]);
+    if (!first || !last) return;
+
+    const firstRect = first.getBoundingClientRect();
+    const lastRect  = last.getBoundingClientRect();
+    const top = (firstRect.top - listRect.top) + list.scrollTop;
+    const bottom = (lastRect.bottom - listRect.top) + list.scrollTop;
+
+    const frame = document.createElement('div');
+    frame.className = 'dor-sel-frame';
+    frame.style.top = `${Math.max(0, top)}px`;
+    frame.style.height = `${Math.max(0, bottom - top)}px`;
+    frame.style.display = 'block';
+    list.appendChild(frame);
+  });
+}
+
+function __dor_setSelection(dlg, idxs, {setAnchor=true}={}){
+  const st = dlg && dlg.__dor;
+  if (!st) return;
+  st.sel = new Set(idxs);
+  const a = (idxs && idxs.length) ? idxs[0] : null;
+  if (setAnchor) st.anchorIdx = a;
+  st.lastClickIdx = a;
+  __dor_updateSelVisual(dlg);
+}
+
+function __dor_toggleSelection(dlg, idx){
+  const st = dlg && dlg.__dor;
+  if (!st) return;
+  if (!st.sel) st.sel = new Set();
+  if (st.sel.has(idx)) st.sel.delete(idx);
+  else st.sel.add(idx);
+  st.anchorIdx = idx;
+  st.lastClickIdx = idx;
+  __dor_updateSelVisual(dlg);
+}
+
+function __dor_rangeSelection(dlg, a, b){
+  const st = dlg && dlg.__dor;
+  if (!st) return;
+  const lo = Math.min(a,b), hi = Math.max(a,b);
+  const idxs = [];
+  for (let i=lo;i<=hi;i++) idxs.push(i);
+  __dor_setSelection(dlg, idxs, {setAnchor:false});
+  st.lastClickIdx = b;
+}
+
+function __dor_bindSelectionAndCutPasteOnce(dlg){
+  if (dlg.__dorBoundSel) return;
+  dlg.__dorBoundSel = true;
+
+  const list = document.getElementById('dayReorderList');
+  if (!list) return;
+
+  // Shift/Ctrl のときだけ mousedown で先取り（DnD開始を潰す）
+  list.addEventListener('mousedown', (e)=>{
+    const row = e.target.closest('.dor-row.slot[data-idx]');
+    if (!row) return;
+    const idx = Number(row.dataset.idx);
+    if (!Number.isFinite(idx)) return;
+
+    const st = dlg.__dor;
+    const isMod = (e.ctrlKey || e.metaKey);
+    const isShift = e.shiftKey === true;
+    if (!isMod && !isShift) return;
+
+    if (isShift && st.anchorIdx != null){
+      __dor_rangeSelection(dlg, st.anchorIdx, idx);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (isMod){
+      __dor_toggleSelection(dlg, idx);
+	  // ★Ctrlは「複数追加選択→そのままドラッグ開始」したいのでDnDを潰さない
+      return;
+    }
+  }, true);
+
+  // 通常クリック：単枠選択（DnDはそのまま動く）
+  list.addEventListener('click', (e)=>{
+    const row = e.target.closest('.dor-row.slot[data-idx]');
+    if (!row) return;
+    const idx = Number(row.dataset.idx);
+    if (!Number.isFinite(idx)) return;
+    // modifier時は mousedown 側が処理済み
+    if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+    __dor_setSelection(dlg, [idx]);
+  });
+
+  __dor_updateSelVisual(dlg);
+}
+
+// ============================
+// Phase3：モーダル内「削除」＝（空）化（間隔は詰めない）
+// ============================
+function __dor_bindDeleteOnce(dlg){
+  if (!dlg || dlg.__dorBoundDelete) return;
+  dlg.__dorBoundDelete = true;
+
+  // ボタン
+  const delBtn = document.getElementById('dayReorderDelete');
+  if (delBtn){
+    delBtn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      __dor_deleteSelectionToEmpty(dlg);
+    });
+  }
+
+  // Delete / Backspace（モーダルが開いている間だけ）
+  document.addEventListener('keydown', (e)=>{
+    const dd = document.getElementById('dayReorderDialog');
+    if (!dd || !dd.open || !dd.__dor) return;
+    const t = e.target;
+    if (t && (t.closest?.('input,textarea,[contenteditable="true"]'))) return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace'){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      __dor_deleteSelectionToEmpty(dd);
+    }
+  }, true);
+}
+
+function __dor_deleteSelectionToEmpty(dlg){
+  try{
+    const st = dlg && dlg.__dor;
+    if (!st) return;
+    const idxs = Array.from(st.sel || []).map(Number).filter(n=>Number.isFinite(n)).sort((a,b)=>a-b);
+    if (!idxs.length) return;
+
+
+    // ★削除分割に使う「当日の正規キー列」（存在しない/失敗しても落ちないように保護）
+    const mon = st.monday || currentMonday;
+    const store = loadWeek(mon) || {};
+    let originalKeysForDay = [];
+    try{
+      originalKeysForDay = __dor_getAllPositionKeysForDay(st.dateIso, st.dayKey, mon) || [];
+    }catch(_){
+      originalKeysForDay = [];
+    }
+
+    // ★blocks配列上での「開始位置(何枠目から始まるか)」を作る（headKey基準だと時刻が飛ぶため）
+    function __dor_blockSlots2(b){
+      if (!b) return 1;
+	  if (b.__deleted) return 1; // ★削除済み（空）行は絶対に1枠扱い（再分割して空が増殖するのを防ぐ）
+      const klen = Array.isArray(b.keys) ? b.keys.length : 0;
+      if (klen > 1) return klen; // merge/RLなど
+      const hk = b.keys && b.keys[0];
+      const hr = hk ? store[hk] : null;
+      const sp = Number(hr?.span || 1);
+      return (Number.isFinite(sp) && sp > 1) ? sp : 1;
+    }
+    const starts = [];
+    let cur = 0;
+    (st.blocks || []).forEach((b, bi)=>{
+      starts[bi] = cur;
+      cur += __dor_blockSlots2(b);
+    });
+
+    // ★ indexズレを避けるため後ろから処理
+    const idxsDesc = idxs.slice().sort((a,b)=>b-a);
+    idxsDesc.forEach(i=>{
+      const b = st.blocks && st.blocks[i];
+      if (!b) return;
+    
+      // ★すでに削除済み（空）なら、ここでは再分割しない（空が過剰に増える原因）
+      if (b.__deleted){
+        b.__deleted = true;
+        return;
+      }
+
+      const keys = Array.isArray(b.keys) ? b.keys.slice() : [];
+      const headKey = keys[0] || null;
+      const headRec = headKey ? (store[headKey] || null) : null;
+
+      // span の決定（安全：何が壊れてても 1 以上）
+      const span = Math.max(
+        1,
+        Number(headRec && headRec.span ? headRec.span : 0) || 0,
+        Number(keys.length || 0) || 0,
+        (typeof __dor_blockSlots === 'function') ? (Number(__dor_blockSlots(b)) || 0) : 0
+      );
+
+      // ★ span>1 は「空×span」に分割（時刻飛び防止：正規キー列から切り出す）
+      if (span > 1){
+        let seq = [];
+        // ★最優先：blocks上の開始位置から切り出す（モーダル内の時刻連続性を保証）
+        const start = (Number.isFinite(starts[i]) ? starts[i] : null);
+        if (start != null && originalKeysForDay.length){
+          seq = originalKeysForDay.slice(start, start + span);
+        }
+        // フォールバック：headKey基準（startが取れない/キー列が取れない場合）
+        if (!seq.length && headKey && originalKeysForDay.length){
+          const i0 = originalKeysForDay.indexOf(headKey);
+          if (i0 >= 0) seq = originalKeysForDay.slice(i0, i0 + span);
+        }
+        // 最終フォールバック：keys の先頭
+        if (!seq.length) seq = keys.slice(0, span);
+        if (seq.length){
+          const reps = seq.map(k => ({ kind:'one', keys:[k], __deleted:true }));
+          st.blocks.splice(i, 1, ...reps);
+        }else{
+          // フォールバックも空なら単枠扱い
+          b.__deleted = true;
+        }
+        return;
+      }
+
+      // 単枠は従来通り（空）化フラグだけ
+      b.__deleted = true;
+    });
+
+    // ★ 分割で sel のindexが壊れるので、削除後は選択解除
+    st.sel = new Set();
+    st.anchorIdx = null;
+
+    // ★ここで履歴確定（“変更後”の状態を積む）→ undo が 1手ずつ戻る
+    __dor_pushHistory(dlg);
+	
+    __dor_redrawFromBlocks(dlg);
+    __dor_updateSelVisual(dlg);
+  }catch(err){
+    console.error('DOR delete failed:', err);
+  }
+}
+
 function __dor_bindDnD(dlg){
   const list = document.getElementById('dayReorderList');
   if (!list) return;
@@ -4736,36 +5647,244 @@ function __dor_bindDnD(dlg){
   };
   const hideLine = ()=>{ line.style.display = 'none'; };
 
-  let dragIdx = -1;
+  let dragIdxs = null; // 単枠なら [idx]、複数なら [idx.]
+  let dragGhostEl = null; // setDragImage用（複数ドラッグの見た目）
+  let visualGhostEl = null;     // ★画面上に出す“自前ゴースト”
+  let visualGhostOn = false;
+  const blankDragImg = new Image(); // ★標準ゴーストを消す
+  blankDragImg.src =
+    'data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA='; // 1x1 transparent
 
-  function clearCues(){
-    list.querySelectorAll('.dor-row').forEach(r=>{
-      r.classList.remove('drop-insert-before','drop-insert-after','drop-swap');
+  function __dor_clearVisualGhost(){
+    visualGhostOn = false;
+    if (visualGhostEl && visualGhostEl.parentNode) visualGhostEl.parentNode.removeChild(visualGhostEl);
+    visualGhostEl = null;
+    document.removeEventListener('dragover', __dor_visualGhostFollow, true);
+  }
+
+  function __dor_visualGhostFollow(e){
+    if (!visualGhostOn || !visualGhostEl) return;
+    const dialogEl = dlg; // __dor_bindDnD(dlg) の dlg を使う
+    if (!dialogEl) return;
+    const r = dialogEl.getBoundingClientRect();
+
+    // dialog内座標に変換（少し右下にずらす）
+    let x = (e.clientX || 0) - r.left + 12;
+    let y = (e.clientY || 0) - r.top  + 12;
+
+    // dialog内にクランプ（はみ出し防止）
+    const gw = visualGhostEl.offsetWidth  || 0;
+    const gh = visualGhostEl.offsetHeight || 0;
+    const maxX = Math.max(0, r.width  - gw - 8);
+    const maxY = Math.max(0, r.height - gh - 8);
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x > maxX) x = maxX;
+    if (y > maxY) y = maxY;
+
+    visualGhostEl.style.transform = `translate(${x}px, ${y}px)`;
+  }  
+
+  function __dor_clearDragGhost(){
+    if (dragGhostEl && dragGhostEl.parentNode) dragGhostEl.parentNode.removeChild(dragGhostEl);
+    dragGhostEl = null;
+  }
+
+  function __dor_setMultiDragGhost(e, idxs){
+    if (!e || !e.dataTransfer) return;
+
+    // ★標準ゴーストを消す（これで“上→下に薄くなる”問題を回避）
+    try { e.dataTransfer.setDragImage(blankDragImg, 0, 0); } catch(_){}
+
+    // ★自前ゴーストを作って画面上に出す
+    __dor_clearVisualGhost();
+    if (!idxs || idxs.length <= 1) return;
+
+    const vg = document.createElement('div');
+    vg.className = 'dor-drag-ghost'; // 既存CSSを流用（直角・枠など）
+    vg.style.left = '0';
+    vg.style.top  = '0';
+    vg.style.position = 'absolute';   // ★ dialog内で動かす
+    vg.style.pointerEvents = 'none';
+    vg.style.zIndex = 99999;
+    // “薄くするなら一定” ※好みで 1 でもOK
+    vg.style.opacity = '0.35';  // ★全体を均一に透過（0.25〜0.45で好み調整）
+
+    const stack = document.createElement('div');
+    stack.className = 'dor-ghost-stack';
+
+    idxs.forEach((i)=>{
+      const src = list.querySelector(`.dor-row.slot[data-idx="${i}"]`);
+      if (!src) return;
+      const item = document.createElement('div');
+      item.className = 'dor-ghost-item';
+      const clone = src.cloneNode(true);
+      clone.classList.remove('dragging','dragging-multi','drop-insert-before','drop-insert-after','drop-swap');
+      clone.classList.remove('multiSelected');
+      clone.removeAttribute('draggable');
+      item.appendChild(clone);
+      stack.appendChild(item);
+    });
+
+    vg.appendChild(stack);
+    // ★ dialog内に出す（モーダル外に出ない／隠れる）
+    // dialog直下でOK。もし form 内に出したければ dlg.querySelector('form') にしても良い
+    dlg.appendChild(vg);
+    visualGhostEl = vg;
+    visualGhostOn = true;
+    document.addEventListener('dragover', __dor_visualGhostFollow, true);
+    // 生成直後も一度追従
+    __dor_visualGhostFollow(e);
+  }
+
+  function __dor_markDraggingMulti(on){
+    // ★ まず全解除（キャンセル残り・経路違いを潰す）
+    if (!on){
+      list.querySelectorAll('.dor-row.dragging-multi').forEach(r=>{
+        r.classList.remove('dragging-multi');
+      });
+      return;
+    }
+    // on=true の時だけ付与
+    if (!dragIdxs || dragIdxs.length <= 1) return;
+    dragIdxs.forEach(i=>{
+      const r = list.querySelector(`.dor-row.slot[data-idx="${i}"]`);
+      if (!r) return;
+      r.classList.add('dragging-multi');
     });
   }
+
+  function __dor_clearSwapTargets(){
+  const ov = document.getElementById('dorSwapOverlay');
+  if (ov) ov.style.display = 'none';
+  // ★面の青（swap-hit）も必ずリセット
+  document.querySelectorAll('#dayReorderList .dor-row.swap-hit')
+    .forEach(el=> el.classList.remove('swap-hit'));
+  }
+
+  function __dor_markSwapTargetRange(b0, b1){
+   __dor_clearSwapTargets();
+   if (b0 == null || b1 == null || b1 < b0) return;
+ 
+   const list = document.getElementById('dayReorderList');
+   const ov = document.getElementById('dorSwapOverlay');
+   if (!list || !ov) return;
+ 
+   const row0 = document.querySelector(`#dayReorderList .dor-row[data-idx="${b0}"]`);
+   const row1 = document.querySelector(`#dayReorderList .dor-row[data-idx="${b1}"]`);
+   if (!row0 || !row1) return;
+
+  // ★範囲の“面”を青く（rowsが存在する範囲だけ）
+  for (let i=b0; i<=b1; i++){
+    const rr = document.querySelector(`#dayReorderList .dor-row[data-idx="${i}"]`);
+    if (rr) rr.classList.add('swap-hit');
+  }
+ 
+   const listRect = list.getBoundingClientRect();
+   const r0 = row0.getBoundingClientRect();
+   const r1 = row1.getBoundingClientRect();
+ 
+   // list内座標（スクロール加味）
+   const top = (r0.top - listRect.top) + list.scrollTop;
+   const bottom = (r1.bottom - listRect.top) + list.scrollTop;
+   const left = (r0.left - listRect.left);
+   const right = (r0.right - listRect.left);
+ 
+   ov.style.left = `${left}px`;
+   ov.style.top = `${top}px`;
+   ov.style.width = `${right - left}px`;
+   ov.style.height = `${bottom - top}px`;
+   ov.style.display = 'block';
+  }
+
+  function clearCues(){
+  // ★全行から drop 系クラスを消す（通ったところが青く残るのを防ぐ）
+  document.querySelectorAll('#dayReorderList .dor-row').forEach(el=>{
+    el.classList.remove('drop-insert-before','drop-insert-after','drop-swap');
+  });
+
+  // ★swap候補の青枠も毎回リセット
+  __dor_clearSwapTargets();
+  }
+
+// block index から、その block が占める row idx 範囲を返す
+function __dor_getRowRangeForBlock(blocks, blockIdx){
+  let rowStart = 0;
+  for (let i = 0; i < blockIdx; i++){
+    const b = blocks[i];
+    const n = Math.max(1, b?.keys?.length || 1);
+    rowStart += n;
+  }
+  const cur = blocks[blockIdx];
+  const len = Math.max(1, cur?.keys?.length || 1);
+  return { start: rowStart, end: rowStart + len - 1 };
+}
 
   // 行（= ブロック）ごとに D&D
   list.querySelectorAll('.dor-row').forEach(row=>{
     row.setAttribute('draggable','true');
 
     row.addEventListener('dragstart', (e)=>{
-      dragIdx = Number(row.dataset.idx);
+      const st = dlg.__dor;
+      const idx = Number(row.dataset.idx);
+      const sel = st?.sel || new Set();
+      if (sel && sel.size > 1 && sel.has(idx)){
+        dragIdxs = Array.from(sel).map(Number).sort((a,b)=>a-b);
+      } else {
+        dragIdxs = [idx];
+      }
       row.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
+
+      // ★ 見た目：複数ドラッグのゴースト＆元行の“掴み中”表現
+      __dor_setMultiDragGhost(e, dragIdxs);
+      __dor_markDraggingMulti(true);	  
     });
 
     // ===== ④ 後始末：dragend で必ず線を消す =====
     row.addEventListener('dragend', ()=>{
-      dragIdx = -1;
+      dragIdxs = null;
       row.classList.remove('dragging');
       clearCues();
       hideLine();
+
+      __dor_markDraggingMulti(false);
+      __dor_clearDragGhost();
+	  __dor_clearVisualGhost(); // ★追加
     });
+
+  // ===== 共通：ドラッグ対象Aを「連続ブロック列」として確定 =====
+  function __dor_getDragGroup(blocks, dragIdxs){
+    if (!dragIdxs || dragIdxs.length === 0) return null;
+    const idxs = dragIdxs.slice().sort((a,b)=>a-b);
+    const a0 = idxs[0];
+    const a1 = idxs[idxs.length-1];
+    // Shift連続選択前提：飛び飛びなら不可
+    for (let i=a0; i<=a1; i++){
+      if (!idxs.includes(i)) return null;
+    }
+    const A = blocks.slice(a0, a1+1);
+    const needSlots = idxs.reduce((sum,i)=> sum + __dor_blockSlots(blocks[i]), 0);
+    return { idxs, a0, a1, A, needSlots };
+  }
+
+  // ===== 共通：b0起点で needSlots ちょうどになるB範囲 b0..b1 を探す =====
+  function __dor_findTargetRange(blocks, b0, needSlots){
+    if (b0 < 0 || b0 >= blocks.length) return null;
+    let slots = 0;
+    for (let j=b0; j<blocks.length; j++){
+      slots += __dor_blockSlots(blocks[j]);
+      if (slots === needSlots) return { b0, b1: j };
+      if (slots > needSlots) return null;
+    }
+    return null;
+  }
 
     // ===== ③ dragover：insert なら「挿入予定線」を出す／swap なら消す =====
     row.addEventListener('dragover', (e)=>{
       e.preventDefault();
       clearCues();
+      // ※ clearCues() 内で swap-target も消える想定	  
 
       const r = row.getBoundingClientRect();
       const y = e.clientY - r.top;
@@ -4779,12 +5898,75 @@ function __dor_bindDnD(dlg){
       if (y < h * 0.35){
         row.classList.add('drop-insert-before');
         showLineAt(rowTopInList + INSERT_LINE_OFFSET);
+        __dor_clearSwapTargets(); // ★insert線のときはswap強調なし		
       } else if (y > h * 0.65){
         row.classList.add('drop-insert-after');
         showLineAt(rowTopInList + h + INSERT_LINE_OFFSET);
+        __dor_clearSwapTargets(); // ★insert線のときはswap強調なし		
       } else {
         row.classList.add('drop-swap');
         hideLine();                                // swap は線なし
+
+        // ===== swap候補強調（needSlots ぶん）=====
+        const targetIdx = Number(row.dataset.idx);
+        if (!dragIdxs || dragIdxs.length === 0 || targetIdx < 0) return;
+        if (dragIdxs.includes(targetIdx)) return; // 自分自身は強調しない
+
+        const blocks = dlg.__dor.blocks;
+        const isMulti = dragIdxs.length > 1;
+
+        if (isMulti){
+          const idxs = dragIdxs.slice().sort((a,b)=>a-b);
+
+
+          // drag側総枠数（keys.length を枠数として扱う）
+          const needSlots = idxs.reduce((sum, i)=>{
+            const n = blocks[i] && Array.isArray(blocks[i].keys) ? blocks[i].keys.length : 1;
+            return sum + Math.max(1, n);
+          }, 0);
+
+          // blocks上で needSlots ちょうどになる連続範囲 b0..b1 を targetIdx から作って強調
+          const b0 = targetIdx;
+          if (b0 < 0 || b0 >= blocks.length) return;
+
+          let slots = 0;
+          let b1 = -1;
+          for (let j=b0; j<blocks.length; j++){
+            const n = blocks[j] && Array.isArray(blocks[j].keys) ? blocks[j].keys.length : 1;
+            slots += Math.max(1, n);
+            if (slots === needSlots){ b1 = j; break; }
+            if (slots > needSlots) return; // overshoot → 強調なし
+          }
+          if (b1 < 0) return; // 足りない → 強調なし
+
+         // ★Ctrl飛び飛びにも対応：選択idx集合と target範囲が交差したら強調しない
+         const selSet = new Set(idxs);
+         for (let j=b0; j<=b1; j++){
+           if (selSet.has(j)) return;
+         }
+
+          __dor_markSwapTargetRange(b0, b1);
+
+        } else {
+          // 単枠：drag側(1ブロック)の「枠数 needSlots」と一致する連続範囲 b0..b1 を targetIdx から作って強調
+          const dragIdx = dragIdxs[0];
+          const needSlots = (blocks[dragIdx] && Array.isArray(blocks[dragIdx].keys)) ? Math.max(1, blocks[dragIdx].keys.length) : 1;
+
+          const b0 = targetIdx;
+          let slots = 0;
+          let b1 = -1;
+          for (let j=b0; j<blocks.length; j++){
+            const n = (blocks[j] && Array.isArray(blocks[j].keys)) ? Math.max(1, blocks[j].keys.length) : 1;
+            slots += n;
+            if (slots === needSlots){ b1 = j; break; }
+            if (slots > needSlots) return; // overshoot → 強調なし
+          }
+          if (b1 < 0) return; // 足りない → 強調なし
+          // 自分自身に被るなら強調しない
+          if (!(b1 < dragIdx || dragIdx < b0)) return;
+
+          __dor_markSwapTargetRange(b0, b1);
+        }	
       }
     });
 
@@ -4799,37 +5981,266 @@ function __dor_bindDnD(dlg){
       hideLine(); // ===== ④ drop でも消す =====
 
       const targetIdx = Number(row.dataset.idx);
-      if (dragIdx < 0 || targetIdx < 0 || dragIdx === targetIdx) return;
+      if (!dragIdxs || dragIdxs.length === 0 || targetIdx < 0) return;
+      // 自分自身（選択内）に落としたら何もしない
+      if (dragIdxs.includes(targetIdx)) return;
 
       const blocks = dlg.__dor.blocks;
-      const src = blocks[dragIdx];
+      // ★Cancelで戻せるよう、操作前を退避（drop内のどの分岐でも使う）
+      const beforeBlocks = __dor_cloneBlocks(blocks);	  
+      const isMulti = dragIdxs.length > 1;
+      // ★confirm Cancel 時に「元の選択」に戻す＆枠再計算を遅延するため退避
+      const st0 = dlg.__dor;
+      const beforeSel = new Set(st0?.sel || []);
+      const beforeAnchor = st0?.anchorIdx ?? null;
+      const beforeLast = st0?.lastClickIdx ?? null;
 
       const r = row.getBoundingClientRect();
       const y = e.clientY - r.top;
       const h = r.height;
 
+      // 位置（before/after の意図）は残すが、swap対象は「この位置から始まる連続ブロック」に限定
+      let atRaw;
+      let dropMode;
       if (y < h * 0.35){
-        // insert before
-        blocks.splice(dragIdx, 1);
-        const ins = targetIdx > dragIdx ? targetIdx - 1 : targetIdx;
-        blocks.splice(ins, 0, src);
+        atRaw = targetIdx;          // before
+        dropMode = 'insert';
       } else if (y > h * 0.65){
-        // insert after
-        blocks.splice(dragIdx, 1);
-        const ins = targetIdx > dragIdx ? targetIdx : targetIdx + 1;
-        blocks.splice(ins, 0, src);
+        atRaw = targetIdx + 1;      // after
+        dropMode = 'insert';
       } else {
-        // swap
-        const tmp = blocks[targetIdx];
-        blocks[targetIdx] = blocks[dragIdx];
-        blocks[dragIdx] = tmp;
+        atRaw = targetIdx;          // middle
+        dropMode = 'swap';
       }
 
-      // ★undo/redo 用：操作後の blocks 状態を必ず deep clone で履歴化
-      __dor_pushHistory(dlg);
+      if (isMulti){
+        // ===== 複数ドラッグ：before/after は insert、middle は枠数一致swap =====
+        const st = dlg.__dor;
+        const idxs = dragIdxs.slice().sort((a,b)=>a-b);
+        const a0 = idxs[0];
 
-      // 再描画（描画関数を再利用）
+
+        // === insert（挿入線に落とした場合）===
+        if (dropMode === 'insert'){
+          const items = idxs.map(i => blocks[i]);
+          // remove（後ろから）
+          for (let i = idxs.length-1; i>=0; i--) blocks.splice(idxs[i], 1);
+          // 挿入位置補正（抜いた分だけ前に詰まる）
+          const shift = idxs.filter(i=>i < atRaw).length;
+          const at = Math.max(0, Math.min(atRaw - shift, blocks.length));
+          blocks.splice(at, 0, ...items);
+
+          // ★移動制約：この瞬間にconfirm（Cancelなら元に戻す）
+          if (!__dor_confirmReorderConstraints(dlg, beforeBlocks, blocks)){
+            dlg.__dor.blocks = beforeBlocks;
+            __dor_redrawFromBlocks(dlg);
+          // ★Cancel：青枠は「移動先」ではなく「元の選択」に戻す（枠計算は描画確定後に）
+          const st = dlg.__dor;
+          st.sel = new Set(beforeSel);
+          st.anchorIdx = beforeAnchor;
+          st.lastClickIdx = beforeLast;
+          requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+            return;
+          }
+
+          __dor_pushHistory(dlg);
+          __dor_redrawFromBlocks(dlg);
+
+          // 移動後の範囲を選択し直す（従来どおり）
+          const newIdxs = [];
+          for (let i=0;i<items.length;i++) newIdxs.push(at+i);
+          st.sel = new Set(newIdxs);
+          st.anchorIdx = at;
+          st.lastClickIdx = at + items.length - 1;
+          requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+          return;
+        }
+
+        // === swap（中央に落とした場合）===
+        // drag側の総枠数（keys.length を枠数として扱う）
+        const needSlots = idxs.reduce((sum, i)=>{
+          const n = blocks[i] && Array.isArray(blocks[i].keys) ? blocks[i].keys.length : 1;
+          return sum + Math.max(1, n);
+        }, 0);
+
+        // swap開始位置は「targetIdx 固定」（中央なので atRaw ではなく targetIdx が自然）
+        const b0 = targetIdx;
+        if (b0 < 0 || b0 >= blocks.length) return;
+
+        // 対象範囲を「needSlots ちょうど」になるまで右に足し上げる
+        let slots = 0;
+        let b1 = -1;
+        for (let j=b0; j<blocks.length; j++){
+          const n = blocks[j] && Array.isArray(blocks[j].keys) ? blocks[j].keys.length : 1;
+          slots += Math.max(1, n);
+          if (slots === needSlots){ b1 = j; break; }
+          if (slots > needSlots) return; // overshoot → 不可
+        }
+        if (b1 < 0) return; // 足りない → 不可
+
+         // ★Ctrl飛び飛びにも対応：target範囲に選択が混ざるなら不可
+         const selSet = new Set(idxs);
+         for (let j=b0; j<=b1; j++){
+           if (selSet.has(j)) return;
+         }
+ 
+         // ★swap（Ctrl飛び飛び＝“詰めて連続パック”としてswap）
+         const A = idxs.map(i=> blocks[i]);      // 選択集合（昇順）
+         const B = blocks.slice(b0, b1+1);       // 交換相手（連続）
+ 
+         // AとBを除いた残り（元indexを保持しながら）
+         const kept = [];
+         const keptBeforeA0 = (()=>{ let c=0; for (let i=0;i<a0;i++){ if (!selSet.has(i) && !(b0<=i && i<=b1)) c++; } return c; })();
+         const keptBeforeB0 = (()=>{ let c=0; for (let i=0;i<b0;i++){ if (!selSet.has(i) && !(b0<=i && i<=b1)) c++; } return c; })();
+         for (let i=0;i<blocks.length;i++){
+           if (selSet.has(i)) continue;
+           if (b0<=i && i<=b1) continue;
+           kept.push(blocks[i]);
+         }
+ 
+         // 先に入れる方で後の挿入位置がずれるので順序を吸収
+         let next = kept.slice();
+         const ins = (arr, at, items)=>{ arr.splice(Math.max(0, Math.min(at, arr.length)), 0, ...items); };
+ 
+         // AはB位置へ、BはA(最小idx)位置へ
+         if (keptBeforeA0 <= keptBeforeB0){
+           ins(next, keptBeforeA0, B);
+           ins(next, keptBeforeB0 + B.length, A);
+         } else {
+           ins(next, keptBeforeB0, A);
+           ins(next, keptBeforeA0 + A.length, B);
+         }
+ 
+         blocks.length = 0;
+         blocks.push(...next);
+
+        // ★移動制約：この瞬間にconfirm（Cancelなら元に戻す）
+        if (!__dor_confirmReorderConstraints(dlg, beforeBlocks, blocks)){
+          dlg.__dor.blocks = beforeBlocks;
+          __dor_redrawFromBlocks(dlg);
+          // ★Cancel：青枠は「移動先」ではなく「元の選択」に戻す（枠計算は描画確定後に）
+          const st = dlg.__dor;
+          st.sel = new Set(beforeSel);
+          st.anchorIdx = beforeAnchor;
+          st.lastClickIdx = beforeLast;
+          requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+          return;
+        }
+
+        __dor_pushHistory(dlg);
+        __dor_redrawFromBlocks(dlg);
+
+        // 選択範囲を「移動先（swap後のAの位置）」に付け替え
+        const start = blocks.indexOf(A[0]);
+        if (start >= 0){
+          const newIdxs = [];
+          for (let i=0;i<A.length;i++) newIdxs.push(start+i);
+          st.sel = new Set(newIdxs);
+          st.anchorIdx = start;
+          st.lastClickIdx = start + A.length - 1;
+          requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+        }
+        return;
+      }
+
+      // 単枠：insert / 枠数一致swap（連続範囲）
+      const st = dlg.__dor;
+      const dragIdx = dragIdxs[0];
+      if (dragIdx === targetIdx) return;
+
+      // === insert（挿入線に落とした場合）===
+      if (dropMode === 'insert'){
+        const src = blocks[dragIdx];
+        blocks.splice(dragIdx, 1);
+        const ins = (atRaw > dragIdx) ? (atRaw - 1) : atRaw;
+        const at = Math.max(0, Math.min(ins, blocks.length));
+        blocks.splice(at, 0, src);
+
+        // ★移動制約：この瞬間にconfirm（Cancelなら元に戻す）
+        if (!__dor_confirmReorderConstraints(dlg, beforeBlocks, blocks)){
+          dlg.__dor.blocks = beforeBlocks;
+          __dor_redrawFromBlocks(dlg);
+          // ★Cancel：青枠は「移動先」ではなく「元の選択」に戻す（枠計算は描画確定後に）
+          const st = dlg.__dor;
+          st.sel = new Set(beforeSel);
+          st.anchorIdx = beforeAnchor;
+          st.lastClickIdx = beforeLast;
+          requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+          return;
+        }
+
+        __dor_pushHistory(dlg);
+        __dor_redrawFromBlocks(dlg);
+
+        // 選択を移動先へ
+        st.sel = new Set([at]);
+        st.anchorIdx = at;
+        st.lastClickIdx = at;
+        requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+        return;
+      }
+
+      // === swap（中央に落とした場合）：needSlots ぶんの連続範囲とswap ===
+      const needSlots = (blocks[dragIdx] && Array.isArray(blocks[dragIdx].keys)) ? Math.max(1, blocks[dragIdx].keys.length) : 1;
+      const b0 = targetIdx;
+      let slots = 0;
+      let b1 = -1;
+      for (let j=b0; j<blocks.length; j++){
+        const n = (blocks[j] && Array.isArray(blocks[j].keys)) ? Math.max(1, blocks[j].keys.length) : 1;
+        slots += n;
+        if (slots === needSlots){ b1 = j; break; }
+        if (slots > needSlots) return; // overshoot → swap不可
+      }
+      if (b1 < 0) return; // 足りない → swap不可
+
+      // 自分自身に被るなら不可
+      if (!(b1 < dragIdx || dragIdx < b0)) return;
+
+      const A = [ blocks[dragIdx] ];
+      const B = blocks.slice(b0, b1+1);
+      let next;
+      if (dragIdx < b0){
+        next = []
+          .concat(blocks.slice(0, dragIdx))
+          .concat(B)
+          .concat(blocks.slice(dragIdx+1, b0))
+          .concat(A)
+          .concat(blocks.slice(b1+1));
+      } else { // b1 < dragIdx
+        next = []
+          .concat(blocks.slice(0, b0))
+          .concat(A)
+          .concat(blocks.slice(b1+1, dragIdx))
+          .concat(B)
+          .concat(blocks.slice(dragIdx+1));
+      }
+      blocks.length = 0;
+      blocks.push(...next);
+
+      // ★移動制約：この瞬間にconfirm（Cancelなら元に戻す）
+      if (!__dor_confirmReorderConstraints(dlg, beforeBlocks, blocks)){
+        dlg.__dor.blocks = beforeBlocks;
+        __dor_redrawFromBlocks(dlg);
+          // ★Cancel：青枠は「移動先」ではなく「元の選択」に戻す（枠計算は描画確定後に）
+          const st = dlg.__dor;
+          st.sel = new Set(beforeSel);
+          st.anchorIdx = beforeAnchor;
+          st.lastClickIdx = beforeLast;
+          requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+        return;
+      }
+
+      __dor_pushHistory(dlg);
       __dor_redrawFromBlocks(dlg);
+
+      // 選択を swap 後のA位置へ
+      const newPos = blocks.indexOf(A[0]);
+      if (newPos >= 0){
+        st.sel = new Set([newPos]);
+        st.anchorIdx = newPos;
+        st.lastClickIdx = newPos;
+        requestAnimationFrame(()=> requestAnimationFrame(()=> __dor_updateSelVisual(dlg)));
+      }
     });
   });
 }
@@ -5149,7 +6560,7 @@ header.addEventListener('dblclick', (e)=>{
       addItem('────────', ()=>{}, {disabled:true});
       addItem('この日の「枠の形」をデフォルトに戻す', ()=>{ if (confirm('この日の枠形状（先頭臨時・途中挿入・末尾臨時）をすべて解除して、初期の枠数に戻します。よろしいですか？')) { resetSlotLayoutForDay?.(currentMonday, dayKey, { snapshot:true }); render(); } });
 
-      addItem('この日の並び替え…', ()=>{ openDayReorderDialog(wrap.dataset.date, dayKey); });
+      addItem('この日の並び替え…', ()=>{ __dor_openDayReorderFromWrap(wrap, dayKey); });
 
       addItem('この日を印刷（A4）', ()=> printDayElement(wrap));
       const close=(ev)=>{ if(!menu.contains(ev.target)){ document.removeEventListener('mousedown',close,true); menu.remove(); } };
@@ -7077,6 +8488,87 @@ function __allowTouPlacementForKey(destKey, dataObj){
     return true; // 失敗時は運用停止にならないよう通す
   }
 }
+
+// =========================================================
+// 当日並び替えモーダル：移動制約チェック（drop/paste瞬間に使う）
+// - 「当」→午前は confirm（Cancelで移動中止）
+// - ✓（arrivalFixed）→時刻が変わる移動は confirm（Cancelで移動中止）
+// =========================================================
+function __dor_baseTimeHHMMForKey(key){
+  try{
+    const p = parseKey(key);
+    if (!p) return '';
+    const sec = CONFIG?.[p.day]?.[p.section];
+    const base = sec?.start || '';
+    if (!base) return '';
+    const idx = Number(p.idx || 0);
+    return addMinutes(base, idx * 20); // 20分枠（現行仕様）
+  }catch(_e){
+    return '';
+  }
+}
+
+function __dor_confirmReorderConstraints(dlg, beforeBlocks, afterBlocks){
+  try{
+    const st = dlg && dlg.__dor;
+    if (!st) return true;
+    const store = loadWeek(currentMonday) || {};
+
+    const beforeKeys = (beforeBlocks || []).flatMap(b => (b && b.keys) ? b.keys : []);
+    const afterKeys  = (afterBlocks  || []).flatMap(b => (b && b.keys) ? b.keys : []);
+    if (beforeKeys.length !== afterKeys.length) return true;
+
+    // ▼ まとめて1回だけ confirm（複数条件があってもOKは1回にする）
+    let touToMorningCount = 0;
+    let arrivalTimeChangeCount = 0;
+
+    for (let i=0; i<afterKeys.length; i++){
+      const srcKey  = afterKeys[i];   // 移動してきた“データ”
+      const destKey = beforeKeys[i];  // そのデータが置かれる“位置”
+      if (!srcKey || !destKey) continue;
+      if (srcKey === destKey) continue; // その位置は変化なし
+
+      const rec = store[srcKey];
+      if (!rec || rec.tail) continue; // head/単枠のみ対象
+
+      // (A) 「当」→ 午前に置くのは警告対象（週末は除外）
+      if ((rec.io || '').trim() === '当'){
+        const p = parseKey(destKey);
+        if (p && !__isWeekendDayKey(p.day)){
+          const period = __getSectionPeriod(p.day, p.section);
+          if (period === 'AM') touToMorningCount++;
+        }
+      }
+
+      // (B) ✓（arrivalFixed）→ 時刻が変わる移動は警告対象
+      if (!!rec.arrivalFixed){
+        const tSrc  = __dor_baseTimeHHMMForKey(srcKey);
+        const tDest = __dor_baseTimeHHMMForKey(destKey);
+        if (tSrc && tDest && tSrc !== tDest){
+          arrivalTimeChangeCount++;
+        }
+      }
+    }
+
+    if (touToMorningCount > 0 || arrivalTimeChangeCount > 0){
+      const parts = [];
+      if (touToMorningCount > 0){
+        parts.push(`【注意】午前枠に「当」（当日入院）を入れようとしています（${touToMorningCount}件）。\n通常は午前入院→午後手術を想定します。`);
+      }
+      if (arrivalTimeChangeCount > 0){
+        parts.push(`【注意】✓（来院時刻連絡済）の症例で、時刻が変わる移動が含まれます（${arrivalTimeChangeCount}件）。\n患者連絡が必要になる可能性があります。`);
+      }
+      const msg = parts.join('\n\n') + '\n\nこのまま移動しますか？';
+      if (!window.confirm(msg)) return false;
+    }
+
+    return true;
+  }catch(e){
+    console.warn('__dor_confirmReorderConstraints failed:', e);
+    return true; // 失敗時は運用停止しない
+  }
+}
+
 function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 function toHalfWidthNum(str){ if(str==null) return ""; return String(str).replace(/[！-～]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)); }
 function normalizeDiopter(s){ if(!s) return ''; const v = Number(String(s).replace(',', '.')); return isFinite(v) ? v.toFixed(1) : s; }
@@ -7611,6 +9103,26 @@ function buildMultiClipboardFromSelection(store){
   const blocks = [];
   const usedKeys = new Set();
 
+  // ★ DOM上の見た目で head/tail を解決する（storeのtail/head崩れを吸収）
+  function __resolveHeadEl(n){
+    let p = n;
+    while (p && p.classList && p.classList.contains('slot')) {
+      if (p.classList.contains('mergeHead')) return p;       // 明示 head
+      if (!p.classList.contains('hiddenRow')) return p;      // 単独＝head扱い
+      p = p.previousElementSibling;
+    }
+    return n;
+  }
+  function __getSpanFromHeadEl(h){
+    const s = h && h.style ? h.style.gridRowEnd : '';
+    const m = s && s.match(/span\s+(\d+)/i);
+    if (m){ const n = parseInt(m[1],10); if (Number.isFinite(n) && n>0) return n; }
+    const d = h && h.dataset ? h.dataset : {};
+    const raw = d.span || d.mergeSpan;
+    const n2 = parseInt(raw,10);
+    return (Number.isFinite(n2) && n2>0) ? n2 : 1;
+  }
+
   for (let i = firstIdx; i <= lastIdx;) {
     const el = list[i];
     const key = el.dataset.key;
@@ -7627,9 +9139,11 @@ function buildMultiClipboardFromSelection(store){
       return null;
     }
 
-    // tail だけから始まる → 結合枠の途中選択なので中止
-    if (rec.tail) {
-      if (!rec.head || !usedKeys.has(rec.head)) {
+    // DOM上 hiddenRow（見た目 tail）から始まる → そのheadが既に処理済みでなければ途中選択
+    if (el.classList.contains('hiddenRow')) {
+      const headEl = __resolveHeadEl(el);
+      const headKey = headEl?.dataset?.key;
+      if (!headKey || !usedKeys.has(headKey)) {
         alert('結合枠の途中だけが選択されています。結合枠は全体を含めて選択してください。');
         return null;
       }
@@ -7637,9 +9151,9 @@ function buildMultiClipboardFromSelection(store){
       continue;
     }
 
-    // head かつ span>1 → 結合枠ブロック
-    if (rec.head && Number(rec.span || 1) > 1) {
-      const span = Number(rec.span || 1);
+    // DOM上 mergeHead → 結合枠ブロック（見た目優先）
+    if (el.classList.contains('mergeHead')) {
+      const span = __getSpanFromHeadEl(el);
 
       // ★ span 分だけ下に tail が存在するか（セクション内に収まるか）だけを確認
       if (i + span - 1 >= list.length) {
@@ -7661,14 +9175,14 @@ function buildMultiClipboardFromSelection(store){
 
         if (j === 0) {
           // 先頭行：選択されている & head であることをチェック
-          if (!selectedKeySet.has(k2) || !rec2.head) {
+          if (!selectedKeySet.has(k2)) {
             alert('結合枠の先頭が選択されていません。結合枠は先頭行から選択してください。');
             return null;
           }
         } else {
-          // tail 行：tail であり、同じ head を指していることだけ確認
-          // （tail 自体が multiSelected である必要はない）
-          if (!rec2.tail || rec2.head !== key) {
+          // tail 行：DOM上で hiddenRow（見た目 tail）であることだけ確認
+          // （store の tail/head が壊れていても、見た目どおりに扱う）
+          if (!el2.classList.contains('hiddenRow')) {
             alert('結合枠の途中だけが選択されています。');
             return null;
           }
@@ -7681,7 +9195,14 @@ function buildMultiClipboardFromSelection(store){
       blocks.push({
         kind: 'merge',
         span,
-        data: deepClone(rec),
+        data: (function(){
+          const d = deepClone(rec);
+          // ★ span は見た目（DOM）に合わせて上書き（ここが重要）
+          d.span = span;
+          d.head = true;
+          delete d.tail;
+          return d;
+        })(),
         keys
       });
       i += span;
@@ -9876,9 +11397,26 @@ document.addEventListener('keydown',(e)=>{
   {
     const ed = document.getElementById('editor');
     const st = document.getElementById('settings');
+    const dor = document.getElementById('dayReorderDialog');
     const dialogOpen =
       (ed && (ed.open || ed.classList?.contains('is-open'))) ||
       (st && (st.open || st.classList?.contains('is-open')));
+    // ★並び替えモーダル中は「週表示側」のショートカットを完全停止（背景が切れないように）
+    if (dor && dor.open){
+      const k2 = (e.key || '').toLowerCase();
+      const isMod = (e.ctrlKey || e.metaKey) && !e.altKey;
+      if (isMod && (k2==='c' || k2==='x' || k2==='v')){
+        e.preventDefault();
+        e.stopPropagation(); // ★モーダル側リスナーは止めない
+        return;
+      }
+      if (k2==='delete' || k2==='backspace' || k2==='enter'){
+        e.preventDefault();
+        e.stopPropagation(); // ★モーダル側リスナーは止めない
+        return;
+      }
+      return;
+    }
     if (dialogOpen) return;
   }
   
@@ -12013,8 +13551,9 @@ todoPathEl.addEventListener('click', (e)=>{
     <!-- ▼ フェーズ3：当日並び替え（骨組み） -->
     <dialog id="dayReorderDialog">
       <form method="dialog" class="dor-form">
-        <div class="dor-help">
-          モーダル内だけで並び替え（D&amp;D：insert / swap）。症例の追加・削除は行いません。
+        <div class="dor-help" style="display:flex;gap:12px;align-items:center;justify-content:flex-start">
+          <span>並び替え（D&amp;D：insert / swap）</span>
+          <span style="color:#666">Shift:連続 / Ctrl:追加選択</span>
         </div>
 
         <div id="dayReorderScroll" class="dor-scroll">
@@ -12025,12 +13564,19 @@ todoPathEl.addEventListener('click', (e)=>{
                 <input class="day-note-input" disabled placeholder="">
               </div>
             </div>
-            <div id="dayReorderList"></div>
+            <div id="dayReorderList">
+              <div id="dorSwapOverlay" aria-hidden="true"></div>
+            </div>
           </div>
         </div>
-        <menu style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
-          <button value="cancel">キャンセル</button>
-          <button id="dayReorderOk" value="ok" class="primary">確定</button>
+        <menu style="display:flex;justify-content:space-between;gap:8px;margin-top:12px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button type="button" id="dayReorderDelete" title="Del">削除</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button value="cancel">キャンセル</button>
+            <button id="dayReorderOk" value="ok" class="primary">確定</button>
+          </div>
         </menu>
       </form>
     </dialog>	
