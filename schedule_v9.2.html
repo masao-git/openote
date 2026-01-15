@@ -986,10 +986,6 @@ body.printWeek2p .slot.mergeHead .surgeon-tag {
 
 }
 
-
-
-
-
 /* 週ピッカー右の曜日バッジ */
 #weekPickerWeekday {
   margin-left: .5rem;
@@ -1142,8 +1138,6 @@ body.dayFocus #printWeek2pBtn {
   display: none !important;
 }
 
-
-
 .iol-table-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1151,7 +1145,6 @@ body.dayFocus #printWeek2pBtn {
   row-gap: 0;              /* ★ 行間スキマなし */
   margin-top: 4px;
 }
-
 
 .iol-header,
 .iol-cell {
@@ -1259,7 +1252,6 @@ body.dayFocus #printWeek2pBtn {
   border-bottom: none;         /* ★ 下の線を消して用途に引き継ぐ */
   border-radius: 0;
 }
-
 
 /* IOL③ ヘッダ */
 .iol-table-grid > .iol-header:nth-child(3) {
@@ -1515,7 +1507,7 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
 /* === Global Search result rows (Phase2) === */
 #globalSearchResult .search-row{
   display: grid;
-  grid-template-columns: 120px 1.2fr 0.9fr 32px 2fr;
+  grid-template-columns: 110px 52px 1.2fr 0.9fr 32px 2fr; /* date | badge | name | id | eye | proc */
   gap: 4px 6px;
   align-items: center;
   padding: 4px 2px;
@@ -1560,6 +1552,81 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
   #globalSearchResult .sr-name{ grid-area: name; white-space: normal; }
   #globalSearchResult .sr-id{   grid-area: id; white-space: normal; }
   #globalSearchResult .sr-proc{ grid-area: proc; white-space: normal; }
+}
+
+/* === ゴミ箱（キャンセル一覧）rows：検索結果風 === */
+#cancelListBody .search-row{
+  display: grid;
+  /* date | badge | name | id | R/L | proc */
+  grid-template-columns: 90px 50px 1.2fr 110px 32px 2fr;
+  gap: 2px 6px;             /* ← バッジと名前の間も詰まる */
+  align-items: center;
+  padding: 4px 2px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+#cancelListBody .search-row:hover{
+  background: rgba(0,0,0,0.03);
+}
+#cancelListBody .sr-date{ opacity: .78; white-space: nowrap; }
+#cancelListBody .sr-spanCol{
+  white-space: nowrap;
+}
+#cancelListBody .sr-dateGap{ display:inline-block; width:10px; }
+#cancelListBody .sr-name{ font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#cancelListBody .sr-id{ opacity: .7; white-space: nowrap; }
+#cancelListBody .sr-eye{
+  opacity: .9;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+#cancelListBody .sr-proc{
+  opacity: .9;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 結合枠だけ「枠数」バッジ */
+#cancelListBody .sr-spanBadge{
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+/* モーダルが狭い時は検索結果と同じ崩し方 */
+@media (max-width: 360px){
+  #cancelListBody .search-row{
+    grid-template-columns: 1fr 60px 34px;
+    grid-template-areas:
+      "date date eye"
+      "name name name"
+      "id   id   id"
+      "proc proc proc";
+    align-items: start;
+  }
+  #cancelListBody .sr-date{ grid-area: date; }
+  #cancelListBody .sr-eye{  grid-area: eye; text-align:right; }
+  #cancelListBody .sr-name{ grid-area: name; white-space: normal; }
+  #cancelListBody .sr-id{   grid-area: id; white-space: normal; }
+  #cancelListBody .sr-proc{ grid-area: proc; white-space: normal; }
+}
+
+/* === トップバー：ゴミ箱アイコンだけ大きく === */
+#cancelListBtn{
+  line-height: 1;     /* ボタンサイズ維持 */
+}
+
+#cancelListBtn::first-letter{
+  font-size: 1.35em; /* ← ここで調整 */
 }
 
 /* === ジャンル管理（最小版 Step1：骨組み） === */
@@ -1989,6 +2056,7 @@ body.pathModeOn .topbar *:focus:not(#arrivalModeBtn):not(#iolModeBtn):not(#pathM
 	  <button id="pathModeBtn" class="modeBtn" title="パス入力済">●</button>
 	  <button id="globalSearchBtn" title="検索">🔍</button>
 	  <button id="todoListBtn" title="未完了リスト（✓/●）">📋</button>
+	  <button id="cancelListBtn" type="button" title="ゴミ箱">🗑</button>
     </div>
   </header>
   <main id="schedule">
@@ -4104,7 +4172,9 @@ let mergeEditBatchOpen = false;
       slotovr: loadSlotOverrides(currentMonday),
       notes:   loadNotes(currentMonday),
       dayoff:  loadDayOff(currentMonday),
-      emerg:   loadEmerg(currentMonday)
+      emerg:   loadEmerg(currentMonday),
+      // ★キャンセル箱もUndo対象にする（存在しない環境でも落ちない）
+      cancel:  (typeof loadCancelStore==='function' ? loadCancelStore() : null)
     };
   }
   function restoreState(snap){
@@ -4120,6 +4190,17 @@ let mergeEditBatchOpen = false;
     localStorage.setItem('notes_'  + wk, JSON.stringify(snap.notes  || {}));
     localStorage.setItem('dayoff_' + wk, JSON.stringify(snap.dayoff || {}));
     localStorage.setItem('emerg_'  + wk, JSON.stringify(snap.emerg  || {}));
+
+    // ★キャンセル箱もUndo対象にする
+    try{
+      if (typeof saveCancelStore==='function' && snap.cancel != null){
+        saveCancelStore(Array.isArray(snap.cancel) ? snap.cancel : []);
+        // 開いてたらUIも追従
+        if (typeof renderCancelList==='function') renderCancelList();
+      }
+    }catch(e){
+      console.warn('restore cancel store failed:', e);
+    }
   }
 const __saveTimeOverrides = saveTimeOverrides;
 saveTimeOverrides = function(week, obj){
@@ -4161,6 +4242,28 @@ saveWeek = function(week, obj){
   document.getElementById('undoBtn')?.addEventListener('click', undo);
   document.getElementById('redoBtn')?.addEventListener('click', redo);
   function isTypingContext(e){ const el = e.target; const tag = (el?.tagName || '').toLowerCase(); return el?.isContentEditable || tag === 'input' || tag === 'textarea' || tag === 'select'; }
+
+  // ===== RL片側選択（単枠ロック）時：Cut/Copy/Delete を禁止 =====
+  function __getRlIdOfSlot(el, store){
+    try{
+      if(!el || !store) return null;
+      if(typeof findRLSetRangeForSlot !== 'function') return null;
+      const info = findRLSetRangeForSlot(el, store);
+      if(!info || !info.keys || info.keys.length < 2) return null; // RLペアじゃない
+      const base = store[info.baseKey];
+      return base?.meta?.rlSetId || null;
+    }catch(_){ return null; }
+  }
+  function __isRLSingleLockedActionBlocked(el, store){
+    const locked = window.rlSetSingleLocked;
+    if(!locked) return false;
+    const rlId = __getRlIdOfSlot(el, store);
+    return !!(rlId && rlId === locked);
+  }
+  function __alertRLSingleBlocked(){
+    alert('RLペア片側選択中は Cut/Copy/Delete できません。右クリックでRLセット解除後に実行してください。');
+  }
+  
 document.addEventListener('keydown', (e)=>{
 // ===== モード中のキー操作制御（arrival / IOL / PATH 共通）=====
 if (arrivalModeOn || iolModeOn || pathModeOn) {
@@ -4768,26 +4871,20 @@ const originalKeys = __dor_getAllPositionKeysForDay(dateIso, dayKey, mon);
 // ★ originalKeys をセクション単位で分割
 const secKeysList = __dor_splitKeysBySection(originalKeys);
 
-// ★ blocks を「元の所属セクション」で固定分類
+// ★ blocks を「移動後の並び順」で日内スロット列へ流し込み、所属セクションもそれで決める
+//   （これをやらないと“元のセクションに固定”され、セクション跨ぎD&Dが必ず壊れる）
+const flatKeys = secKeysList.flat();
+let cursor = 0;
 blocks.forEach(b=>{
-  const headKey = b.keys?.[0];
-  const p = parseKey(headKey);
+  const slots = __dor_blockSlots(b);
+  const destHeadKey = flatKeys[cursor] || b.keys?.[0];
+  b.__dor_destHeadKey = destHeadKey;
+
+  const p = parseKey(destHeadKey);
   const secKey = `${p.day}|${p.section}`;
   (bySec[secKey] ||= []).push(b);
-});
 
-// ★ 各セクション内でのみ destHeadKey を割り当てる
-secKeysList.forEach(secKeys=>{
-  const p = parseKey(secKeys[0]);
-  const secKey = `${p.day}|${p.section}`;
-  const list = bySec[secKey] || [];
-
-  let cursor = 0;
-  list.forEach(b=>{
-    const destHeadKey = secKeys[cursor] || b.keys[0];
-    b.__dor_destHeadKey = destHeadKey;
-    cursor += __dor_blockSlots(b);
-  });
+  cursor += slots;
 });
 
 
@@ -5120,9 +5217,11 @@ if (okBtn && !okBtn.__bound){
     }
 
     // ★このOK反映（store更新＋time override再構築）を Undo 1手にまとめる
-    const __batch = (typeof beginUndoBatch === 'function')
-      ? beginUndoBatch('dayreorder-ok')
-      : null;
+    let __batched = false;
+    if (typeof beginUndoBatch === 'function'){
+      beginUndoBatch(); // ★return値は無いので、フラグで管理する
+      __batched = true;
+    }
     try {
 
     // ★削除（空）化の確定：該当キーのレコードを store から削除する（間隔は詰めない）
@@ -5135,6 +5234,10 @@ if (okBtn && !okBtn.__bound){
       delHeadKeys.forEach(headKey=>{
         const rec = store[headKey];
         if (!rec) return;
+
+        // ★キャンセル箱へ退避（削除前）
+        try{ __cancel_addFromKey(headKey, store, { route:'dayreorder-delete' }); }catch(_){}
+		
         if (rec.tail) return; // tail直指定はスキップ（head側でまとめて消す）
         const span = Math.max(1, Number(rec.span || 1));
         const i0 = originalKeys.indexOf(headKey);
@@ -5166,7 +5269,7 @@ if (okBtn && !okBtn.__bound){
     saveWeek(mon, store);
     dlg.close();
     } finally {
-      if (__batch) endUndoBatch();
+      if (__batched) endUndoBatch();
     }	
     const __wasFocus = document.body.classList.contains('dayFocus');
     const __focusISO = window.focusDate;
@@ -8433,12 +8536,144 @@ function saveWeek(date,data){
   localStorage.setItem(k, JSON.stringify(data || {}));
 }
 
+/** フェーズ4：キャンセル履歴ストア（別箱） cancelStore_v1 */
+const CANCEL_STORE_KEY = 'cancelStore_v1';
+function loadCancelStore(){
+  try{ return JSON.parse(localStorage.getItem(CANCEL_STORE_KEY)) || []; }catch(_){ return []; }
+}
+function saveCancelStore(list){
+  localStorage.setItem(CANCEL_STORE_KEY, JSON.stringify(list || []));
+}
+
+// ★キャンセル箱の正規化：旧形式を変換し、壊れたゴミデータを除去する
+function normalizeCancelStore(){
+  let list = [];
+  try { list = loadCancelStore(); } catch(_){ list = []; }
+  if (!Array.isArray(list)) list = [];
+
+  let changed = false;
+  const out = [];
+  for (const it of list){
+    if (!it || typeof it !== 'object') { changed = true; continue; }
+
+    // 1) 正式形式（deletedAt + summary + data）がある → OK
+    if (it.deletedAt && it.summary && it.data){
+      const sum = it.summary || {};
+      const ok = !!(String(sum.name||'').trim() || String(sum.pid||'').trim() ||
+                    String(sum.proc1||'').trim() || String(sum.proc2||'').trim());
+      if (!ok){ changed = true; continue; }
+      out.push(it);
+      continue;
+    }
+
+    // 2) 旧形式（name/pid/proc/clip 等）→ 正式形式へ変換
+    const name = String(it.name || '').trim();
+    const pid  = String(it.pid  || '').trim();
+    const eye  = String(it.eye  || '').trim();
+    const p1   = String(it.proc1|| '').trim();
+    const p2   = String(it.proc2|| '').trim();
+    const hasAny = !!(name || pid || p1 || p2);
+    if (!hasAny) { changed = true; continue; } // ← no name ゴミはここで落ちる
+
+    let data = null;
+    if (it.data) data = it.data;
+    else if (it.clip && it.clip.data) data = it.clip.data;
+    if (!data) { changed = true; continue; }
+
+    let deletedAt = it.deletedAt;
+    if (!deletedAt){
+      // createdAt があればそれを使う、無ければ今
+      const t = Date.parse(it.createdAt || '');
+      deletedAt = Number.isFinite(t) ? t : Date.now();
+    }
+
+    const converted = {
+      id: it.id || `c_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      deletedAt,
+      reason: it.reason || it.route || 'delete',
+      from: it.from || { week: weekKey(currentMonday), slotKey: it.fromKey || '' },
+      keys: it.keys || [],
+      data,
+      summary: { name, pid, eye, proc1:p1, proc2:p2 }
+    };
+    out.push(converted);
+    changed = true;
+  }
+
+  if (changed){
+    try { saveCancelStore(out); } catch(_){}
+  }
+  return out;
+}
+
+function __cancel_makeSummary(rec){
+  const name = String(rec?.name || '').trim();
+  const pid  = String(rec?.pid  || '').trim();
+  const eye  = String(rec?.eye  || rec?.rl || '').trim(); // 互換
+  const p1   = String(rec?.proc1|| '').trim();
+  const p2   = String(rec?.proc2|| '').trim();
+  return { name, pid, eye, proc1:p1, proc2:p2 };
+}
+function cancelStore_addFromStore(store, headKey, reason){
+  try{
+    if(!store || !headKey) return null;
+    const rec = store[headKey];
+    if(!rec) return null;
+    // tailが来たらheadへ寄せる
+    let hk = headKey;
+    let head = rec;
+    if(head?.tail && head?.head){
+      hk = head.head;
+      head = store[hk] || head;
+    }
+    if(!head || head.tail) return null;
+
+    const span = head.head ? Math.max(1, Number(head.span || 1)) : 1;
+    const keys = [];
+    const snap = {};   // ★結合枠スナップショット
+    keys.push(hk);
+    snap[hk] = deepClone(store[hk]);
+
+    // 結合枠なら tail 分も「データごと」保存
+    if(span > 1){
+      const p = parseKey(hk);
+      for(let i=1;i<span;i++){
+        const tk = `${p.d}|${p.day}|${p.section}|${p.idx+i}`;
+        if(store[tk]){
+          keys.push(tk);
+          snap[tk] = deepClone(store[tk]);
+        }
+      }
+    }
+
+    const p = parseKey(hk);
+    const sum = __cancel_makeSummary(head);
+    const item = {
+      id: `c_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      deletedAt: Date.now(),
+      reason: reason || 'delete',
+      from: { week: weekKey(currentMonday), slotKey: hk, d:p?.d, day:p?.day, section:p?.section, idx:p?.idx },
+      keys,
+      data: deepClone(head),
+      snap,              // ★ head + tail の完全コピー
+      summary: sum
+    };
+    const list = loadCancelStore();
+    list.unshift(item);           // 新しい順
+    saveCancelStore(list);
+    return item.id;
+  }catch(e){
+    console.warn('cancelStore_addFromStore failed:', e);
+    return null;
+  }
+}
 
 /** Undo スナップショット＆復元に schedule を統合 */
 const __snapshotState = snapshotState;
 snapshotState = function(){
   const base = __snapshotState();
   base.schedule = loadWeek(currentMonday);
+  base.cancelStore = loadCancelStore();  
   return base;
 };
 const __restoreState = restoreState;
@@ -8447,6 +8682,9 @@ restoreState = function(snap){
   if (snap && snap.schedule){
     localStorage.setItem('schedule_'+weekKey(currentMonday), JSON.stringify(snap.schedule||{}));
   }
+  if (snap && snap.cancelStore){
+    saveCancelStore(snap.cancelStore);
+  }  
 };
 
 /** 共通ユーティリティ */
@@ -9022,22 +9260,28 @@ function createMergeFromMultiSelection(){
       delete st[k];
     }
 
-    // head をセット
-    st[headKey] = {
-      head: true,
-      span: span,
-      duration: durationMinutes
-    };
-
-    // tail をセット
-    for (let i = firstIdx + 1; i <= lastIdx; i++){
-      const k = list[i].dataset.key;
-      st[k] = { tail: true, head: headKey };
+    // ★結合枠：ゴミ箱 snap があれば「完全復元」
+    if (clip?.meta?.fromCancel && clip?.meta?.snap){
+      Object.entries(clip.meta.snap).forEach(([k, v])=>{
+        st[k] = deepClone(v);
+      });
+    } else {
+      // 通常 merge（従来動作）
+      st[headKey] = {
+        head: true,
+        span: span,
+        duration: durationMinutes
+      };
+      for (let i = firstIdx + 1; i <= lastIdx; i++){
+        const k = list[i].dataset.key;
+        st[k] = { tail: true, head: headKey };
+      }
     }
 
     // この day/section のアンカーを一括再構築
     rebuildDurationAnchorsForDaySection(day, section, st);
-
+	
+	__consumeCutCancelIds();
     // 保存
     saveWeek(currentMonday, st);
 
@@ -10088,7 +10332,6 @@ function openEditor(keys){
   editor.addEventListener('keydown', editor.__editorKeyHandler, true);
 
 editor.addEventListener('close', function handler(){
-  editor.removeEventListener('close', handler);
 
   // 結合→即編集のバッチが開いていたかどうか
   const hadMergeBatch = !!mergeEditBatchOpen;
@@ -10112,7 +10355,12 @@ editor.addEventListener('close', function handler(){
           if (!ok) {
             // ★ ここが肝：save 処理自体を中止して「キャンセル扱い」に寄せる
             editor.returnValue = 'cancel';
-            // 結合→即編集のバッチが開いていたら閉じる（save以外ルートと同等に）
+            // ★ 結合→即編集のバッチが開いていたらここで必ず閉じる
+            // （ここでreturnすると下の hadMergeBatch 後処理に行かないため）
+            if (hadMergeBatch) {
+              try { endUndoBatch(); } catch(_){}
+              mergeEditBatchOpen = false;
+            }
             return; // ← 外側（saveブロック）から抜けるので保存されない
           }
         }
@@ -10507,6 +10755,9 @@ editor.addEventListener('close', function handler(){
 
 
 
+      // ★ フェーズ4：削除前にキャンセル履歴へ退避（Undoで戻れば cancelStore も巻き戻る）
+      try { cancelStore_addFromStore(data, firstKey, 'delete'); } catch(_){}
+
       // ====== 後続枠の時刻再計算（押し出し） ======
       try {
         const { day, section } = parseKey(firstKey);
@@ -10579,38 +10830,50 @@ editor.addEventListener('close', function handler(){
     }
 
     if (editor.returnValue === 'clear') {
-      // ★ CLEAR も 1 アクションとしてまとめて Undo できるようにバッチ化
+      // ★このエディタで編集していた枠＝firstKey を基準に「確実に消す」
+      const data = loadWeek(currentMonday) || {};
+      const headKey = firstKey;
+      const dHead = data[headKey];
+      if (!dHead) return; // 既に空なら何もしない
+
       beginUndoBatch();
       try {
-        const data   = loadWeek(currentMonday);
-        const dHead  = data[firstKey];
-        const parsed = parseKey(firstKey); // { d, day, section, idx }
-        const { d, day, section, idx } = parsed || {};
+        // ★キャンセル箱へ退避（削除前）
+        try { __cancel_addFromKey(headKey, data, { route:'editor-clear' }); } catch(_){}
 
-        // ★ 削除前の情報を使って、所要時間アンカーを片付ける
-        cleanupTimeOverrideOnDelete(firstKey, data);
+        // ★削除前の情報で time override を掃除
+        try { cleanupTimeOverrideOnDelete(headKey, data); } catch(_){}
 
-        // --- 実データの削除（head なら span 分まとめて、単枠なら 1 つ） ---
+        // --- 実データ削除（結合枠なら span 分まとめて） ---
         if (dHead && dHead.head) {
+          const p = (typeof parseKey === 'function') ? parseKey(headKey) : null;
+          const d = p?.d, day = p?.day, section = p?.section, idx = p?.idx;
           const span = Number(dHead.span || 1);
-          for (let i = 0; i < span; i++) {
-            const k = `${d}|${day}|${section}|${idx + i}`;
-            delete data[k];
+          if (d && day && section != null && idx != null) {
+            for (let i = 0; i < span; i++) {
+              delete data[`${d}|${day}|${section}|${idx + i}`];
+            }
+          } else {
+            // parseKey が取れない場合は保険で headKey だけ消す
+            delete data[headKey];
           }
         } else {
-          delete data[firstKey];
+          delete data[headKey];
         }
 
-        // ★ 結合枠クリア後：この day/section のアンカーをまとめて再構築
+        // ★アンカー再構築（可能なら）
         try {
-          if (day != null && section != null) {
-            rebuildDurationAnchorsForDaySection(day, section, data);
+          const p = (typeof parseKey === 'function') ? parseKey(headKey) : null;
+          if (p?.day != null && p?.section != null) {
+            rebuildDurationAnchorsForDaySection(p.day, p.section, data);
           }
         } catch (e) {
           console.warn('rebuild-after-clear failed:', e);
         }
 
-        debugTimeOverrides('before CLEAR saveWeek');
+        if (typeof debugTimeOverrides === 'function') {
+          debugTimeOverrides('before CLEAR saveWeek');
+        }
 
         // --- ここから先はフォーカス維持ロジック（元のまま） ---
         const wasFocus = document.body.classList.contains('dayFocus');
@@ -10894,6 +11157,47 @@ function formatMinutesColon(min){
 const appClipboard = { type:null, data:null };
 let lastCopySourceKey = null;
 
+// ============================================================
+// キャンセル箱：削除フック（3ルート共通）
+// ============================================================
+function __cancel_isWorth(rec){
+  if (!rec) return false;
+  // 既存の判定があればそれを優先
+  if (typeof isOccupiedRecord === 'function') return !!isOccupiedRecord(rec);
+  // フォールバック（よく使うフィールドが1つでもあれば対象）
+  const f = ['name','pid','id','eye','proc1','proc2','surgeon','note','io','iolType','iolPower'];
+  return f.some(k => !!String(rec?.[k] ?? '').trim());
+}
+
+function __cancel_resolveHeadKey(key, st){
+  if (!key) return null;
+  const rec = st?.[key];
+  if (rec && rec.tail && rec.head) return rec.head;
+  return key;
+}
+
+function __cancel_makeClip(headKey, st){
+  const rec = st?.[headKey];
+  if (!rec || !__cancel_isWorth(rec)) return null;
+  if (rec.head && Number(rec.span||1) > 1){
+    return { type:'merge', data:{ headKey, span:Number(rec.span||1), headData: deepClone(rec) } };
+  }
+  return { type:'single', data:{ key: headKey, data: deepClone(rec) } };
+}
+
+function __cancel_addFromKey(key, st, meta={}){
+  // ★キャンセル箱への追加は cancelStore_addFromStore() に統一（型ズレ根絶）
+  try{
+    if (!key || !st) return null;
+    const reason = meta?.route || meta?.reason || 'delete';
+    if (typeof cancelStore_addFromStore !== 'function') return null;
+    return cancelStore_addFromStore(st, key, reason);
+  }catch(e){
+    console.warn('__cancel_addFromKey wrapper failed:', e);
+    return null;
+  }
+}
+
 function isOccupiedRecord(rec){
   if (!rec) return false;
   const f = ['head','tail','name','pid','age','eye','iolType','iolPower','proc1','proc2','surgeon','note','io','linkWith'];
@@ -10986,7 +11290,29 @@ function copySlotOrMerge(){
 
 function pasteToActive({flip=false}={}){
   const clip = appClipboard;
+ 
+  // ★ B：ここ
+  console.log('[B PASTE START]', clip?.type, clip); 
+  
   if(!clip?.type){ alert('コピーされていません'); return; }
+
+  // ★ cut で「先にキャンセル箱へ入れた」分を、paste成功時にだけ消す
+  //   - Undoスナップショットに cancelStore が含まれるので（既存実装）、同一Undoで巻き戻る
+  function __consumeCutCancelIds(){
+    const ids = clip?.meta?.cancelIds;
+    if (!Array.isArray(ids) || ids.length === 0) return;
+    try{
+      const set = new Set(ids);
+      const list = loadCancelStore();
+      const next = list.filter(it => !set.has(it?.id));
+      if (next.length !== list.length) saveCancelStore(next);
+    }catch(e){
+      console.warn('__consumeCutCancelIds failed:', e);
+    }
+    // 二重消し防止（同じclipboardで連続pasteしても安全）
+    try{ clip.meta.cancelIds = []; }catch(_){}
+  }
+  
   const tEl = getActiveSlot?.(); if(!tEl){ alert('貼り付け先を選択してください'); return; }
   const tKey = tEl.dataset.key;
   const st = loadWeek(currentMonday);
@@ -11096,13 +11422,48 @@ if (clip.type === 'multi') {
     // ★ 貼り付け後：このセクションの所要時間アンカーを一括で組み直す
     const { day, section } = parseKey(tKey);
     rebuildDurationAnchorsForDaySection(day, section, st);
-
+	
+	__consumeCutCancelIds();
     saveWeek(currentMonday, st);
   } finally {
     endUndoBatch();
   }
 
+  // ★貼り付け成功後はクリップボードを消費（コピー/切り取りとも1回だけ）
+  appClipboard.type = null;
+  appClipboard.data = null;
+  appClipboard.meta = {};
+
   reRenderPreservingFocus(tKey); // 貼り付け先を基準に復帰
+
+  // ★貼り付け直後：RLペアなら「外周選択（multiSelected）」に戻す
+  //   （貼り付け直後だけ片側focusedになり、Cutが片側で走る問題の対策）
+  try{
+    const __k = tKey;
+    requestAnimationFrame(()=>{
+      try{
+        const el = document.querySelector(`.slot[data-key="${CSS.escape(__k)}"]`);
+        if (!el) return;
+        const st = loadWeek(currentMonday);
+        if (!st || typeof findRLSetRangeForSlot !== 'function') return;
+        const info = findRLSetRangeForSlot(el, st);
+        if (!info || !info.keys || info.keys.length < 2) return;
+        const baseRec = st[info.baseKey];
+        const rlId = baseRec?.meta?.rlSetId;
+        if (!rlId) return;
+
+        // 単枠ロックは解除して「外周表示」を優先（既存ロジックに合わせる）
+        window.rlSetSingleLocked = null;
+        if (typeof clearMultiSelection === 'function') clearMultiSelection();
+        info.keys.forEach(k=>{
+          const el2 = document.querySelector(`.slot[data-key="${CSS.escape(k)}"]`);
+          if (el2 && typeof addMultiSelect === 'function') addMultiSelect(el2);
+        });
+        window.currentRLSetId = rlId;
+        if (typeof updateMultiRangeOutline === 'function') updateMultiRangeOutline();
+      }catch(_){}
+    });
+  }catch(_){}  
   return;
 }
 
@@ -11134,11 +11495,26 @@ if (clip.type === 'single') {
     // ★ このセクション全体のアンカーを組み直す
     const { day, section } = parseKey(tKey);
     rebuildDurationAnchorsForDaySection(day, section, st);
-
+	
+	__consumeCutCancelIds();
     saveWeek(currentMonday, st);
+
+    // ★キャンセル履歴からの「切り取り→貼り付け」なら、貼り付け成功後に履歴から削除
+    if (clip.__fromCancelId){
+      try{
+        const cl = loadCancelStore().filter(x => x.id !== clip.__fromCancelId);
+        saveCancelStore(cl);
+      }catch(_){}
+      try{ delete clip.__fromCancelId; }catch(_){}
+    }
   } finally {
     endUndoBatch();            // ★ バッチ終了
   }
+
+  // ★貼り付け成功後はクリップボードを消費（コピー/切り取りとも1回だけ）
+  appClipboard.type = null;
+  appClipboard.data = null;
+  appClipboard.meta = {};
 
   // 描画はバッチ外でOK
   reRenderPreservingFocus(tKey);
@@ -11148,6 +11524,10 @@ if (clip.type === 'single') {
 
 
 if (clip.type === 'merge') {
+
+  // ★ C：ここ
+  console.log('[C PASTE MERGE ENTER]');
+
   const span = Number(clip.data.span || 1);
   if (span <= 1) {
     alert('結合情報が不正です');
@@ -11181,31 +11561,79 @@ if (clip.type === 'merge') {
   // ★ ここからまとめて 1 つの undo にする
   beginUndoBatch();
   try {
-    // head データ
-    const headData = deepClone(clip.data.headData || {});
-    delete headData.head;
-    delete headData.tail;
-    delete headData.span;
-    delete headData.linkWith;
-    if (flip && headData.eye) headData.eye = flipEye(headData.eye);
-
-    const headKey = destKeys[0];
-    st[headKey] = { ...headData, head: true, span };
-
-    // tail を書き込み
-    for (let i = 1; i < span; i++) {
-      st[destKeys[i]] = { tail: true, head: headKey };
+    // ★ ゴミ箱からの完全復元（snap がある場合）
+    if (clip?.data?.snap){
+    // ★ snap の中身を「貼り付け先 destKeys」に対応付けて復元する
+    const snapKeys = Object.keys(clip.data.snap);
+    for (let i = 0; i < snapKeys.length; i++){
+      const srcKey = snapKeys[i];
+      const dstKey = destKeys[i];
+      if (!dstKey) continue;
+    
+      const v = deepClone(clip.data.snap[srcKey]);
+      // head / tail の参照先を貼り付け先 headKey に付け替え
+      if (v.head){
+        v.head = true;
+        v.span = span;
+      }
+      if (v.tail){
+        v.head = destKeys[0];
+      }
+      st[dstKey] = v;
     }
+   
+     // ★ 結合枠の duration を固定したうえで、セクション全体を再計算
+     const { day: d, section } = parseKey(destKeys[0]);
+   
+     // 念のため head の duration を明示固定
+     const headKey = destKeys[0];
+     if (st[headKey]?.head && st[headKey]?.span){
+       st[headKey].duration = clip.data.head.duration;
+     }
+   
+     rebuildDurationAnchorsForDaySection(d, section, st);	  
+    } else {
+      // 通常 merge（従来どおり）
+      const headData = deepClone(clip.data.headData || {});
+      delete headData.head;
+      delete headData.tail;
+      delete headData.span;
+      delete headData.linkWith;
+      if (flip && headData.eye) headData.eye = flipEye(headData.eye);
 
-    // ★ このセクション全体のアンカーを組み直す
-    const { day: dayKey, section } = parseKey(headKey);
-    rebuildDurationAnchorsForDaySection(dayKey, section, st);
+      const headKey = destKeys[0];
+      st[headKey] = { ...headData, head: true, span };
+
+      for (let i = 1; i < span; i++) {
+        st[destKeys[i]] = { tail: true, head: headKey };
+      }
+
+      const { day: dayKey, section } = parseKey(headKey);
+      rebuildDurationAnchorsForDaySection(dayKey, section, st);
+    }
 
     // 保存してフォーカス復帰
     saveWeek(currentMonday, st);
+
+    // ★キャンセル履歴からの「切り取り→貼り付け」なら、貼り付け成功後に履歴から削除
+    if (clip?.meta?.cancelIds?.length){
+      try{
+        const del = new Set(clip.meta.cancelIds);
+        const cl = loadCancelStore().filter(x => !del.has(x.id));
+        saveCancelStore(cl);
+      }catch(e){
+        console.warn('consume cancelIds failed:', e);
+      }
+      clip.meta.cancelIds = [];
+    }
   } finally {
     endUndoBatch();  // ★ まとめて1アクションに確定
   }
+
+  // ★貼り付け成功後はクリップボードを消費（コピー/切り取りとも1回だけ）
+  appClipboard.type = null;
+  appClipboard.data = null;
+  appClipboard.meta = {};
 
   reRenderPreservingFocus(tKey);
   return;
@@ -11215,6 +11643,12 @@ if (clip.type === 'merge') {
 
 function cutActive(){
   const storeNow = loadWeek(currentMonday);
+  // ★RL片側選択（単枠ロック）中の Cut は禁止（ペア解除後のみ許可）
+  const __ael0 = getActiveSlot?.();
+  if(__ael0 && __isRLSingleLockedActionBlocked(__ael0, storeNow)){
+    __alertRLSingleBlocked();
+    return;
+  }
 
   // --- どの枠を削除するか、削除プランを作る ---
   const deletePlan = [];
@@ -11287,7 +11721,7 @@ function cutActive(){
         deletePlan.push({ type: 'single', key });
       }
     }
-  } else {
+  } else if (!handledRL) {
     // 2) 通常の単枠 / 結合枠 1つだけの cut
     const el = getActiveSlot?.(); 
     if (!el) return;
@@ -11314,6 +11748,25 @@ function cutActive(){
   beginUndoBatch();
   try {
     const st = loadWeek(currentMonday);
+
+    // ★ cutした瞬間にキャンセル箱へ退避（貼り付け成功で消すためIDを保持）
+    const __cutCancelIds = [];
+    try{
+      for (const plan of deletePlan){
+        const hk = (plan.type === 'merge') ? plan.headKey : plan.key;
+        // route='cut' として記録（表示/検索用に理由が分かる）
+        const cid = (typeof __cancel_addFromKey === 'function')
+          ? __cancel_addFromKey(hk, st, { route:'cut' })
+          : (typeof cancelStore_addFromStore === 'function' ? cancelStore_addFromStore(st, hk, 'cut') : null);
+        if (cid) __cutCancelIds.push(cid);
+      }
+    }catch(e){
+      console.warn('cut->cancelStore add failed:', e);
+    }
+    if (__cutCancelIds.length){
+      if (!appClipboard.meta) appClipboard.meta = {};
+      appClipboard.meta.cancelIds = __cutCancelIds.slice();
+    }
 
     // フォーカス維持用の情報を先に記録
     const wasFocus = document.body.classList.contains('dayFocus');
@@ -11398,9 +11851,11 @@ document.addEventListener('keydown',(e)=>{
     const ed = document.getElementById('editor');
     const st = document.getElementById('settings');
     const dor = document.getElementById('dayReorderDialog');
+    const cdlg = document.getElementById('cancelListDialog');	
     const dialogOpen =
       (ed && (ed.open || ed.classList?.contains('is-open'))) ||
       (st && (st.open || st.classList?.contains('is-open')));
+	  
     // ★並び替えモーダル中は「週表示側」のショートカットを完全停止（背景が切れないように）
     if (dor && dor.open){
       const k2 = (e.key || '').toLowerCase();
@@ -11417,18 +11872,75 @@ document.addEventListener('keydown',(e)=>{
       }
       return;
     }
+
+    // ★ゴミ箱（キャンセル履歴）モーダル中：背景（週表示）のショートカットを完全停止し、
+    //   Ctrl+X / Delete / Backspace はモーダル内ボタンに連動させる
+    if (cdlg && cdlg.open){
+      const k2 = String(e.key || '');
+      const kl = k2.toLowerCase();
+      const isMod = (e.ctrlKey || e.metaKey) && !e.altKey;
+
+      const t = e.target;
+      const tag = t?.tagName?.toLowerCase();
+      const editable = (tag==='input' || tag==='textarea' || t?.isContentEditable);
+
+      // Ctrl/Cmd + X → モーダル内「切り取り」（入力欄編集中は邪魔しない）
+      if (isMod && kl === 'x'){
+        if (!editable && cancelCutBtn && !cancelCutBtn.disabled){
+          e.preventDefault();
+          e.stopPropagation();
+          cancelCutBtn.click();
+        }
+        return;
+      }
+
+      // Delete / Backspace → モーダル内「完全削除」（入力欄編集中は邪魔しない）
+      if ((kl === 'delete' || kl === 'backspace')){
+        if (!editable && cancelDeleteBtn && !cancelDeleteBtn.disabled){
+          e.preventDefault();
+          e.stopPropagation();
+          cancelDeleteBtn.click();
+        }
+        return;
+      }
+
+      // それ以外の Ctrl/Cmd + C/V なども、背景へは飛ばさない
+      if (isMod && (kl==='c' || kl==='v')){
+        if (!editable){
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
+      }
+      return;
+    }
+	
     if (dialogOpen) return;
   }
   
   const k = e.key.toLowerCase();
 
-  if((e.ctrlKey||e.metaKey) && k==='c'){ e.preventDefault(); copySlotOrMerge(); }
+  if((e.ctrlKey||e.metaKey) && k==='c'){
+    e.preventDefault();
+    const el = getActiveSlot?.(); if(!el) return;
+    const st = loadWeek(currentMonday);
+    if(__isRLSingleLockedActionBlocked(el, st)){ __alertRLSingleBlocked(); return; }
+    copySlotOrMerge();
+  }
   if((e.ctrlKey||e.metaKey) && k==='v'){ e.preventDefault(); pasteToActive({flip:e.shiftKey}); }
-  if((e.ctrlKey||e.metaKey) && k==='x'){ e.preventDefault(); cutActive(); }
-
+  if((e.ctrlKey||e.metaKey) && k==='x'){
+    e.preventDefault();
+    const el = getActiveSlot?.(); if(!el) return;
+    const st = loadWeek(currentMonday);
+    if(__isRLSingleLockedActionBlocked(el, st)){ __alertRLSingleBlocked(); return; }
+    cutActive();
+  }
   if(k==='delete' || k==='backspace'){
     e.preventDefault();
     const el = getActiveSlot?.(); if(!el) return;
+    const st0 = loadWeek(currentMonday);
+    if(__isRLSingleLockedActionBlocked(el, st0)){ __alertRLSingleBlocked(); return; }
+	
 
   // ============================================
   // 🔵 複数選択されている場合：まとめて削除
@@ -11442,14 +11954,28 @@ document.addEventListener('keydown',(e)=>{
     beginUndoBatch();
     try {
       const st = loadWeek(currentMonday) || {};
+	  const __pushed = new Set(); // headKey重複防止
       let anyHeadKey = null;
 
-      for (const k of keysToDelete) {
-        const rec = st[k];
-        if (!rec) continue;
+ // ★選択slotをDOM順で拾い、headKeyを重複なしで並べる
+ const orderedHeadKeys = [];
+ const seen = new Set();
+ Array.from(document.querySelectorAll('.slot.multiSelected')).forEach(el => {
+   let hk = el.dataset.key;
+   if (el.classList.contains('hiddenRow')) {
+     let p = el.previousElementSibling;
+     while (p && p.classList.contains('hiddenRow')) p = p.previousElementSibling;
+     if (p && p.classList.contains('slot')) hk = p.dataset.key;
+   }
+   if (hk && !seen.has(hk)) {
+     seen.add(hk);
+     orderedHeadKeys.push(hk);
+   }
+ });
+
+      for (const k of orderedHeadKeys.slice().reverse()) {
 
         // head を特定する（結合枠前提）
-        const { d, day, section, idx } = parseKey(k);
         const baseEl = document.querySelector(`.slot[data-key="${k}"]`);
         const headEl = (function resolveHead(n){
           let p = n;
@@ -11463,7 +11989,20 @@ document.addEventListener('keydown',(e)=>{
 
         const headKey = headEl?.dataset?.key;
         if (!headKey) continue;
+        const rec = st[headKey] || st[k];
+        if (!rec) continue;		
         if (!anyHeadKey) anyHeadKey = headKey;
+
+        // ★キャンセル箱へ退避（headKey単位で1回）
+        if (!__pushed.has(headKey)) {
+          try { __cancel_addFromKey(headKey, st, { route: 'kbd-multi-delete' }); } catch(_){}
+          __pushed.add(headKey);
+        }		
+
+        // ★削除対象キーは「headKey」を基準にする（k基準だとズレる）
+        const hp = parseKey(headKey);
+        const hd = hp?.d, hday = hp?.day, hsec = hp?.section, hidx = hp?.idx;
+        if (!hd || !hday || hsec==null || hidx==null) continue;
 
         // span を取得
         function getSpan(h){
@@ -11480,7 +12019,7 @@ document.addEventListener('keydown',(e)=>{
 
         // head + tail を削除
         for (let i = 0; i < span; i++) {
-          const key2 = `${d}|${day}|${section}|${idx + i}`;
+          const key2 = `${hd}|${hday}|${hsec}|${hidx + i}`;
           delete st[key2];
         }
       }
@@ -11521,6 +12060,9 @@ document.addEventListener('keydown',(e)=>{
             const rec = storeForDel[headKey];
             if (!rec) continue;
 
+            // ★キャンセル箱へ退避（削除前）
+            __cancel_addFromKey(headKey, storeForDel, { route:'kbd-rlset' });
+
             const span = rec.head ? Math.max(1, Number(rec.span || 1)) : 1;
 
             // 所要時間アンカーの片付け
@@ -11560,6 +12102,14 @@ document.addEventListener('keydown',(e)=>{
     if (!window.confirm('この枠の内容をクリアします。よろしいですか？')) {
       return; // キャンセルなら何もしない
     }
+
+    // ★ 追加：キャンセル箱へ退避（削除前・headKey基準）
+    try {
+      const data0 = loadWeek(currentMonday);
+      if (data0 && head?.dataset?.key) {
+        __cancel_addFromKey(head.dataset.key, data0, { route: 'editor-clear' });
+      }
+    } catch(_){}
 	
     // ★ この削除操作全体を「Undo 1ステップ」にまとめる
     beginUndoBatch();
@@ -11592,6 +12142,9 @@ document.addEventListener('keydown',(e)=>{
      const st = loadWeek(currentMonday);
      const headKey = head?.dataset?.key || null;
      // ※ この時点では time override はまだ触らない（autoRebuild に一任）
+
+     // ★キャンセル箱へ退避（削除前）
+     if (headKey) try{ __cancel_addFromKey(headKey, st, { route:'kbd-single' }); }catch(_){}
  	 
      if (head.dataset && head.dataset.key) delete st[head.dataset.key];
      let p = head.nextElementSibling;
@@ -13216,6 +13769,422 @@ todoListBtn.addEventListener('click', ()=>{
   todoListExec.click(); // 開いたら自動更新
 });
 
+// ===== フェーズ4：キャンセル履歴（ゴミ箱） =====
+const cancelListBtn     = document.getElementById('cancelListBtn');
+const cancelDlg         = document.getElementById('cancelListDialog');
+const cancelBody        = document.getElementById('cancelListBody');
+const cancelCountEl     = document.getElementById('cancelCount');
+const cancelSearchInput = document.getElementById('cancelSearchInput');
+const cancelSearchClear = document.getElementById('cancelSearchClear');
+const cancelCutBtn      = document.getElementById('cancelCutBtn');
+const cancelDeleteBtn   = document.getElementById('cancelDeleteBtn');
+
+let __cancelSelId = null;
+
+
+// ★キャンセル履歴を「開いた瞬間に必ず描画」する正式ハンドラ
+if (cancelListBtn && cancelDlg){
+  cancelListBtn.addEventListener('click', ()=>{
+    try{
+      __cancelSelId = null;
+
+      // 検索語は毎回リセット（クリア押さないと出ない問題の根本対策）
+      if (cancelSearchInput) cancelSearchInput.value = '';
+
+      // ★ここが最重要：開く前に必ず描画
+      renderCancelList();
+
+      cancelDlg.showModal();
+    }catch(e){
+      console.warn('open cancelListDialog failed:', e);
+      try{ cancelDlg.setAttribute('open',''); }catch(_){}
+    }
+  });
+}
+
+function __cancel_match(item, q){
+  if(!q) return true;
+  const key = __normStr(q);
+  const sum = item?.summary || {};
+
+  // ★ 名前・IDをそれぞれ正規化して「先頭一致」で判定
+  const name = __normStr(sum.name || '');
+  const pid  = __normStr(sum.pid  || '');
+
+  return name.startsWith(key) || pid.startsWith(key);
+}
+
+function __normStr(s){
+  if(!s) return '';
+  return String(s)
+    .normalize('NFKC')                 // 全角⇔半角
+    .replace(/[ぁ-ゖ]/g, ch =>         // ひら→カタ
+      String.fromCharCode(ch.charCodeAt(0) + 0x60)
+    )
+    .toLowerCase()
+    .replace(/\s+/g,'');
+}
+
+function __cancel_rowHtml(item){
+  // ★RLまとめ表示（表示専用の仮想行）
+  if (item && item.__rlGroup && Array.isArray(item.items) && item.items.length){
+    const a0 = item.items[0];
+    const sum0 = a0.summary || {};
+
+    // 日付ラベル（既存と同じ作り方）
+    const dateISO = (a0?.from?.d || '').trim();
+    let dateLabel = '';
+    if (dateISO){
+      const dt = new Date(dateISO);
+      if (!Number.isNaN(dt.getTime())){
+        const dow = ['日','月','火','水','木','金','土'][dt.getDay()];
+        dateLabel = `${dateISO}（${dow}）`;
+      } else {
+        dateLabel = dateISO;
+      }
+    }
+
+    // 術式ラベル（既存と同じ作り方：先頭の術式を代表にする）
+    const proc1 = (sum0.proc1 || '').trim();
+    const proc2 = (sum0.proc2 || '').trim();
+    const procLabel = (proc1 && proc2) ? `${proc1}／${proc2}` : (proc1 || proc2 || '');
+
+    // ★枠数：R/Lそれぞれの span を合算（単枠は1）
+    const totalSlots = item.items.reduce((acc, it)=>{
+      const sp = Math.max(1, Number(it?.data?.span || 1));
+      return acc + (Number.isFinite(sp) ? sp : 1);
+    }, 0);
+    const spanBadge = `<span class="sr-spanBadge">${totalSlots}枠</span>`;
+
+    // data-ids に元の2行の id を入れておく（次ステップのcut/pasteで使える）
+    const ids = item.items.map(x=>x.id).filter(Boolean).join(',');
+
+    return `
+      <div class="cancel-row search-row rl-group"
+     data-id="${item.id}"
+     data-ids="${ids}">
+        <div class="sr-date">${dateLabel || ''}</div>
+        <div class="sr-spanCol">${spanBadge}</div>
+        <div class="sr-name">${sum0.name || '(氏名なし)'}</div>
+        <div class="sr-id">${sum0.pid || ''}</div>
+        <div class="sr-eye">RL</div>
+        <div class="sr-proc">${procLabel}</div>
+      </div>`;
+  }
+
+  const sum = item.summary || {};
+  const dateISO = (item?.from?.d || '').trim();
+  let dateLabel = '';
+  if (dateISO){
+    const dt = new Date(dateISO);
+    if (!Number.isNaN(dt.getTime())){
+      const dow = ['日','月','火','水','木','金','土'][dt.getDay()];
+      dateLabel = `${dateISO}（${dow}）`;
+    } else {
+      dateLabel = dateISO;
+    }
+  }
+  const eye = (sum.eye || '').trim();
+  const eyeLabel = (eye === 'R' || eye === 'L' || eye === 'B') ? eye : (eye || '');
+
+  const proc1 = (sum.proc1 || '').trim();
+  const proc2 = (sum.proc2 || '').trim();
+  const procLabel = (proc1 && proc2) ? `${proc1}／${proc2}` : (proc1 || proc2 || '');
+
+  // ★結合枠のみ「枠数」バッジ（所要時間は出さない）
+  const span = Math.max(1, Number(item?.data?.span || 1));
+  const spanBadge = (item?.data?.head && span > 1) ? `<span class="sr-spanBadge">${span}枠</span>` : '';
+
+  return `
+    <div class="cancel-row search-row" data-id="${item.id}" data-ids="${item.ids || ''}">
+      <div class="sr-date">${dateLabel || ''}</div>
+      <div class="sr-spanCol">${spanBadge || ''}</div>
+      <div class="sr-name">${sum.name || '(氏名なし)'}</div>
+      <div class="sr-id">${sum.pid || ''}</div>
+      <div class="sr-eye">${eyeLabel || ''}</div>
+      <div class="sr-proc">${procLabel}</div>
+    </div>`;
+}
+
+function renderCancelList(){
+  const list = normalizeCancelStore();
+  const q = String(cancelSearchInput?.value || '').trim();
+  const hit = list.filter(it => __cancel_match(it, q));
+  cancelCountEl.textContent = `件数：${hit.length} / ${list.length}`;
+
+  // ★RL連続行を1行に束ねる（表示専用）
+  const grouped = [];
+  for (let i = 0; i < hit.length; i++){
+    const a = hit[i];
+    const b = hit[i+1];
+
+    // 条件：連続／同一患者ID／同一日付／同一術式表示／眼がRとLの組
+    const samePid  = a?.summary?.pid && (a.summary.pid === b?.summary?.pid);
+    const sameDate = (a?.from?.d || '') === (b?.from?.d || '');
+    const sameProc = ((a?.summary?.proc1||'') === (b?.summary?.proc1||'')) &&
+                     ((a?.summary?.proc2||'') === (b?.summary?.proc2||''));
+    const eyeA = (a?.summary?.eye || '').trim();
+    const eyeB = (b?.summary?.eye || '').trim();
+    const isRL = (eyeA === 'R' && eyeB === 'L') || (eyeA === 'L' && eyeB === 'R');
+
+if (b && samePid && sameDate && sameProc && isRL){
+  // ★RLまとめ行：2件の実IDを保持（選択・cut/deleteで使う）
+  const ids = [a.id, b.id].filter(Boolean).join(',');
+  grouped.push({
+    __rlGroup: true,
+    items: [a, b],
+    id: `grp:${ids}`,  // ★選択用ID（renderCancelListの復元＆clickで使う）
+    ids               // ★実ID列（cut/deleteで2件を取る）
+  });
+  i++; // b を消費
+} else {
+  grouped.push(a);
+}
+  }
+
+  cancelBody.innerHTML = grouped.map(__cancel_rowHtml).join('') || `<div style="padding:14px;opacity:.7">（空）</div>`;
+
+  // ★前回の選択枠を全消し（残骸防止）
+  Array.from(cancelBody.querySelectorAll('.cancel-row')).forEach(r=>{
+    r.style.outline = '';
+    r.style.outlineOffset = '';
+    r.style.boxShadow = '';
+  });
+
+// 選択復元（★hitではなくDOMに存在するかで判定：RLまとめ行もOK）
+if (__cancelSelId){
+  const el = cancelBody.querySelector(`.cancel-row[data-id="${CSS.escape(__cancelSelId)}"]`);
+  if (el){
+    el.style.boxShadow = 'inset 0 0 0 2px #2563eb';
+    cancelCutBtn.disabled = false;
+    cancelDeleteBtn.disabled = false;
+  } else {
+    __cancelSelId = null;
+    cancelCutBtn.disabled = true;
+    cancelDeleteBtn.disabled = true;
+  }
+} else {
+  cancelCutBtn.disabled = true;
+  cancelDeleteBtn.disabled = true;
+}
+}
+
+cancelBody?.addEventListener('click', (e)=>{
+  const row = e.target.closest('.cancel-row');
+  if(!row) return;
+
+  cancelBody.querySelectorAll('.cancel-row').forEach(r=>{
+    r.style.outline = '';
+    r.style.outlineOffset = '';
+    r.style.boxShadow = '';
+  });
+
+  // ★通常行: data-id / RLまとめ行: data-ids から grp: を作る
+  __cancelSelId =
+    row.dataset.id
+      ? row.dataset.id
+      : (row.dataset.ids ? (`grp:${row.dataset.ids}`) : null);
+	  
+  row.style.boxShadow = 'inset 0 0 0 2px #2563eb'; // ★四角で囲む（直角）
+  cancelCutBtn.disabled = false;
+  cancelDeleteBtn.disabled = false;
+});
+
+
+cancelListBtn?.addEventListener('click', ()=>{
+  __cancelSelId = null;
+  cancelCutBtn.disabled = true;
+  cancelDeleteBtn.disabled = true;
+  // ★開くたび検索語を初期化（「クリア押さないと出ない」対策）
+  if (cancelSearchInput) cancelSearchInput.value = '';
+  renderCancelList();
+  cancelDlg.showModal();
+  // ★開いた直後にもう一度（直前の保存タイミング差・DOM反映ズレ吸収）
+  setTimeout(()=>{ try{ renderCancelList(); }catch(_){} }, 0);  
+});
+
+cancelSearchInput?.addEventListener('input', ()=> renderCancelList());
+cancelSearchClear?.addEventListener('click', ()=>{
+  cancelSearchInput.value = '';
+  renderCancelList();
+});
+
+// 「切り取り」＝キャンセル箱から取り出して、通常の貼り付け（Ctrl+V 等）で復活させる
+cancelCutBtn?.addEventListener('click', ()=>{
+  if(!__cancelSelId) return;
+  const list = loadCancelStore();
+
+  // ============================
+  // ★RLまとめ行（grp:）の切り取り
+  // ============================
+  if (String(__cancelSelId).startsWith('grp:')){
+    const ids = String(__cancelSelId).slice(4).split(',').map(s=>s.trim()).filter(Boolean);
+    const items = ids.map(id => list.find(x=>x.id===id)).filter(Boolean);
+    if (items.length < 2) return;
+
+    // ★順序の正規化：R → L（切り取り→貼り付け時のLR逆転を防ぐ）
+    //   ※削除→復元の経路には触れない
+    const __eyeOrd = (it)=>{
+      const e = String(it?.data?.eye || '');
+      if (e === 'R') return 0;
+      if (e === 'L') return 1;
+      if (e === 'B') return 2;
+      return 9;
+    };
+    items.sort((a,b)=> __eyeOrd(a) - __eyeOrd(b));
+
+    // blocks を作る（R/Lそれぞれを single/merge として保持）
+    const blocks = [];
+    for (const item of items){
+      const head = deepClone(item.data);
+      const span = (head?.head ? Math.max(1, Number(head?.span || 1)) : 1);
+      const kind = (head?.head && span > 1) ? 'merge' : 'single';
+
+      // from.slotKey があれば keys に載せる（なければnull）
+      const k0 = item?.from?.slotKey || item?.from?.key || null;
+      blocks.push({ kind, span, data: deepClone(head), keys: [k0].filter(Boolean) });
+    }
+
+    // day/section は先頭アイテムの from から取れれば入れる（無ければnullでもOK）
+    let day = null, section = null;
+    const k = items[0]?.from?.slotKey || items[0]?.from?.key || null;
+    if (k){
+      const p = parseKey(k);
+      day = p?.day ?? null;
+      section = p?.section ?? null;
+    }
+
+    appClipboard.type = 'multi';
+    appClipboard.data = { day, section, blocks };
+    appClipboard.meta = appClipboard.meta || {};
+    appClipboard.meta.cancelIds = ids.slice(); // ★貼り付け成功時に2件とも消える
+    appClipboard.meta.fromCancel = true;
+
+    __cancelSelId = null;
+    renderCancelList();
+    cancelDlg.close();
+    return;
+  }  
+  const idx = list.findIndex(x=>x.id===__cancelSelId);
+  if(idx < 0) return;
+  const item = list[idx];
+
+  // ============================================================
+  // ★RLまとめ行：multi clipboard を作って、貼り付けで両眼（＋結合枠なら枠数も）復元
+  // ============================================================
+  const keys0 = Array.isArray(item?.keys) ? item.keys.slice() : [];
+  const snap0 = (item && typeof item.snap === 'object' && item.snap) ? item.snap : {};
+
+  // RLまとめの判定：keysが複数 かつ snapに複数データがある（古い形式も壊さない）
+  const isGroup = (keys0.length >= 2) && (Object.keys(snap0).length >= 2);
+
+  if (isGroup){
+    // head だけに間引く（merge tail を混ぜない）
+    const uniq = [];
+    const seen = new Set();
+    for (const k of keys0){
+      if (!k || seen.has(k)) continue;
+      const r = snap0[k];
+      // tail は飛ばす（head側だけで復元できる）
+      if (r && r.tail && r.head) continue;
+      seen.add(k);
+      uniq.push(k);
+    }
+
+    // R→L→B→その他 の順に並べる（週表示の期待どおり）
+    const rankEye = (e)=>{
+      const x = String(e||'').trim().toUpperCase();
+      if (x === 'R') return 0;
+      if (x === 'L') return 1;
+      if (x === 'B') return 2;
+      return 9;
+    };
+    uniq.sort((a,b)=>{
+      const ea = snap0[a]?.eye;
+      const eb = snap0[b]?.eye;
+      return rankEye(ea) - rankEye(eb);
+    });
+
+    const blocks = [];
+    for (const k of uniq){
+      const rec0 = snap0[k] ? deepClone(snap0[k]) : null;
+      if (!rec0) continue;
+      const span = rec0.head ? Math.max(1, Number(rec0.span || 1)) : 1;
+      const kind = (rec0.head && span > 1) ? 'merge' : 'single';
+      blocks.push({ kind, span, data: rec0, keys:[k] });
+    }
+
+    if (blocks.length){
+      const p = parseKey(blocks[0].keys[0]);
+      appClipboard.type = 'multi';
+      appClipboard.data = { day: p?.day, section: p?.section, blocks };
+    } else {
+      // 何か変だったら従来挙動へフォールバック
+      const head = deepClone(item.data);
+      const span = Number(head?.span || 1);
+      if (head?.head && span > 1){
+        appClipboard.type = 'merge';
+        appClipboard.data = { head: deepClone(head), span, snap: deepClone(item.snap), keys: keys0 };
+      } else {
+        appClipboard.type = 'single';
+        appClipboard.data = { key: item?.from?.key || null, data: head };
+      }
+    }
+  } else {
+    // ============================================================
+    // 単枠／結合枠（従来どおり）
+    // ============================================================
+    const head = deepClone(item.data);
+    const span = Number(head?.span || 1);
+    if (head?.head && span > 1){
+      appClipboard.type = 'merge';
+      appClipboard.data = {
+        head: deepClone(head),
+        span,
+        snap: deepClone(item.snap),
+        keys: (Array.isArray(item.keys) ? item.keys.slice() : [])
+      };
+    } else {
+      appClipboard.type = 'single';
+      appClipboard.data = { key: item?.from?.key || null, data: head };
+    }
+  }
+
+  // ★paste成功時にキャンセル履歴から消すため、IDを保持
+  appClipboard.meta = appClipboard.meta || {};
+  appClipboard.meta.cancelIds = [ item.id ];
+  appClipboard.meta.fromCancel = true;
+  appClipboard.meta.snap = item.snap;
+
+  // ★ A：ここ
+  console.log('[A CANCEL CUT]', appClipboard.type, appClipboard.data);
+  
+  __cancelSelId = null;
+  renderCancelList();
+  cancelDlg.close();
+});
+
+// 「削除」＝完全削除
+cancelDeleteBtn?.addEventListener('click', ()=>{
+  if(!__cancelSelId) return;
+  if(!confirm('キャンセル履歴から完全削除します。よろしいですか？')) return;
+  // ★RLまとめ行（grp:）なら2件まとめて消す
+  if (String(__cancelSelId).startsWith('grp:')){
+    const ids = String(__cancelSelId).slice(4).split(',').map(s=>s.trim()).filter(Boolean);
+    const del = new Set(ids);
+    const list = loadCancelStore().filter(x => !del.has(x.id));
+    saveCancelStore(list);
+    __cancelSelId = null;
+    renderCancelList();
+    return;
+  }
+
+  const list = loadCancelStore().filter(x=>x.id!==__cancelSelId);
+  saveCancelStore(list);
+  __cancelSelId = null;
+  renderCancelList();
+});
+
 function scanAllWeeksTodos(){
   const arrivalsMap = new Map(); // key: rlSetId or slotKey
   const iols = [];
@@ -13548,6 +14517,36 @@ todoPathEl.addEventListener('click', (e)=>{
       </form>
     </dialog> 
 
+    <!-- ▼ フェーズ4：キャンセル履歴（ゴミ箱） -->
+    <dialog id="cancelListDialog">
+      <form method="dialog" style="min-width:720px;max-width:980px;padding:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;">
+          <h3 style="margin:0;">🗑 ゴミ箱</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="cancelSearchInput" placeholder="検索：名前 / ID" autocomplete="off" style="width:360px">
+            <button id="cancelSearchClear" type="button">クリア</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;margin:0 0 8px;font-size:12px;opacity:.75;">
+          <div id="cancelCount">件数：0</div>
+          <div>（選択→「切り取り」で貼り付け復活。ここで「削除」は完全削除）</div>
+        </div>
+
+        <div id="cancelListBody" style="max-height:60vh;overflow:auto;border:1px solid #eee;font-size:13px;"></div>
+
+        <menu style="display:flex;justify-content:space-between;gap:8px;margin-top:12px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="cancelCutBtn" type="button" class="primary" disabled>切り取り</button>
+            <button id="cancelDeleteBtn" type="button" disabled>削除</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button value="cancel">閉じる</button>
+          </div>
+        </menu>
+      </form>
+    </dialog>
+
     <!-- ▼ フェーズ3：当日並び替え（骨組み） -->
     <dialog id="dayReorderDialog">
       <form method="dialog" class="dor-form">
@@ -13578,7 +14577,51 @@ todoPathEl.addEventListener('click', (e)=>{
             <button id="dayReorderOk" value="ok" class="primary">確定</button>
           </div>
         </menu>
-      </form>
-    </dialog>	
+      </form> 
+ </dialog>
+<script>
+// ===== フェーズ4：キャンセル履歴：本物（cancelListDialog）を確実に開く =====
+(function(){
+  return; // ★暫定オープナー停止（一覧が「クリア押下まで描画されない」原因になる）
+  const btn = document.getElementById('cancelListBtn');
+  if (!btn) return;
+
+  function openCancelDialog(){
+    const real = document.getElementById('cancelListDialog');
+    if (real && typeof real.showModal === 'function') {
+      // 先に一覧を描画（関数があれば）
+      try { if (typeof renderCancelList === 'function') renderCancelList(); } catch(e){ console.warn(e); }
+      try { real.showModal(); } catch(e){ try{ real.setAttribute('open',''); }catch(_){} }
+      return;
+    }
+
+    // 本物が無い：ここでは「暫定」で気づけるように表示（もう隠さない）
+    let tmp = document.getElementById('cancelListDialog__tmp');
+    if (!tmp){
+      tmp = document.createElement('dialog');
+      tmp.id = 'cancelListDialog__tmp';
+      tmp.innerHTML = `
+        <form method="dialog" style="min-width:520px;max-width:860px;padding:16px">
+          <h3 style="margin:0 0 10px">🗑 キャンセル履歴（本物が見つかりません）</h3>
+          <div style="opacity:.8;margin-bottom:10px">
+            cancelListDialog がDOM上にありません（ID違い or 挿入位置ミス）。<br>
+            まずHTMLに id="cancelListDialog" が1つだけあるか確認してください。
+          </div>
+          <menu style="display:flex;justify-content:flex-end;gap:8px">
+            <button value="cancel">閉じる</button>
+          </menu>
+        </form>`;
+      document.body.appendChild(tmp);
+    }
+    try { tmp.showModal(); } catch(e){ try{ tmp.setAttribute('open',''); }catch(_){} }
+  }
+
+  btn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    openCancelDialog();
+  }, true);
+})();
+</script>
  </body>
 </html>
